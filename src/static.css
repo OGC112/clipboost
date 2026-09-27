@@ -205,3 +205,13 @@
 .control-subtitle{margin-top:13px;padding-top:12px;border-top:1px solid #182231;font-size:8px;font-weight:900;letter-spacing:.16em;color:#6f7e93}
 .smart-tracking-health{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:999px;background:#17352a;color:#70e2a3;font-size:8px}
 .tracking-badge.warning{border-color:rgba(245,158,11,.42);background:rgba(34,22,8,.82)}.tracking-badge.warning>span{color:#f7b955}.tracking-badge.warning b{color:#ffe3ad}
+
+
+/* ClipBoost 21.2 Quality Engine */
+.quality-explainer{margin:8px 0 12px;padding:10px 11px;border:1px solid rgba(61,220,151,.20);border-radius:10px;background:linear-gradient(135deg,rgba(25,190,128,.08),rgba(9,15,26,.66));display:grid;gap:3px}
+.quality-explainer b{font-size:10px;color:#a9f2d3;letter-spacing:.01em}
+.quality-explainer span{font-size:9px;line-height:1.45;color:#8190a5}
+.quality-mini{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 2px}
+.quality-mini span{font-style:normal;font-size:8px;line-height:1;padding:5px 6px;border-radius:6px;border:1px solid #26364b;background:#0d1623;color:#9bb0c9}
+.quality-mini span:first-child{border-color:rgba(139,92,246,.35);color:#c8b6ff}
+.controls select#captionColorSelect{min-width:92px}

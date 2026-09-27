@@ -1,3 +1,41 @@
+# ClipBoost v21.2.0 — Quality Engine
+
+V21.2.0 focuses on editorial quality rather than adding more surface features. The goal is to make generated clips feel cleaner, more intentional and closer to what a human short-form editor would choose.
+
+## Major changes
+
+- **Quality-first clip selection**: candidates are rescored for Hook, Story, Emotion, Retention, Clean speech and Visual quality. Boundaries are snapped to complete speech groups to reduce clips starting or ending mid-sentence.
+- **Better clip diversity**: overlap and text-similarity deduplication are stricter, and long videos are sampled across more timeline sections.
+- **Cleaned transcript pipeline**: common fillers and accidental repeated words/short phrases are removed from the caption transcript while word timestamps remain local.
+- **Automatic punctuation**: caption groups now receive capitalization plus period/question/comma punctuation based on phrase structure and pauses.
+- **Speech cleanup modes**:
+  - `Clean captions` keeps the original audio but removes stutters/fillers from captions.
+  - `Clean speech + captions` also removes short detected disfluencies from the rendered audio/video timeline.
+  - `Off` preserves the raw word stream for captions.
+- **Natural Auto Zoom v2**: no more mandatory zoom at the start and no arbitrary “zoom every few seconds” fallback. Zooms are now triggered by strong hooks, meaningful speech emphasis or reaction peaks, with larger spacing and lower zoom strength.
+- **Smoother zoom motion**: zoom events are ramped through short intermediate steps instead of switching scale in one hard jump.
+- **Auto Zoom modes**: Minimal, Natural and Energetic.
+- **Common caption colors only**: White, Yellow, Red, Green, Blue, Purple, Orange and Black.
+- **Quality score details** are shown on generated candidate cards so you can see why a clip was selected.
+- **Old projects are supported**: re-running `Generate variations` upgrades the existing cached transcript to the Quality Engine cleanup format; you do not need to upload the source again as long as the original media is still available.
+
+## Recommended first test
+
+Use an existing long project and click **Generate variations** once. Then compare the new top clips with the previous list.
+
+Recommended render settings:
+
+- Speech cleanup: `Clean captions`
+- Auto zoom: `Natural`
+- Dynamic zoom: ON
+- Smart 9:16 reframing: ON
+- Speaker tracking: ON
+- Caption color: White or Yellow
+
+If the spoken stutters are distracting in the final video, switch Speech cleanup to **Clean speech + captions** and regenerate the preview before export.
+
+---
+
 # ClipBoost v21.1.0 — Smart Reframing & Speaker Tracking
 
 V21.1.0 is the first computer-vision editing release. The goal is to make vertical clips feel camera-directed rather than simply center-cropped.
