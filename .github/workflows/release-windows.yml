@@ -34,24 +34,23 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Choose next patch version
+      - name: Choose release version
         id: version
         shell: pwsh
         run: |
           git fetch --tags --force
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $packageVersion = [version]([string]$pkg.version)
           $latestTag = git tag --list "v*" --sort=-v:refname | Select-Object -First 1
 
+          $candidate = $packageVersion
           if ($latestTag -and $latestTag -match '^v(\d+)\.(\d+)\.(\d+)$') {
-            $major = [int]$Matches[1]
-            $minor = [int]$Matches[2]
-            $patch = [int]$Matches[3] + 1
-            $version = "$major.$minor.$patch"
-          } else {
-            $pkg = Get-Content package.json -Raw | ConvertFrom-Json
-            $version = [string]$pkg.version
+            $nextPatch = [version]("{0}.{1}.{2}" -f [int]$Matches[1],[int]$Matches[2],([int]$Matches[3] + 1))
+            if ($nextPatch -gt $candidate) { $candidate = $nextPatch }
           }
+          $version = $candidate.ToString()
 
           Write-Host "Building ClipBoost $version"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

@@ -17,7 +17,8 @@ const uploadsDir = path.join(storageRoot, 'uploads');
 const metaDir = path.join(storageRoot, 'meta');
 const exportsDir = process.env.CLIPBOOST_EXPORT_DIR ? path.resolve(process.env.CLIPBOOST_EXPORT_DIR) : path.join(storageRoot, 'exports');
 const previewsDir = path.join(storageRoot, 'previews');
-for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir]) fsSync.mkdirSync(dir, { recursive: true });
+const trackingDir = path.join(storageRoot, 'tracking');
+for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir, trackingDir]) fsSync.mkdirSync(dir, { recursive: true });
 
 const libraryFile = path.join(storageRoot, 'library.json');
 
@@ -636,6 +637,7 @@ app.get('/api/system/health', async (req,res) => {
     ffmpeg: { ok:false, detail:'Not found' },
     ffprobe: { ok:false, detail:'Not found' },
     python: { ok:false, detail:python },
+    tracking: { ok:false, detail:'OpenCV face tracking' },
     ollama: { ok:false, detail:String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') },
     youtube: { ok:Boolean(String(process.env.YOUTUBE_API_KEY || '').trim()), detail:'API key' },
     twitch: { ok:Boolean(String(process.env.TWITCH_CLIENT_ID || '').trim() && String(process.env.TWITCH_CLIENT_SECRET || '').trim()), detail:'Client credentials' },
@@ -645,6 +647,7 @@ app.get('/api/system/health', async (req,res) => {
     run('ffmpeg',['-version'],{timeout:8000}).then(x=>{result.ffmpeg={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
     run('ffprobe',['-version'],{timeout:8000}).then(x=>{result.ffprobe={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
     run(python,['--version'],{timeout:8000}).then(x=>{result.python={ok:true,detail:(x.stdout||x.stderr).trim()||python}}).catch(()=>{}),
+    run(python,['-c','import cv2; print(cv2.__version__)'],{timeout:8000}).then(x=>{result.tracking={ok:true,detail:`OpenCV ${String(x.stdout||x.stderr).trim()} ready`}}).catch(()=>{}),
     fetch(`${ollamaUrl}/api/tags`,{signal:AbortSignal.timeout(3500)}).then(r=>r.ok?r.json():Promise.reject(new Error('offline'))).then(data=>{
       const names=(data.models||[]).map(m=>m.name).filter(Boolean);
       const wanted=String(process.env.OLLAMA_MODEL || 'qwen2.5:3b');
@@ -901,6 +904,8 @@ app.delete('/api/projects/:id', async (req, res, next) => {
     await fs.rm(path.join(storageRoot, 'transcript-cache', meta.id), { recursive:true, force:true }).catch(() => {});
     const previews = await fs.readdir(previewsDir).catch(() => []);
     await Promise.all(previews.filter(name => name.startsWith(`${meta.id}-`)).map(name => fs.rm(path.join(previewsDir,name), { force:true }).catch(() => {})));
+    const tracks = await fs.readdir(trackingDir).catch(() => []);
+    await Promise.all(tracks.filter(name => name.startsWith(`${meta.id}-`)).map(name => fs.rm(path.join(trackingDir,name), { force:true }).catch(() => {})));
     await fs.rm(path.join(metaDir, `${meta.id}.json`), { force:true });
     res.json({ ok:true, id:meta.id });
   } catch (e) {
@@ -1418,13 +1423,83 @@ function normalizeRenderOptions(raw = {}) {
   const captionStyle = ['bold','clean','neon','minimal'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
   const captionPosition = ['top','center','bottom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const captionSize = ['small','medium','large'].includes(String(raw.captionSize || '').toLowerCase()) ? String(raw.captionSize).toLowerCase() : 'medium';
+  const trackingMode = ['speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
+  const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
   return {
-    intensity,preset,captionStyle,captionPosition,captionSize,
+    intensity,preset,captionStyle,captionPosition,captionSize,trackingMode,cameraMovement,
     autoReframe: raw.autoReframe !== false,
+    speakerTracking: raw.speakerTracking !== false,
+    reactionDetection: raw.reactionDetection !== false,
+    sceneAwareCuts: raw.sceneAwareCuts !== false,
     silenceRemoval: raw.silenceRemoval !== false,
     dynamicZoom: raw.dynamicZoom !== false,
     captions: raw.captions !== false
   };
+}
+
+function trackingCacheKey(meta, start, end, options) {
+  const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}`).digest('hex').slice(0,24);
+}
+
+async function ensureFaceTracking(meta, start, end, options) {
+  if (!options.autoReframe || !options.speakerTracking || !meta?.sourcePath) return null;
+  const key = trackingCacheKey(meta, start, end, options);
+  const cacheFile = path.join(trackingDir, `${meta.id}-${key}.json`);
+  try {
+    const cached = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
+    if (cached?.keyframes?.length) return cached;
+  } catch {}
+  const python = String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim();
+  const script = path.join(root, 'scripts', 'track_faces.py');
+  try {
+    const result = await runJsonProcess(python, [script,'--input',meta.sourcePath,'--start',String(start),'--end',String(end),'--mode',options.trackingMode,'--movement',options.cameraMovement,'--step',options.cameraMovement==='high'?'0.25':options.cameraMovement==='low'?'0.55':'0.36'], { timeout: 8*60_000, idleTimeout: 0 });
+    if (result?.keyframes?.length) await fs.writeFile(cacheFile, JSON.stringify(result), 'utf8').catch(()=>{});
+    return result;
+  } catch (error) {
+    return { ok:false, error:error?.message || 'Face tracking unavailable.', keyframes:[], summary:{ samples:0, facesDetected:0, faceCountMax:0, speakerSwitches:0, reactionPeaks:0, mode:options.trackingMode, movement:options.cameraMovement } };
+  }
+}
+
+function splitPiecesAtBoundaries(pieces = [], boundaries = []) {
+  const sortedBoundaries=[...new Set(boundaries.map(Number).filter(Number.isFinite))].sort((a,b)=>a-b);
+  const out=[];
+  for (const part of pieces) {
+    const pts=[Number(part.start), ...sortedBoundaries.filter(t=>t>Number(part.start)+0.04 && t<Number(part.end)-0.04), Number(part.end)];
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i], b=pts[i+1]; if(b-a<0.055) continue;
+      out.push({...part,start:a,end:b});
+    }
+  }
+  return out;
+}
+
+function nearestTrackingFrame(tracking, time) {
+  const frames=tracking?.keyframes||[]; if(!frames.length) return null;
+  let best=frames[0], bestDist=Math.abs(Number(best.time||0)-time);
+  for(const f of frames){const d=Math.abs(Number(f.time||0)-time);if(d<bestDist){best=f;bestDist=d}}
+  return best;
+}
+
+function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
+  let boundaries=[];
+  if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
+  if(tracking?.keyframes?.length){
+    const minGap=options.cameraMovement==='high'?0.62:options.cameraMovement==='low'?1.8:1.05;
+    let lastTime=-99,lastX=.5,lastY=.45,lastId=null;
+    for(const f of tracking.keyframes){
+      const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null;
+      const moved=Math.hypot(x-lastX,y-lastY)>0.035;
+      const speakerChanged=id&&lastId&&id!==lastId;
+      if(t-lastTime>=minGap || moved || speakerChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;}
+    }
+  }
+  const pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
+    const mid=(Number(part.start)+Number(part.end))/2;
+    const frame=nearestTrackingFrame(tracking,mid);
+    return {...part,focusX:frame?Number(frame.x||.5):.5,focusY:frame?Number(frame.y||.44):.44,trackingConfidence:frame?Number(frame.confidence||0):0,activeFaceId:frame?.activeFaceId??null,faceCount:frame?.faceCount||0};
+  });
+  return {...timeline,pieces};
 }
 
 function subtractIntervals(totalDuration, removals = []) {
@@ -1459,7 +1534,7 @@ function buildEditedTimeline(plan, clipDuration, options) {
     : [];
   const keep = subtractIntervals(clipDuration, removalEvents);
   const zoomEvents = options.dynamicZoom
-    ? (plan?.events || []).filter(e => e.type === 'dynamic-zoom' || e.type === 'punch-in')
+    ? (plan?.events || []).filter(e => e.type === 'dynamic-zoom' || e.type === 'punch-in' || e.type === 'reaction-zoom')
     : [];
   const pieces = [];
   for (const k of keep) {
@@ -1537,22 +1612,58 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   const safeEnd = Math.min(Number(meta.details?.duration || end || safeStart + 30), Math.max(safeStart + .25, Number(end || safeStart + 30)));
   const clipDuration = safeEnd - safeStart;
   const silences = meta.analysis?.timeline?.silences || [];
+  const absoluteScenes = meta.analysis?.timeline?.scenes || [];
+  const sceneTimes = absoluteScenes.map(Number).filter(t=>Number.isFinite(t)&&t>safeStart+.05&&t<safeEnd-.05).map(t=>Number((t-safeStart).toFixed(3)));
+
+  const tracking = await ensureFaceTracking(meta, safeStart, safeEnd, options);
   const plan = buildEditPlan({ start: safeStart, end: safeEnd }, meta.transcript, silences, options.intensity, options.preset);
-  const timeline = buildEditedTimeline(plan, clipDuration, options);
+
+  if (options.reactionDetection && tracking?.summary?.reactionPeakTimes?.length) {
+    const existing=(plan.events||[]).filter(e=>/zoom|punch/.test(e.type));
+    for(const peak of tracking.summary.reactionPeakTimes){
+      const at=Number(peak.time||0); if(at<1.1||at>clipDuration-0.6) continue;
+      if(existing.some(e=>Math.abs(Number(e.start||0)-at)<1.4)) continue;
+      plan.events.push({type:'reaction-zoom',start:Number(Math.max(0,at-.18).toFixed(2)),end:Number(Math.min(clipDuration,at+1.0).toFixed(2)),zoom:options.intensity==='high'?1.18:1.12,reason:'Reaction peak'});
+    }
+  }
+  if(options.sceneAwareCuts){
+    for(const t of sceneTimes.slice(0,80)) plan.events.push({type:'scene-boundary',start:t,end:t,reason:'Scene-aware framing reset'});
+  }
+  plan.events.sort((a,b)=>Number(a.start||0)-Number(b.start||0));
+  plan.summary.zooms=plan.events.filter(e=>/zoom|punch/.test(e.type)).length;
+  plan.summary.sceneCuts=sceneTimes.length;
+  plan.summary.speakerSwitches=tracking?.summary?.speakerSwitches||0;
+  plan.summary.reactionPeaks=tracking?.summary?.reactionPeaks||0;
+  plan.summary.faceCountMax=tracking?.summary?.faceCountMax||0;
+
+  let timeline = buildEditedTimeline(plan, clipDuration, options);
   if (!timeline.pieces.length) timeline.pieces.push({ start:0, end:clipDuration, zoom:1 });
+  timeline = applySmartFraming(timeline, tracking, sceneTimes, options);
 
   const preview = Boolean(render.preview);
   const width = Number(render.width || (preview ? 540 : 1080));
   const height = Number(render.height || (preview ? 960 : 1920));
+  const srcW=Math.max(2,Number(meta.details?.width||width));
+  const srcH=Math.max(2,Number(meta.details?.height||height));
+  const fillScale=Math.max(width/srcW,height/srcH);
+  const scaledW=Math.max(width,Math.ceil(srcW*fillScale/2)*2);
+  const scaledH=Math.max(height,Math.ceil(srcH*fillScale/2)*2);
   const filter = [];
   const hasAudio = Boolean(meta.details?.audioCodec);
   for (let i=0; i<timeline.pieces.length; i++) {
     const part = timeline.pieces[i];
     const srcA = safeStart + part.start;
     const srcB = safeStart + part.end;
-    let vf = options.autoReframe
-      ? `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`
-      : `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+    let vf;
+    if(options.autoReframe){
+      const focusX=Math.max(0.02,Math.min(.98,Number(part.focusX??.5)));
+      const focusY=Math.max(0.08,Math.min(.92,Number(part.focusY??.44)));
+      const cropX=Math.max(0,Math.min(Math.max(0,scaledW-width),Math.round(focusX*scaledW-width/2)));
+      const cropY=Math.max(0,Math.min(Math.max(0,scaledH-height),Math.round(focusY*scaledH-height/2)));
+      vf=`scale=${scaledW}:${scaledH},crop=${width}:${height}:${cropX}:${cropY}`;
+    }else{
+      vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+    }
     if (Number(part.zoom || 1) > 1.001) {
       const zw = Math.max(width, Math.round(width * part.zoom));
       const zh = Math.max(height, Math.round(height * part.zoom));
@@ -1592,12 +1703,19 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   return {
     outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
     editPlan: plan,
+    tracking: tracking?.summary || { samples:0,faceCountMax:0,speakerSwitches:0,reactionPeaks:0,mode:options.trackingMode,movement:options.cameraMovement },
+    trackingWarning: tracking?.ok===false ? tracking.error : null,
     editApplied: {
       silenceCuts: options.silenceRemoval ? plan.summary.cuts : 0,
       zooms: options.dynamicZoom ? plan.summary.zooms : 0,
       reframed: options.autoReframe,
+      speakerTracking: Boolean(options.speakerTracking && tracking?.keyframes?.length),
+      reactionDetection: options.reactionDetection,
+      sceneAwareCuts: options.sceneAwareCuts,
       captions: Boolean(assFile),
       preset: options.preset,
+      trackingMode: options.trackingMode,
+      cameraMovement: options.cameraMovement,
       captionStyle: options.captionStyle
     }
   };
@@ -1693,8 +1811,10 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
   const key = previewCacheKey(meta.id, safeStart, safeEnd, options);
   const fileName = `${meta.id}-${key}.mp4`;
   const filePath = path.join(previewsDir, fileName);
+  const renderMetaFile = `${filePath}.json`;
   if (fsSync.existsSync(filePath) && fsSync.statSync(filePath).size > 1024) {
-    return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: true, edited: true };
+    let renderInfo=null; try{renderInfo=JSON.parse(await fs.readFile(renderMetaFile,'utf8'))}catch{}
+    return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: true, edited: true, render:renderInfo };
   }
 
   if (!previewJobs.has(key)) {
@@ -1702,17 +1822,18 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
       const tmpPath = `${filePath}.tmp.mp4`;
       await fs.rm(tmpPath, { force: true }).catch(() => {});
       try {
-        await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:540, height:960 });
+        const renderInfo = await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:540, height:960 });
         await fs.rename(tmpPath, filePath);
+        await fs.writeFile(renderMetaFile,JSON.stringify(renderInfo),'utf8').catch(()=>{});
+        return renderInfo;
       } finally {
         await fs.rm(tmpPath, { force: true }).catch(() => {});
       }
-      return filePath;
     })().finally(() => previewJobs.delete(key));
     previewJobs.set(key, job);
   }
-  await previewJobs.get(key);
-  return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: false, edited: true };
+  const renderInfo=await previewJobs.get(key);
+  return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: false, edited: true, render:renderInfo };
 }
 
 app.post('/api/videos/:id/analyze', async (req, res, next) => {

@@ -1,3 +1,49 @@
+# ClipBoost v21.1.0 — Smart Reframing & Speaker Tracking
+
+V21.1.0 is the first computer-vision editing release. The goal is to make vertical clips feel camera-directed rather than simply center-cropped.
+
+## Major features
+
+- **Local face tracking** powered by OpenCV. ClipBoost samples each selected clip, follows face positions and caches the tracking result locally.
+- **Speaker-aware framing** uses lower-face motion as a lightweight local cue for the active speaker. It is designed as a practical heuristic, not biometric speaker identification.
+- **Tracking modes**: Active speaker, Center subject and Two-person / split.
+- **Camera movement control**: Low, Balanced or High. Tracking is smoothed before rendering so the virtual camera does not jump on every frame.
+- **Real moving 9:16 crop**: FFmpeg now receives face-aware crop positions for each timeline section instead of using one fixed centered crop.
+- **Reaction detection**: strong face-motion peaks can add tasteful reaction punch-ins when Dynamic Zoom is enabled.
+- **Scene-aware framing**: detected scene changes create framing reset boundaries so a crop from the previous shot is not blindly carried into the next one.
+- **Tracking diagnostics in preview**: rendered previews show detected face count, speaker switches and reaction peaks.
+- **System Health** now checks the OpenCV tracking engine in addition to FFmpeg, Python, Ollama and integrations.
+- **Tracking cache**: once a clip is tracked, changing captions or reopening the project can reuse the local tracking data.
+
+## Local AI dependency update
+
+Run once after applying this version:
+
+```powershell
+python -m pip install -r requirements-local-ai.txt
+```
+
+This adds `opencv-python-headless` and `numpy`. All face/speaker framing analysis remains on your PC; no face data is uploaded to a cloud service by this feature.
+
+## Recommended first test
+
+In AI Studio choose:
+
+- Smart 9:16 reframing: ON
+- Speaker tracking: ON
+- Tracking mode: Active speaker
+- Camera movement: Balanced
+- Reaction detection: ON
+- Scene-aware cuts: ON
+
+The first preview of a clip may take a little longer because ClipBoost creates and caches the tracking pass. Later renders of the same clip reuse it.
+
+## Automatic release versioning
+
+The GitHub Actions workflow now treats the `package.json` version as the minimum release version. That means this major/minor update publishes as **v21.1.0** even when the previous GitHub release is v21.0.x.
+
+---
+
 # ClipBoost v21.0.4 — Creative Engine Update
 
 V21.0.4 is a larger editing/desktop release focused on making ClipBoost feel more like a real automatic short-form editor.
