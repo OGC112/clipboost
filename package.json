@@ -2,7 +2,7 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.0.3",
+  "version": "21.0.4",
   "description": "AI video clipping, real auto-edit rendering, creator library and analytics desktop app",
   "type": "module",
   "main": "desktop/main.cjs",

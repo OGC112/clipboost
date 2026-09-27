@@ -1,3 +1,21 @@
+# ClipBoost v21.0.4 — Creative Engine Update
+
+V21.0.4 is a larger editing/desktop release focused on making ClipBoost feel more like a real automatic short-form editor.
+
+## Highlights
+
+- **Functional edit presets**: Dynamic, Clean, Gaming and Podcast. Each preset changes silence-cut aggressiveness, hook punch-ins and zoom rhythm in the actual FFmpeg render.
+- **Caption designer**: Bold Viral, Clean, Neon and Minimal caption looks, plus Top / Center / Bottom positioning and Small / Medium / Large sizing. Preview and export use the same settings.
+- **Persistent editor preferences**: your preset, caption design, edit intensity and toggles survive reloads/restarts.
+- **Update Center in the top bar**: download progress and update-ready state are visible inside ClipBoost instead of relying on Windows dialogs.
+- **System Health diagnostics** in Settings: one-click checks for FFmpeg, FFprobe, Python, Ollama, YouTube and Twitch plus the current data/export paths.
+- **Studio keyboard shortcuts**: Ctrl+E exports the current clip, Ctrl+Shift+E exports all clips, and Left/Right switches between generated candidates.
+- **Automatic GitHub release workflow** remains included and uses the fixed build-only + GitHub-release publishing flow.
+
+## Publish this update
+
+With the permanent development folder connected to GitHub, use `Publish ClipBoost Update.bat`. GitHub Actions will build and publish the Windows installer automatically. With v21.0.3 already released, this push is built as **v21.0.4**.
+
 # ClipBoost v21.0.3 — Custom dialogs
 
 This build replaces native Windows/browser alerts with ClipBoost-styled dialogs for updates, creator removal, exports, errors, and project deletion.

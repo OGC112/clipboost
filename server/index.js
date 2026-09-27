@@ -628,6 +628,32 @@ app.get('/api/integrations/status', (req, res) => {
   res.json({ youtube: { configured: Boolean(String(process.env.YOUTUBE_API_KEY || '').trim()) }, twitch: { configured: Boolean(String(process.env.TWITCH_CLIENT_ID || '').trim() && String(process.env.TWITCH_CLIENT_SECRET || '').trim()) }, localAI: { configured: true, whisperModel: String(process.env.LOCAL_WHISPER_MODEL || 'small'), ollamaModel: String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') } });
 });
 
+app.get('/api/system/health', async (req,res) => {
+  const python = String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim();
+  const ollamaUrl = String(process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/,'');
+  const result = {
+    checkedAt: new Date().toISOString(),
+    ffmpeg: { ok:false, detail:'Not found' },
+    ffprobe: { ok:false, detail:'Not found' },
+    python: { ok:false, detail:python },
+    ollama: { ok:false, detail:String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') },
+    youtube: { ok:Boolean(String(process.env.YOUTUBE_API_KEY || '').trim()), detail:'API key' },
+    twitch: { ok:Boolean(String(process.env.TWITCH_CLIENT_ID || '').trim() && String(process.env.TWITCH_CLIENT_SECRET || '').trim()), detail:'Client credentials' },
+    paths: { data: dataDir, exports: exportsDir }
+  };
+  await Promise.all([
+    run('ffmpeg',['-version'],{timeout:8000}).then(x=>{result.ffmpeg={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
+    run('ffprobe',['-version'],{timeout:8000}).then(x=>{result.ffprobe={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
+    run(python,['--version'],{timeout:8000}).then(x=>{result.python={ok:true,detail:(x.stdout||x.stderr).trim()||python}}).catch(()=>{}),
+    fetch(`${ollamaUrl}/api/tags`,{signal:AbortSignal.timeout(3500)}).then(r=>r.ok?r.json():Promise.reject(new Error('offline'))).then(data=>{
+      const names=(data.models||[]).map(m=>m.name).filter(Boolean);
+      const wanted=String(process.env.OLLAMA_MODEL || 'qwen2.5:3b');
+      result.ollama={ok:true,detail:names.includes(wanted)?`${wanted} ready`:`Ollama online · ${names.length} model${names.length===1?'':'s'}`};
+    }).catch(()=>{})
+  ]);
+  res.json(result);
+});
+
 app.get('/api/library/creators', async (req, res, next) => {
   try { res.json(await readLibrary()); } catch (e) { next(e); }
 });
@@ -1311,37 +1337,50 @@ function captionsForRange(transcript, start, end) {
   }));
 }
 
-function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanced') {
+function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanced', preset = 'dynamic') {
   const start = Number(candidate.start || 0);
   const end = Number(candidate.end || start + 30);
   const clipDuration = Math.max(0, end - start);
   const events = [];
-  const strength = intensity === 'high' ? 1.18 : intensity === 'low' ? 1.08 : 1.12;
-  events.push({ type: 'reframe', start: 0, end: clipDuration, mode: 'center-subject', confidence: 0.72 });
-  events.push({ type: 'punch-in', start: 0, end: Math.min(1.4, clipDuration), zoom: strength, reason: 'Strengthen the opening hook' });
+  const style = ['dynamic','clean','gaming','podcast'].includes(String(preset||'').toLowerCase()) ? String(preset).toLowerCase() : 'dynamic';
+  const presetBoost = style === 'gaming' ? 0.035 : style === 'clean' ? -0.035 : style === 'podcast' ? -0.02 : 0;
+  const strength = Math.max(1.03, (intensity === 'high' ? 1.18 : intensity === 'low' ? 1.08 : 1.12) + presetBoost);
+  const silenceThreshold = style === 'gaming' ? 0.42 : style === 'clean' ? 0.85 : style === 'podcast' ? 0.72 : 0.55;
+  const zoomGap = style === 'gaming' ? 3.2 : style === 'clean' ? 8.0 : style === 'podcast' ? 6.5 : 4.5;
+  events.push({ type: 'reframe', start: 0, end: clipDuration, mode: style === 'podcast' ? 'speaker-safe' : 'center-subject', confidence: 0.72 });
+  if (style !== 'clean' || intensity === 'high') {
+    events.push({ type: 'punch-in', start: 0, end: Math.min(style === 'gaming' ? 1.7 : 1.4, clipDuration), zoom: strength, reason: 'Strengthen the opening hook' });
+  }
 
   for (const s of silences) {
     const overlapStart = Math.max(start, Number(s.start || 0));
     const overlapEnd = Math.min(end, Number(s.end || 0));
     const dur = overlapEnd - overlapStart;
-    if (dur >= 0.55) events.push({ type: 'remove-silence', start: Number((overlapStart-start).toFixed(2)), end: Number((overlapEnd-start).toFixed(2)), duration: Number(dur.toFixed(2)) });
+    if (dur >= silenceThreshold) events.push({ type: 'remove-silence', start: Number((overlapStart-start).toFixed(2)), end: Number((overlapEnd-start).toFixed(2)), duration: Number(dur.toFixed(2)) });
   }
 
   const caps = captionsForRange(transcript, start, end);
-  const keywords = /\b(never|why|how|crazy|insane|impossible|actually|wait|look|wow|jamais|pourquoi|comment|incroyable|impossible|attends|regarde)\b/i;
+  const keywords = /\b(never|why|how|crazy|insane|impossible|actually|wait|look|wow|bro|no way|jamais|pourquoi|comment|incroyable|impossible|attends|regarde)\b/i;
   let lastEmphasis = -99;
   for (const cap of caps) {
-    if ((/[!?]/.test(cap.text) || keywords.test(cap.text)) && cap.start - lastEmphasis >= 4.5) {
-      events.push({ type: 'dynamic-zoom', start: Number(cap.start.toFixed(2)), end: Number(Math.min(cap.end + .45, clipDuration).toFixed(2)), zoom: intensity === 'high' ? 1.16 : 1.1, reason: 'Speech emphasis' });
+    const expressive = /[!?]/.test(cap.text) || keywords.test(cap.text);
+    if (expressive && cap.start - lastEmphasis >= zoomGap && style !== 'clean') {
+      const zoom = intensity === 'high' ? (style === 'gaming' ? 1.21 : 1.16) : style === 'gaming' ? 1.14 : style === 'podcast' ? 1.07 : 1.1;
+      events.push({ type: 'dynamic-zoom', start: Number(cap.start.toFixed(2)), end: Number(Math.min(cap.end + .45, clipDuration).toFixed(2)), zoom, reason: 'Speech emphasis' });
       lastEmphasis = cap.start;
     }
   }
-  if (intensity !== 'low' && clipDuration > 14 && !events.some(e => e.type === 'dynamic-zoom')) {
+  if (style === 'gaming' && intensity !== 'low' && clipDuration > 18) {
+    for (const pct of [0.34,0.68]) {
+      const at=Math.min(clipDuration-1.5,Math.max(4,clipDuration*pct));
+      if(!events.some(e=>/zoom|punch/.test(e.type)&&Math.abs(Number(e.start||0)-at)<2.5)) events.push({type:'dynamic-zoom',start:Number(at.toFixed(2)),end:Number(Math.min(clipDuration,at+1.15).toFixed(2)),zoom:1.11,reason:'Gaming rhythm'});
+    }
+  } else if (style === 'dynamic' && intensity !== 'low' && clipDuration > 14 && !events.some(e => e.type === 'dynamic-zoom')) {
     const at = Math.min(clipDuration - 2, Math.max(5, clipDuration * .45));
     events.push({ type: 'dynamic-zoom', start: Number(at.toFixed(2)), end: Number(Math.min(clipDuration, at + 1.3).toFixed(2)), zoom: 1.09, reason: 'Maintain visual rhythm' });
   }
   return {
-    style: 'Dynamic', intensity,
+    style: style[0].toUpperCase()+style.slice(1), intensity,
     autoReframe: true, captions: true, silenceRemoval: true,
     events: events.sort((a,b)=>a.start-b.start),
     summary: { cuts: events.filter(e=>e.type==='remove-silence').length, zooms: events.filter(e=>/zoom|punch/.test(e.type)).length, reframes: events.filter(e=>e.type==='reframe').length }
@@ -1375,8 +1414,12 @@ function ffmpegFilterPath(file) {
 
 function normalizeRenderOptions(raw = {}) {
   const intensity = ['low','balanced','high'].includes(String(raw.intensity || '').toLowerCase()) ? String(raw.intensity).toLowerCase() : 'balanced';
+  const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
+  const captionStyle = ['bold','clean','neon','minimal'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
+  const captionPosition = ['top','center','bottom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
+  const captionSize = ['small','medium','large'].includes(String(raw.captionSize || '').toLowerCase()) ? String(raw.captionSize).toLowerCase() : 'medium';
   return {
-    intensity,
+    intensity,preset,captionStyle,captionPosition,captionSize,
     autoReframe: raw.autoReframe !== false,
     silenceRemoval: raw.silenceRemoval !== false,
     dynamicZoom: raw.dynamicZoom !== false,
@@ -1463,15 +1506,26 @@ function remapCaptionsForEditedTimeline(meta, clipStart, keepIntervals = []) {
   return out;
 }
 
-async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height=1920) {
+async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height=1920, rawOptions={}) {
   const captions = remapCaptionsForEditedTimeline(meta, clipStart, keepIntervals).filter(c => c.text);
   if (!captions.length) return null;
+  const options = normalizeRenderOptions(rawOptions);
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
-  const fontSize = Math.max(38, Math.round(width * 0.068));
-  const outline = Math.max(3, Math.round(width * 0.0046));
-  const marginV = Math.round(height * 0.16);
-  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H70000000,-1,0,0,0,100,100,0,0,1,${outline},1,2,55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
-  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(c.text.toUpperCase())}`).join('\n');
+  const sizeScale = options.captionSize === 'large' ? 0.082 : options.captionSize === 'small' ? 0.054 : 0.068;
+  const fontSize = Math.max(34, Math.round(width * sizeScale));
+  const outline = options.captionStyle === 'minimal' ? Math.max(2, Math.round(width*.0028)) : Math.max(3, Math.round(width * .0046));
+  const alignment = options.captionPosition === 'top' ? 8 : options.captionPosition === 'center' ? 5 : 2;
+  const marginV = options.captionPosition === 'top' ? Math.round(height*.12) : options.captionPosition === 'center' ? 0 : Math.round(height*.16);
+  const styleMap = {
+    bold: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:0, bold:-1 },
+    clean: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1 },
+    neon: { font:'Arial', primary:'&H00FFF2A6', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:2, spacing:1, bold:-1 },
+    minimal: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0 }
+  };
+  const st=styleMap[options.captionStyle]||styleMap.bold;
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,100,100,${st.spacing},0,1,${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
+  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(transform(c.text))}`).join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
   return file;
 }
@@ -1483,7 +1537,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   const safeEnd = Math.min(Number(meta.details?.duration || end || safeStart + 30), Math.max(safeStart + .25, Number(end || safeStart + 30)));
   const clipDuration = safeEnd - safeStart;
   const silences = meta.analysis?.timeline?.silences || [];
-  const plan = buildEditPlan({ start: safeStart, end: safeEnd }, meta.transcript, silences, options.intensity);
+  const plan = buildEditPlan({ start: safeStart, end: safeEnd }, meta.transcript, silences, options.intensity, options.preset);
   const timeline = buildEditedTimeline(plan, clipDuration, options);
   if (!timeline.pieces.length) timeline.pieces.push({ start:0, end:clipDuration, zoom:1 });
 
@@ -1522,7 +1576,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
 
   let assFile = null;
   if (options.captions && meta.transcript?.captions?.length) {
-    assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height).catch(() => null);
+    assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height, options).catch(() => null);
     if (assFile) {
       filter.push(`[${videoLabel}]subtitles='${ffmpegFilterPath(assFile)}'[vout]`);
       videoLabel = 'vout';
@@ -1542,7 +1596,9 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       silenceCuts: options.silenceRemoval ? plan.summary.cuts : 0,
       zooms: options.dynamicZoom ? plan.summary.zooms : 0,
       reframed: options.autoReframe,
-      captions: Boolean(assFile)
+      captions: Boolean(assFile),
+      preset: options.preset,
+      captionStyle: options.captionStyle
     }
   };
 }
