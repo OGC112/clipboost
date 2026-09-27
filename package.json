@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.2.0",
-  "description": "AI video clipping with Quality Engine, cleaned word-synced captions, natural auto-zooms, smart speaker tracking, dynamic 9:16 reframing and creator library desktop app",
+  "version": "21.2.1",
+  "description": "AI video clipping with Quality Engine, Twitch Live Library refresh, cleaned word-synced captions, natural auto-zooms, smart speaker tracking and dynamic 9:16 reframing",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

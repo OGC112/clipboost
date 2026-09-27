@@ -794,6 +794,49 @@ app.post('/api/library/twitch/refresh/:userId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+app.post('/api/library/twitch/live', async (req, res, next) => {
+  try {
+    const library = await readLibrary();
+    const twitchCreators = library.creators.filter(c => c.platform === 'twitch' && c.id);
+    if (!twitchCreators.length) return res.json({ library, liveCount: 0, refreshedAt: new Date().toISOString() });
+
+    // Twitch supports multiple user_id parameters on Get Streams. Refreshing all
+    // followed streamers in one request keeps Live fast and avoids re-fetching
+    // VODs/clips just to know who is online.
+    const ids = twitchCreators.map(c => c.id).slice(0, 100);
+    const streamsRes = await twitchGet('streams', { user_id: ids, first: 100 });
+    const streams = streamsRes.data || [];
+    const byUser = new Map(streams.map(s => [String(s.user_id), s]));
+    const refreshedAt = new Date().toISOString();
+
+    library.creators = library.creators.map(c => {
+      if (c.platform !== 'twitch') return c;
+      const stream = byUser.get(String(c.id)) || null;
+      if (!stream) {
+        return { ...c, isLive: false, live: null, refreshedAt };
+      }
+      return {
+        ...c,
+        isLive: true,
+        title: stream.title || c.title || null,
+        gameName: stream.game_name || c.gameName || null,
+        live: {
+          id: stream.id,
+          title: stream.title || 'Live stream',
+          viewerCount: Number(stream.viewer_count || 0),
+          startedAt: stream.started_at || null,
+          gameName: stream.game_name || null,
+          thumbnail: twitchThumb(stream.thumbnail_url)
+        },
+        refreshedAt
+      };
+    });
+
+    await writeLibrary(library);
+    res.json({ library, liveCount: streams.length, refreshedAt });
+  } catch (e) { next(e); }
+});
+
 app.delete('/api/library/creators/:platform/:id', async (req, res, next) => {
   try {
     const library = await readLibrary();

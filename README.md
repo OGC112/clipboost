@@ -345,3 +345,8 @@ Double-click `Publish ClipBoost Update.bat`. It stages changes, creates a commit
 ### Refresh the local development folder
 
 Double-click `Update ClipBoost Dev.bat` to run `git pull --rebase origin main` followed by `npm install`.
+
+## 21.2.1 Twitch Live Fix
+- Dedicated batch live-status refresh for followed Twitch creators.
+- Automatic refresh every 60 seconds while Library → Twitch → Live is open.
+- Watch Live opens Twitch externally for reliable Electron desktop playback.
