@@ -1,4 +1,4 @@
-param([string]$RepoRoot = '')
+﻿param([string]$RepoRoot = '')
 $ErrorActionPreference = 'Stop'
 
 if (-not $RepoRoot) {
@@ -37,7 +37,7 @@ Start-Sleep -Seconds 2
 
 Write-Host ''
 Write-Host '====================================================' -ForegroundColor Green
-Write-Host ' ClipBoost Auto Publisher v1.2 installed' -ForegroundColor Green
+Write-Host ' ClipBoost Auto Publisher v1.3 installed' -ForegroundColor Green
 Write-Host '====================================================' -ForegroundColor Green
 Write-Host ''
 Write-Host "Repository: $RepoRoot"

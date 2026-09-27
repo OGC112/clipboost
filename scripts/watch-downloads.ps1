@@ -178,8 +178,17 @@ function Process-ClipBoostZip {
         Push-Location $RepoRoot
         try {
             Write-Log 'Checking Git repository...'
+
+            $branch = ((& git branch --show-current) -join '').Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'git branch --show-current failed' }
+            if ($branch -ne 'main') {
+                throw "Auto Publisher expects the repository to be on branch 'main', but current branch is '$branch'."
+            }
+
+            # Fetch only here. A strict pull --ff-only used to fail whenever local main
+            # was already ahead of GitHub or had diverged. We safely reconcile after
+            # the update is committed, when the worktree is clean.
             Invoke-GitCommand -GitArguments @('fetch','origin')
-            Invoke-GitCommand -GitArguments @('pull','--ff-only','origin','main')
 
             $currentVersion = $null
             $currentPackagePath = Join-Path $RepoRoot 'package.json'
@@ -189,8 +198,22 @@ function Process-ClipBoostZip {
                     $currentVersion = Parse-Version ([string]$currentPackage.version)
                 } catch {}
             }
-            if ($currentVersion -and $newVersion -lt $currentVersion) {
-                Write-Log "Ignored older version $newVersion because repo is $currentVersion."
+
+            $remoteVersion = $null
+            try {
+                $remotePackageJson = (& git show 'origin/main:package.json' 2>$null) -join "`n"
+                if ($LASTEXITCODE -eq 0 -and $remotePackageJson) {
+                    $remotePackage = $remotePackageJson | ConvertFrom-Json
+                    $remoteVersion = Parse-Version ([string]$remotePackage.version)
+                }
+            } catch {}
+
+            $highestExistingVersion = $currentVersion
+            if ($remoteVersion -and ((-not $highestExistingVersion) -or $remoteVersion -gt $highestExistingVersion)) {
+                $highestExistingVersion = $remoteVersion
+            }
+            if ($highestExistingVersion -and $newVersion -lt $highestExistingVersion) {
+                Write-Log "Ignored older version $newVersion because repository/GitHub already has $highestExistingVersion."
                 Mark-Processed $signature
                 Save-Status 'running' "Ignored older v$newVersion"
                 return
@@ -225,6 +248,31 @@ function Process-ClipBoostZip {
                 Write-Log "Created Git commit for v$newVersion."
             } else {
                 Write-Log "No new file changes for v$newVersion; checking push state."
+            }
+
+            # Re-fetch because GitHub may have moved while npm/install/build prep was
+            # running. Reconcile main without deleting local commits or files.
+            Invoke-GitCommand -GitArguments @('fetch','origin')
+            $countsLine = ((& git rev-list --left-right --count 'HEAD...origin/main') -join ' ').Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'git rev-list failed while comparing local main with origin/main' }
+            $parts = $countsLine -split '\s+'
+            if ($parts.Count -lt 2) { throw "Unable to parse Git divergence state: $countsLine" }
+            $ahead = [int]$parts[0]
+            $behind = [int]$parts[1]
+
+            Write-Log "Git state before push: local ahead=$ahead, behind=$behind"
+
+            if ($behind -gt 0 -and $ahead -eq 0) {
+                Write-Log 'GitHub is ahead; fast-forwarding local main...'
+                Invoke-GitCommand -GitArguments @('merge','--ff-only','origin/main')
+            }
+            elseif ($behind -gt 0 -and $ahead -gt 0) {
+                Write-Log 'Local main and GitHub both changed; rebasing local commits onto origin/main...'
+                & git rebase origin/main
+                if ($LASTEXITCODE -ne 0) {
+                    & git rebase --abort 2>$null | Out-Null
+                    throw 'Automatic rebase could not be completed. No local commit was deleted. Resolve the Git conflict once, then retry.'
+                }
             }
 
             Invoke-GitCommand -GitArguments @('push','origin','main')
