@@ -61,9 +61,13 @@ jobs:
         shell: pwsh
         run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
 
+      - name: Build web assets
+        shell: pwsh
+        run: npm run build
+
       - name: Build Windows installer
         shell: pwsh
-        run: npm run desktop:build
+        run: npx electron-builder --win nsis --publish never
 
       - name: Verify updater files
         shell: pwsh
