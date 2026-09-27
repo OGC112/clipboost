@@ -1,0 +1,1713 @@
+import 'dotenv/config';
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs/promises';
+import fsSync from 'fs';
+import crypto from 'crypto';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const root = path.resolve(__dirname, '..');
+const storageRoot = process.env.CLIPBOOST_DATA_DIR ? path.resolve(process.env.CLIPBOOST_DATA_DIR) : path.join(root, 'storage');
+const uploadsDir = path.join(storageRoot, 'uploads');
+const metaDir = path.join(storageRoot, 'meta');
+const exportsDir = process.env.CLIPBOOST_EXPORT_DIR ? path.resolve(process.env.CLIPBOOST_EXPORT_DIR) : path.join(storageRoot, 'exports');
+const previewsDir = path.join(storageRoot, 'previews');
+for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir]) fsSync.mkdirSync(dir, { recursive: true });
+
+const libraryFile = path.join(storageRoot, 'library.json');
+
+const settingsEnvPath = process.env.DOTENV_CONFIG_PATH ? path.resolve(process.env.DOTENV_CONFIG_PATH) : path.join(root, '.env');
+const SETTINGS_KEYS = [
+  'YOUTUBE_API_KEY','TWITCH_CLIENT_ID','TWITCH_CLIENT_SECRET',
+  'PYTHON_BIN','LOCAL_WHISPER_MODEL','LOCAL_WHISPER_DEVICE','LOCAL_WHISPER_COMPUTE_TYPE',
+  'LOCAL_WHISPER_CHUNK_SECONDS','LOCAL_WHISPER_WORKERS','LOCAL_WHISPER_CPU_THREADS','LOCAL_WHISPER_SKIP_SILENCE',
+  'OLLAMA_URL','OLLAMA_MODEL','CLIPBOOST_EXPORT_DIR','CLIPBOOST_UPDATE_OWNER','CLIPBOOST_UPDATE_REPO'
+];
+function parseEnvText(text='') {
+  const out = {};
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const idx = line.indexOf('=');
+    if (idx < 0) continue;
+    const key = line.slice(0,idx).trim();
+    let value = line.slice(idx+1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1,-1);
+    out[key] = value;
+  }
+  return out;
+}
+function serializeEnv(map) {
+  return Object.entries(map).map(([k,v]) => `${k}=${String(v ?? '').replace(/\r?\n/g,'')}`).join('\n') + '\n';
+}
+async function readSettingsEnv() {
+  try { return parseEnvText(await fs.readFile(settingsEnvPath, 'utf8')); }
+  catch { return {}; }
+}
+async function writeSettingsEnv(nextValues) {
+  const current = await readSettingsEnv();
+  for (const key of SETTINGS_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(nextValues, key)) current[key] = String(nextValues[key] ?? '').trim();
+  }
+  await fs.writeFile(settingsEnvPath, serializeEnv(current), 'utf8');
+  for (const key of SETTINGS_KEYS) if (Object.prototype.hasOwnProperty.call(current, key)) process.env[key] = current[key];
+  return current;
+}
+function maskSecret(value='') {
+  const v = String(value || '');
+  if (!v) return '';
+  if (v.length <= 8) return '••••••••';
+  return `${v.slice(0,4)}••••••••${v.slice(-4)}`;
+}
+
+
+async function readLibrary() {
+  try { return JSON.parse(await fs.readFile(libraryFile, 'utf8')); }
+  catch { return { creators: [] }; }
+}
+async function writeLibrary(data) {
+  await fs.writeFile(libraryFile, JSON.stringify(data, null, 2));
+}
+function youtubeKey() {
+  const key = String(process.env.YOUTUBE_API_KEY || '').trim();
+  if (!key) throw Object.assign(new Error('YOUTUBE_API_KEY is missing. Add it to .env and restart ClipBoost.'), { status: 503 });
+  return key;
+}
+async function youtubeGet(endpoint, params = {}) {
+  const url = new URL(`https://www.googleapis.com/youtube/v3/${endpoint}`);
+  Object.entries({ ...params, key: youtubeKey() }).forEach(([k,v]) => v !== undefined && v !== null && url.searchParams.set(k, String(v)));
+  const response = await fetch(url);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = body?.error?.message || `YouTube API request failed (${response.status}).`;
+    throw Object.assign(new Error(message), { status: response.status });
+  }
+  return body;
+}
+function parseYoutubeInput(raw = '') {
+  const input = String(raw).trim();
+  if (!input) throw Object.assign(new Error('Enter a YouTube @handle, channel URL, or channel ID.'), { status: 400 });
+  if (/^UC[\w-]{20,}$/i.test(input)) return { id: input };
+  if (input.startsWith('@')) return { forHandle: input };
+  try {
+    const u = new URL(input.includes('://') ? input : `https://${input}`);
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'channel' && parts[1]) return { id: parts[1] };
+    if (parts[0]?.startsWith('@')) return { forHandle: parts[0] };
+    if (parts[0] === 'user' && parts[1]) return { forUsername: parts[1] };
+  } catch {}
+  return { forHandle: input.startsWith('@') ? input : `@${input.replace(/^@/, '')}` };
+}
+function isoDurationToSeconds(value='PT0S') {
+  const m = String(value).match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
+  if (!m) return 0;
+  return (Number(m[1]||0)*86400)+(Number(m[2]||0)*3600)+(Number(m[3]||0)*60)+Number(m[4]||0);
+}
+function formatYoutubeVideo(item, details = {}) {
+  const snippet = item.snippet || details.snippet || {};
+  const videoId = item.contentDetails?.videoId || snippet.resourceId?.videoId || details.id;
+  const thumbs = snippet.thumbnails || details.snippet?.thumbnails || {};
+  return {
+    id: videoId,
+    title: snippet.title || details.snippet?.title || 'Untitled video',
+    publishedAt: item.contentDetails?.videoPublishedAt || snippet.publishedAt || details.snippet?.publishedAt || null,
+    thumbnail: thumbs.maxres?.url || thumbs.standard?.url || thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || null,
+    duration: isoDurationToSeconds(details.contentDetails?.duration),
+    isShort: isoDurationToSeconds(details.contentDetails?.duration) > 0 && isoDurationToSeconds(details.contentDetails?.duration) <= 180,
+    viewCount: Number(details.statistics?.viewCount || 0),
+    likeCount: Number(details.statistics?.likeCount || 0),
+    url: videoId ? `https://www.youtube.com/watch?v=${videoId}` : null
+  };
+}
+
+const youtubeSearchCache = new Map();
+function youtubeChannelSummary(channel) {
+  const thumbnails = channel.snippet?.thumbnails || {};
+  return {
+    platform: 'youtube',
+    id: channel.id,
+    handle: channel.snippet?.customUrl || null,
+    name: channel.snippet?.title || 'YouTube creator',
+    description: channel.snippet?.description || '',
+    avatar: thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || null,
+    subscribers: Number(channel.statistics?.subscriberCount || 0),
+    totalViews: Number(channel.statistics?.viewCount || 0),
+    videoCount: Number(channel.statistics?.videoCount || 0),
+    channelUrl: channel.snippet?.customUrl ? `https://www.youtube.com/${channel.snippet.customUrl}` : `https://www.youtube.com/channel/${channel.id}`
+  };
+}
+async function searchYoutubeCreators(rawQuery) {
+  const query = String(rawQuery || '').trim();
+  if (query.length < 2) return [];
+  const cacheKey = query.toLowerCase();
+  const cached = youtubeSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 5 * 60_000) return cached.results;
+
+  const parsed = parseYoutubeInput(query);
+  const looksExact = query.startsWith('@') || /^UC[\w-]{20,}$/i.test(query) || /youtube\.com/i.test(query);
+  let channels = [];
+  if (looksExact) {
+    const exact = await youtubeGet('channels', { part: 'snippet,statistics', ...parsed });
+    channels = exact.items || [];
+  } else {
+    const search = await youtubeGet('search', { part: 'snippet', type: 'channel', q: query, maxResults: 6 });
+    const ids = (search.items || []).map(item => item.snippet?.channelId || item.id?.channelId).filter(Boolean);
+    if (ids.length) {
+      const details = await youtubeGet('channels', { part: 'snippet,statistics', id: ids.join(',') });
+      const map = new Map((details.items || []).map(c => [c.id, c]));
+      channels = ids.map(id => map.get(id)).filter(Boolean);
+    }
+  }
+  const results = channels.map(youtubeChannelSummary);
+  youtubeSearchCache.set(cacheKey, { at: Date.now(), results });
+  return results;
+}
+async function fetchYoutubeUploadsPage(playlistId, pageToken = null) {
+  if (!playlistId) return { videos: [], nextPageToken: null };
+  const playlist = await youtubeGet('playlistItems', {
+    part: 'snippet,contentDetails',
+    playlistId,
+    maxResults: 50,
+    pageToken: pageToken || undefined
+  });
+  const ids = (playlist.items || []).map(x => x.contentDetails?.videoId || x.snippet?.resourceId?.videoId).filter(Boolean);
+  let detailMap = new Map();
+  if (ids.length) {
+    const details = await youtubeGet('videos', { part: 'snippet,contentDetails,statistics', id: ids.join(',') });
+    detailMap = new Map((details.items || []).map(v => [v.id, v]));
+  }
+  const videos = (playlist.items || []).map(item => {
+    const id = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+    const details = detailMap.get(id);
+    return details ? formatYoutubeVideo(item, details) : null;
+  }).filter(Boolean);
+  return { videos, nextPageToken: playlist.nextPageToken || null };
+}
+
+function youtubeRecentCutoffDate() {
+  const d = new Date();
+  d.setUTCMonth(d.getUTCMonth() - 3);
+  return d;
+}
+
+async function fetchYoutubeRecentWindow(playlistId) {
+  const cutoff = youtubeRecentCutoffDate();
+  let pageToken = null;
+  let nextPageToken = null;
+  let videos = [];
+  let pages = 0;
+  // Upload playlists are newest-first. Fetch only until we cross the 3-month
+  // boundary, then keep the returned nextPageToken for explicit older-history loading.
+  do {
+    const page = await fetchYoutubeUploadsPage(playlistId, pageToken);
+    videos = mergeYoutubeVideos(videos, page.videos || []);
+    nextPageToken = page.nextPageToken || null;
+    pages += 1;
+    const oldest = (page.videos || []).reduce((min, v) => {
+      const t = new Date(v.publishedAt || 0).getTime();
+      return t && t < min ? t : min;
+    }, Infinity);
+    if (!nextPageToken || oldest <= cutoff.getTime()) break;
+    pageToken = nextPageToken;
+  } while (pages < 20);
+  return { videos, nextPageToken, cutoff: cutoff.toISOString(), pages };
+}
+
+function mergeYoutubeVideos(fresh = [], existing = []) {
+  const map = new Map();
+  for (const video of [...fresh, ...existing]) if (video?.id && !map.has(video.id)) map.set(video.id, video);
+  return [...map.values()].sort((a,b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+}
+
+async function fetchYoutubeCreator(input, existingCreator = null) {
+  const filter = parseYoutubeInput(input);
+  const channels = await youtubeGet('channels', { part: 'snippet,contentDetails,statistics', ...filter });
+  const channel = channels.items?.[0];
+  if (!channel) throw Object.assign(new Error('YouTube channel not found. Try its @handle or /channel/ URL.'), { status: 404 });
+  const uploads = channel.contentDetails?.relatedPlaylists?.uploads;
+  const recentWindow = await fetchYoutubeRecentWindow(uploads);
+  const thumbnails = channel.snippet?.thumbnails || {};
+  const previousVideos = existingCreator?.id === channel.id ? (existingCreator.videos || []) : [];
+  return {
+    platform: 'youtube',
+    id: channel.id,
+    handle: channel.snippet?.customUrl || null,
+    name: channel.snippet?.title || 'YouTube creator',
+    description: channel.snippet?.description || '',
+    avatar: thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || null,
+    subscribers: Number(channel.statistics?.subscriberCount || 0),
+    totalViews: Number(channel.statistics?.viewCount || 0),
+    videoCount: Number(channel.statistics?.videoCount || 0),
+    channelUrl: channel.snippet?.customUrl ? `https://www.youtube.com/${channel.snippet.customUrl}` : `https://www.youtube.com/channel/${channel.id}`,
+    uploadsPlaylistId: uploads || null,
+    videos: mergeYoutubeVideos(recentWindow.videos, previousVideos),
+    youtubeNextPageToken: recentWindow.nextPageToken,
+    youtubeHistoryInitialized: true,
+    youtubeRecentCutoff: recentWindow.cutoff,
+    refreshedAt: new Date().toISOString()
+  };
+}
+
+
+function twitchConfig() {
+  const clientId = String(process.env.TWITCH_CLIENT_ID || '').trim();
+  const clientSecret = String(process.env.TWITCH_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) {
+    throw Object.assign(new Error('Twitch API is not configured. Add TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET to .env, then restart ClipBoost.'), { status: 503 });
+  }
+  return { clientId, clientSecret };
+}
+
+let twitchTokenCache = { token: '', expiresAt: 0 };
+async function twitchAccessToken() {
+  if (twitchTokenCache.token && twitchTokenCache.expiresAt > Date.now() + 60_000) return twitchTokenCache.token;
+  const { clientId, clientSecret } = twitchConfig();
+  const body = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' });
+  const response = await fetch('https://id.twitch.tv/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.access_token) throw Object.assign(new Error(data.message || 'Could not authenticate with Twitch.'), { status: response.status || 502 });
+  twitchTokenCache = { token: data.access_token, expiresAt: Date.now() + Math.max(60, Number(data.expires_in || 3600)) * 1000 };
+  return data.access_token;
+}
+
+async function twitchGet(endpoint, params = {}) {
+  const { clientId } = twitchConfig();
+  const token = await twitchAccessToken();
+  const url = new URL(`https://api.twitch.tv/helix/${endpoint}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) value.forEach(v => url.searchParams.append(key, String(v)));
+    else url.searchParams.set(key, String(value));
+  }
+  const response = await fetch(url, { headers: { 'Client-Id': clientId, 'Authorization': `Bearer ${token}` } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body?.message || `Twitch API request failed (${response.status}).`), { status: response.status });
+  return body;
+}
+
+function parseTwitchInput(raw = '') {
+  const input = String(raw).trim();
+  if (!input) throw Object.assign(new Error('Enter a Twitch username or channel URL.'), { status: 400 });
+  try {
+    const u = new URL(input.includes('://') ? input : `https://${input}`);
+    if (/twitch\.tv$/i.test(u.hostname) || /www\.twitch\.tv$/i.test(u.hostname)) {
+      const login = u.pathname.split('/').filter(Boolean)[0];
+      if (login) return login.toLowerCase();
+    }
+  } catch {}
+  return input.replace(/^@/, '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+}
+
+function twitchDurationToSeconds(value = '') {
+  const m = String(value).match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/i);
+  return (Number(m?.[1] || 0) * 3600) + (Number(m?.[2] || 0) * 60) + Number(m?.[3] || 0);
+}
+function twitchThumb(url = '', width = 640, height = 360) {
+  return String(url || '').replace(/%\{width\}/g, String(width)).replace(/%\{height\}/g, String(height));
+}
+function twitchUserSummary(user, extra = {}) {
+  return {
+    platform: 'twitch', id: user.id, login: user.login, handle: user.login,
+    name: user.display_name || user.login || 'Twitch creator', description: user.description || '',
+    avatar: user.profile_image_url || extra.thumbnail_url || null,
+    channelUrl: `https://www.twitch.tv/${user.login}`,
+    isLive: Boolean(extra.is_live), gameName: extra.game_name || null, title: extra.title || null
+  };
+}
+
+const twitchSearchCache = new Map();
+async function searchTwitchCreators(rawQuery) {
+  const query = String(rawQuery || '').trim();
+  if (query.length < 2) return [];
+  const cacheKey = query.toLowerCase();
+  const cached = twitchSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 5 * 60_000) return cached.results;
+  const search = await twitchGet('search/channels', { query, first: 8, live_only: false });
+  const rows = search.data || [];
+  const logins = rows.map(x => x.broadcaster_login).filter(Boolean);
+  let users = [];
+  if (logins.length) users = (await twitchGet('users', { login: logins })).data || [];
+  const rowMap = new Map(rows.map(x => [String(x.broadcaster_login || '').toLowerCase(), x]));
+  const results = users.map(u => twitchUserSummary(u, rowMap.get(String(u.login || '').toLowerCase()) || {}));
+  twitchSearchCache.set(cacheKey, { at: Date.now(), results });
+  return results;
+}
+
+async function fetchTwitchCreator(input) {
+  const login = parseTwitchInput(input);
+  const users = await twitchGet('users', { login });
+  const user = users.data?.[0];
+  if (!user) throw Object.assign(new Error('Twitch channel not found. Try the streamer username or Twitch channel URL.'), { status: 404 });
+  // Fetch every public video type (archives, highlights and uploads). Some Twitch
+  // channels do not keep archive VODs, so filtering to type=archive can incorrectly make
+  // a channel look empty even though public videos exist.
+  const [videosRes, clipsRes, streamsRes, channelsRes] = await Promise.all([
+    twitchGet('videos', { user_id: user.id, first: 100 }),
+    // Omitting a date window lets Twitch return the broadcaster's available clips instead
+    // of restricting results to an arbitrary recent period.
+    twitchGet('clips', { broadcaster_id: user.id, first: 100 }),
+    twitchGet('streams', { user_id: user.id, first: 1 }),
+    twitchGet('channels', { broadcaster_id: user.id })
+  ]);
+  const channel = channelsRes.data?.[0] || {};
+  const stream = streamsRes.data?.[0] || null;
+  const vods = (videosRes.data || []).map(v => ({
+    id: v.id, type: 'vod', videoType: v.type || 'archive', title: v.title || 'Untitled VOD', description: v.description || '',
+    createdAt: v.created_at || v.published_at || null, publishedAt: v.published_at || v.created_at || null,
+    thumbnail: twitchThumb(v.thumbnail_url), duration: twitchDurationToSeconds(v.duration), viewCount: Number(v.view_count || 0),
+    url: v.url || `https://www.twitch.tv/videos/${v.id}`, language: v.language || null,
+    viewable: v.viewable || 'public'
+  }));
+  const clips = (clipsRes.data || []).map(c => ({
+    id: c.id, type: 'clip', title: c.title || 'Untitled clip', creatorName: c.creator_name || '',
+    createdAt: c.created_at || null, publishedAt: c.created_at || null, thumbnail: c.thumbnail_url || null,
+    duration: Number(c.duration || 0), viewCount: Number(c.view_count || 0), url: c.url || null,
+    embedUrl: c.embed_url || null, videoId: c.video_id || null, vodOffset: c.vod_offset ?? null,
+    isFeatured: Boolean(c.is_featured)
+  }));
+  return {
+    ...twitchUserSummary(user, { is_live: Boolean(stream), game_name: stream?.game_name || channel.game_name, title: stream?.title || channel.title }),
+    broadcasterType: user.broadcaster_type || '', totalViews: Number(user.view_count || 0),
+    live: stream ? { id: stream.id, title: stream.title, viewerCount: Number(stream.viewer_count || 0), startedAt: stream.started_at, gameName: stream.game_name, thumbnail: twitchThumb(stream.thumbnail_url) } : null,
+    vods, clips, refreshedAt: new Date().toISOString()
+  };
+}
+
+const app = express();
+app.use(express.json({ limit: '2mb' }));
+app.use('/media', express.static(storageRoot, { acceptRanges: true }));
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_, __, cb) => cb(null, uploadsDir),
+    filename: (_, file, cb) => {
+      const id = crypto.randomUUID();
+      const ext = path.extname(file.originalname || '.mp4').toLowerCase() || '.mp4';
+      cb(null, `${id}${ext}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    if ((file.mimetype || '').startsWith('video/')) cb(null, true);
+    else cb(new Error('Only video files are supported.'));
+  }
+});
+
+function run(command, args, { timeout = 15 * 60 * 1000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error(`${command} timed out`));
+    }, timeout);
+    proc.stdout.on('data', d => stdout += d.toString());
+    proc.stderr.on('data', d => stderr += d.toString());
+    proc.on('error', err => { clearTimeout(timer); reject(err); });
+    proc.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`${command} exited with code ${code}\n${stderr.slice(-3000)}`));
+    });
+  });
+}
+
+
+function externalIngestionConfig() {
+  return {
+    python: String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim(),
+    maxHeight: Math.max(360, Math.min(2160, Number(process.env.INGEST_MAX_HEIGHT || 720)))
+  };
+}
+
+async function findDownloadedProjectFile(projectId) {
+  const entries = await fs.readdir(uploadsDir, { withFileTypes: true }).catch(() => []);
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith(`${projectId}.`)) continue;
+    if (/\.(part|ytdl|json|jpg|jpeg|webp|png)$/i.test(entry.name)) continue;
+    const full = path.join(uploadsDir, entry.name);
+    try {
+      const stat = await fs.stat(full);
+      candidates.push({ full, name: entry.name, size: stat.size, mtime: stat.mtimeMs });
+    } catch {}
+  }
+  candidates.sort((a,b) => b.size - a.size || b.mtime - a.mtime);
+  return candidates[0] || null;
+}
+
+async function patchProject(projectId, patch = {}) {
+  const meta = await readMeta(projectId);
+  Object.assign(meta, patch, { updatedAt: new Date().toISOString() });
+  await writeMeta(meta);
+  return meta;
+}
+
+async function downloadExternalSource(projectId) {
+  const meta = await readMeta(projectId);
+  const source = meta.externalSource;
+  if (!source?.url) throw new Error('This project does not have a downloadable source URL.');
+  if (meta.sourcePath && fsSync.existsSync(meta.sourcePath)) return meta;
+
+  const cfg = externalIngestionConfig();
+  meta.status = 'ingesting';
+  meta.ingestion = { stage: 'starting', progress: 3, engine: 'yt-dlp', startedAt: new Date().toISOString(), error: null };
+  await writeMeta(meta);
+
+  const outputTemplate = path.join(uploadsDir, `${meta.id}.%(ext)s`);
+  const format = `bv*[height<=${cfg.maxHeight}]+ba/b[height<=${cfg.maxHeight}]/b`;
+  const args = [
+    '-m','yt_dlp',
+    '--no-playlist',
+    '--newline',
+    '--progress',
+    '--no-warnings',
+    '-f', format,
+    '--merge-output-format','mp4',
+    '-o', outputTemplate,
+    source.url
+  ];
+
+  await new Promise((resolve, reject) => {
+    const proc = spawn(cfg.python, args, { cwd: root, windowsHide: true });
+    let stderr = '';
+    let stdout = '';
+    let lastWrite = 0;
+    let lastProgress = 3;
+    const consume = chunk => {
+      const text = chunk.toString();
+      stdout += text;
+      const match = text.match(/\[download\]\s+([0-9.]+)%/);
+      if (match) {
+        const raw = Number(match[1]);
+        if (Number.isFinite(raw)) lastProgress = Math.max(4, Math.min(88, Math.round(4 + raw * 0.84)));
+      }
+      const now = Date.now();
+      if (now - lastWrite > 900) {
+        lastWrite = now;
+        readMeta(projectId).then(current => {
+          current.status = 'ingesting';
+          current.ingestion = { ...(current.ingestion || {}), stage: 'downloading', progress: lastProgress, engine: 'yt-dlp', error: null };
+          current.updatedAt = new Date().toISOString();
+          return writeMeta(current);
+        }).catch(() => {});
+      }
+    };
+    proc.stdout?.on('data', consume);
+    proc.stderr?.on('data', d => { stderr += d.toString(); consume(d); });
+    proc.on('error', reject);
+    proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr.trim() || stdout.trim() || `yt-dlp exited with code ${code}`)));
+  });
+
+  const downloaded = await findDownloadedProjectFile(projectId);
+  if (!downloaded) throw new Error('The source downloader finished but no video file was produced.');
+  const details = await probe(downloaded.full);
+  const current = await readMeta(projectId);
+  current.filename = downloaded.name;
+  current.sourcePath = downloaded.full;
+  current.sourceUrl = `/media/uploads/${encodeURIComponent(downloaded.name)}`;
+  current.details = details;
+  current.status = 'uploaded';
+  current.ingestion = { ...(current.ingestion || {}), stage: 'downloaded', progress: 92, engine: 'yt-dlp', completedAt: new Date().toISOString(), error: null };
+  current.updatedAt = new Date().toISOString();
+  await writeMeta(current);
+  return current;
+}
+
+async function startExternalIngestion(projectId) {
+  try {
+    await downloadExternalSource(projectId);
+    const current = await readMeta(projectId);
+    current.status = 'analyzing';
+    current.ingestion = { ...(current.ingestion || {}), stage: 'downloaded', progress: 100, error: null };
+    await writeMeta(current);
+    await analyzeProject(projectId);
+  } catch (err) {
+    try {
+      const current = await readMeta(projectId);
+      current.status = current.sourcePath ? 'uploaded' : 'linked';
+      current.ingestion = {
+        ...(current.ingestion || {}),
+        stage: 'error',
+        progress: Number(current.ingestion?.progress || 0),
+        error: err?.message || 'Automatic source ingestion failed.'
+      };
+      current.updatedAt = new Date().toISOString();
+      await writeMeta(current);
+    } catch {}
+    console.error('External ingestion failed:', err);
+  }
+}
+
+async function probe(file) {
+  const { stdout } = await run('ffprobe', [
+    '-v','quiet','-print_format','json','-show_format','-show_streams', file
+  ], { timeout: 60_000 });
+  const data = JSON.parse(stdout);
+  const video = data.streams.find(s => s.codec_type === 'video') || {};
+  const audio = data.streams.find(s => s.codec_type === 'audio') || {};
+  const duration = Number(data.format?.duration || video.duration || 0);
+  const fpsParts = String(video.avg_frame_rate || '0/1').split('/').map(Number);
+  const fps = fpsParts[1] ? fpsParts[0] / fpsParts[1] : 0;
+  return {
+    duration,
+    width: video.width || 0,
+    height: video.height || 0,
+    fps: Math.round(fps * 100) / 100,
+    videoCodec: video.codec_name || null,
+    audioCodec: audio.codec_name || null,
+    size: Number(data.format?.size || 0),
+    bitrate: Number(data.format?.bit_rate || 0)
+  };
+}
+
+async function readMeta(id) {
+  const file = path.join(metaDir, `${id}.json`);
+  return JSON.parse(await fs.readFile(file, 'utf8'));
+}
+async function writeMeta(meta) {
+  await fs.writeFile(path.join(metaDir, `${meta.id}.json`), JSON.stringify(meta, null, 2));
+}
+
+
+
+
+app.get('/api/settings', async (req,res,next) => {
+  try {
+    const env = await readSettingsEnv();
+    res.json({
+      values: {
+        YOUTUBE_API_KEY: maskSecret(env.YOUTUBE_API_KEY),
+        TWITCH_CLIENT_ID: env.TWITCH_CLIENT_ID || '',
+        TWITCH_CLIENT_SECRET: maskSecret(env.TWITCH_CLIENT_SECRET),
+        PYTHON_BIN: env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3'),
+        LOCAL_WHISPER_MODEL: env.LOCAL_WHISPER_MODEL || 'small',
+        LOCAL_WHISPER_DEVICE: env.LOCAL_WHISPER_DEVICE || 'cpu',
+        LOCAL_WHISPER_COMPUTE_TYPE: env.LOCAL_WHISPER_COMPUTE_TYPE || 'int8',
+        LOCAL_WHISPER_CHUNK_SECONDS: env.LOCAL_WHISPER_CHUNK_SECONDS || '120',
+        LOCAL_WHISPER_WORKERS: env.LOCAL_WHISPER_WORKERS || '2',
+        LOCAL_WHISPER_CPU_THREADS: env.LOCAL_WHISPER_CPU_THREADS || '0',
+        LOCAL_WHISPER_SKIP_SILENCE: (env.LOCAL_WHISPER_SKIP_SILENCE || 'true') !== 'false',
+        OLLAMA_URL: env.OLLAMA_URL || 'http://127.0.0.1:11434',
+        OLLAMA_MODEL: env.OLLAMA_MODEL || 'qwen2.5:3b',
+        CLIPBOOST_EXPORT_DIR: env.CLIPBOOST_EXPORT_DIR || exportsDir,
+        CLIPBOOST_UPDATE_OWNER: env.CLIPBOOST_UPDATE_OWNER || '',
+        CLIPBOOST_UPDATE_REPO: env.CLIPBOOST_UPDATE_REPO || ''
+      },
+      configured: {
+        youtube: Boolean(env.YOUTUBE_API_KEY), twitch: Boolean(env.TWITCH_CLIENT_ID && env.TWITCH_CLIENT_SECRET)
+      }
+    });
+  } catch(e) { next(e); }
+});
+app.post('/api/settings', async (req,res,next) => {
+  try {
+    const body = req.body || {};
+    const current = await readSettingsEnv();
+    const next = {};
+    for (const key of SETTINGS_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(body,key)) continue;
+      let value = body[key];
+      if (typeof value === 'boolean') value = value ? 'true' : 'false';
+      value = String(value ?? '').trim();
+      if ((key === 'YOUTUBE_API_KEY' || key === 'TWITCH_CLIENT_SECRET') && value.includes('••')) continue;
+      next[key] = value;
+    }
+    const saved = await writeSettingsEnv(next);
+    res.json({ ok:true, restartRecommended: Object.keys(next).some(k => ['PYTHON_BIN','LOCAL_WHISPER_DEVICE','LOCAL_WHISPER_COMPUTE_TYPE','CLIPBOOST_EXPORT_DIR'].includes(k)), configured:{ youtube:Boolean(saved.YOUTUBE_API_KEY), twitch:Boolean(saved.TWITCH_CLIENT_ID && saved.TWITCH_CLIENT_SECRET) } });
+  } catch(e) { next(e); }
+});
+
+app.get('/api/integrations/status', (req, res) => {
+  res.json({ youtube: { configured: Boolean(String(process.env.YOUTUBE_API_KEY || '').trim()) }, twitch: { configured: Boolean(String(process.env.TWITCH_CLIENT_ID || '').trim() && String(process.env.TWITCH_CLIENT_SECRET || '').trim()) }, localAI: { configured: true, whisperModel: String(process.env.LOCAL_WHISPER_MODEL || 'small'), ollamaModel: String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') } });
+});
+
+app.get('/api/library/creators', async (req, res, next) => {
+  try { res.json(await readLibrary()); } catch (e) { next(e); }
+});
+
+
+app.get('/api/library/youtube/search', async (req, res, next) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) return res.json({ results: [] });
+    const results = await searchYoutubeCreators(query);
+    res.json({ results });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/library/youtube/creator', async (req, res, next) => {
+  try {
+    const creator = await fetchYoutubeCreator(req.body?.input);
+    const library = await readLibrary();
+    const existing = library.creators.findIndex(c => c.platform === 'youtube' && c.id === creator.id);
+    if (existing >= 0) library.creators[existing] = creator;
+    else library.creators.unshift(creator);
+    await writeLibrary(library);
+    res.json({ creator, library });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/library/youtube/refresh/:channelId', async (req, res, next) => {
+  try {
+    const library = await readLibrary();
+    const previous = library.creators.find(c => c.platform === 'youtube' && c.id === req.params.channelId) || null;
+    const creator = await fetchYoutubeCreator(req.params.channelId, previous);
+    const existing = library.creators.findIndex(c => c.platform === 'youtube' && c.id === creator.id);
+    if (existing >= 0) library.creators[existing] = creator;
+    else library.creators.unshift(creator);
+    await writeLibrary(library);
+    res.json({ creator, library });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/library/youtube/load-more/:channelId', async (req, res, next) => {
+  try {
+    const library = await readLibrary();
+    const index = library.creators.findIndex(c => c.platform === 'youtube' && c.id === req.params.channelId);
+    if (index < 0) throw Object.assign(new Error('YouTube creator not found in library.'), { status: 404 });
+    let creator = library.creators[index];
+
+    // Robust history loading: do not depend on a previously persisted page token.
+    // We rebuild the cursor from the oldest upload already present, then return up
+    // to 50 uploads older than that boundary. This survives restarts/migrations.
+    if (!creator.uploadsPlaylistId) {
+      const channels = await youtubeGet('channels', { part: 'snippet,contentDetails,statistics', id: creator.id });
+      const channel = channels.items?.[0];
+      if (!channel) throw Object.assign(new Error('YouTube channel could not be refreshed.'), { status: 404 });
+      creator.uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads || null;
+      creator.videoCount = Number(channel.statistics?.videoCount || creator.videoCount || 0);
+      creator.avatar = channel.snippet?.thumbnails?.high?.url || channel.snippet?.thumbnails?.medium?.url || channel.snippet?.thumbnails?.default?.url || creator.avatar || null;
+      creator.name = channel.snippet?.title || creator.name;
+      if (!creator.uploadsPlaylistId) throw Object.assign(new Error('This channel does not expose an uploads playlist.'), { status: 400 });
+    }
+
+    const existing = Array.isArray(creator.videos) ? creator.videos : [];
+    const existingIds = new Set(existing.map(v => v?.id).filter(Boolean));
+    const oldestLoadedMs = existing.reduce((min, v) => {
+      const t = new Date(v?.publishedAt || 0).getTime();
+      return t && t < min ? t : min;
+    }, Infinity);
+
+    let pageToken = null;
+    let collected = [];
+    let scannedPages = 0;
+    let reachedBoundary = !Number.isFinite(oldestLoadedMs);
+    let hasMore = false;
+
+    while (scannedPages < 30 && collected.length < 50) {
+      const page = await fetchYoutubeUploadsPage(creator.uploadsPlaylistId, pageToken);
+      scannedPages += 1;
+      const videos = page.videos || [];
+
+      for (const video of videos) {
+        const publishedMs = new Date(video.publishedAt || 0).getTime();
+        if (!reachedBoundary) {
+          if (publishedMs < oldestLoadedMs) reachedBoundary = true;
+          else continue;
+        }
+        if (!existingIds.has(video.id) && collected.length < 50) collected.push(video);
+      }
+
+      pageToken = page.nextPageToken || null;
+      if (!pageToken) { hasMore = false; break; }
+      hasMore = true;
+    }
+
+    creator.videos = mergeYoutubeVideos(collected, existing);
+    creator.youtubeHistoryInitialized = true;
+    creator.youtubeNextPageToken = hasMore ? 'stateless' : null;
+    creator.refreshedAt = new Date().toISOString();
+    library.creators[index] = creator;
+    await writeLibrary(library);
+
+    res.json({ creator, library, loaded: collected.length, done: !hasMore, mode: 'older-than-oldest' });
+  } catch (e) { next(e); }
+});
+
+app.get('/api/library/twitch/search', async (req, res, next) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) return res.json({ results: [] });
+    res.json({ results: await searchTwitchCreators(query) });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/library/twitch/creator', async (req, res, next) => {
+  try {
+    const creator = await fetchTwitchCreator(req.body?.input);
+    const library = await readLibrary();
+    const existing = library.creators.findIndex(c => c.platform === 'twitch' && c.id === creator.id);
+    if (existing >= 0) library.creators[existing] = creator;
+    else library.creators.unshift(creator);
+    await writeLibrary(library);
+    res.json({ creator, library });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/library/twitch/refresh/:userId', async (req, res, next) => {
+  try {
+    const library = await readLibrary();
+    const existingCreator = library.creators.find(c => c.platform === 'twitch' && c.id === req.params.userId);
+    if (!existingCreator) throw Object.assign(new Error('Twitch creator not found in library.'), { status: 404 });
+    const creator = await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name);
+    const existing = library.creators.findIndex(c => c.platform === 'twitch' && c.id === creator.id);
+    if (existing >= 0) library.creators[existing] = creator;
+    else library.creators.unshift(creator);
+    await writeLibrary(library);
+    res.json({ creator, library });
+  } catch (e) { next(e); }
+});
+
+app.delete('/api/library/creators/:platform/:id', async (req, res, next) => {
+  try {
+    const library = await readLibrary();
+    library.creators = library.creators.filter(c => !(c.platform === req.params.platform && c.id === req.params.id));
+    await writeLibrary(library);
+    res.json(library);
+  } catch (e) { next(e); }
+});
+
+app.post('/api/projects/from-library', async (req, res, next) => {
+  try {
+    const platform = String(req.body?.platform || '').trim();
+    const creatorId = String(req.body?.creatorId || '').trim();
+    const mediaType = String(req.body?.mediaType || '').trim();
+    const mediaId = String(req.body?.mediaId || '').trim();
+    if (!['youtube','twitch'].includes(platform) || !creatorId || !mediaId) {
+      return res.status(400).json({ error: 'Invalid Library source.' });
+    }
+    const library = await readLibrary();
+    const creator = library.creators.find(c => c.platform === platform && c.id === creatorId);
+    if (!creator) return res.status(404).json({ error: 'Creator not found in Library.' });
+    let item = null;
+    if (platform === 'youtube') item = (creator.videos || []).find(v => String(v.id) === mediaId);
+    else if (mediaType === 'clip') item = (creator.clips || []).find(v => String(v.id) === mediaId);
+    else item = (creator.vods || []).find(v => String(v.id) === mediaId);
+    if (!item) return res.status(404).json({ error: 'Video source not found in Library.' });
+
+    const id = crypto.randomUUID();
+    const meta = {
+      id,
+      originalName: item.title || `${creator.name} source`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'linked',
+      details: { duration: Number(item.duration || 0) },
+      candidates: [],
+      externalSource: {
+        platform,
+        mediaType: platform === 'youtube' ? 'video' : mediaType,
+        id: String(item.id),
+        url: item.url || null,
+        thumbnail: item.thumbnail || null,
+        title: item.title || null,
+        creatorName: creator.name || creator.login || creator.handle || 'Creator',
+        creatorId: creator.id,
+        creatorHandle: creator.handle || creator.login || null,
+        publishedAt: item.publishedAt || item.createdAt || null,
+        viewCount: Number(item.viewCount || 0)
+      }
+    };
+    await writeMeta(meta);
+    res.json(meta);
+  } catch (e) { next(e); }
+});
+
+
+app.post('/api/projects/:id/ingest', async (req, res, next) => {
+  try {
+    const meta = await readMeta(req.params.id);
+    if (!meta.externalSource?.url) return res.status(400).json({ error: 'This project is not linked to a Library source.' });
+    if (meta.sourcePath && fsSync.existsSync(meta.sourcePath)) return res.json(meta);
+    if (['ingesting','analyzing'].includes(meta.status)) return res.status(202).json(meta);
+    meta.status = 'ingesting';
+    meta.ingestion = { ...(meta.ingestion || {}), stage: 'queued', progress: 1, engine: 'yt-dlp', error: null };
+    meta.updatedAt = new Date().toISOString();
+    await writeMeta(meta);
+    setTimeout(() => startExternalIngestion(meta.id), 10);
+    res.status(202).json(meta);
+  } catch (e) { next(e); }
+});
+
+app.get('/api/projects', async (req, res, next) => {
+  try {
+    const names = await fs.readdir(metaDir).catch(() => []);
+    const projects = [];
+    for (const name of names.filter(n => n.endsWith('.json'))) {
+      try {
+        const meta = JSON.parse(await fs.readFile(path.join(metaDir, name), 'utf8'));
+        projects.push({
+          id: meta.id,
+          originalName: meta.originalName,
+          createdAt: meta.createdAt,
+          updatedAt: meta.updatedAt || meta.createdAt,
+          status: meta.status,
+          details: meta.details || {},
+          externalSource: meta.externalSource || null,
+          candidateCount: Array.isArray(meta.candidates) ? meta.candidates.length : 0,
+          sourceUrl: meta.sourceUrl || null
+        });
+      } catch {}
+    }
+    projects.sort((a,b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+    res.json(projects);
+  } catch (e) { next(e); }
+});
+
+app.post('/api/videos', upload.single('video'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No video uploaded.' });
+    const requestedProjectId = String(req.body?.projectId || '').trim();
+    let existingProject = null;
+    if (/^[0-9a-f-]{36}$/i.test(requestedProjectId)) {
+      existingProject = await readMeta(requestedProjectId).catch(() => null);
+    }
+    const id = existingProject?.id || path.parse(req.file.filename).name;
+    const details = await probe(req.file.path);
+    const meta = {
+      ...(existingProject || {}),
+      id,
+      originalName: existingProject?.originalName || req.file.originalname,
+      filename: req.file.filename,
+      sourcePath: req.file.path,
+      sourceUrl: `/media/uploads/${req.file.filename}`,
+      createdAt: existingProject?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'uploaded',
+      details,
+      candidates: []
+    };
+    await writeMeta(meta);
+    res.json(meta);
+  } catch (e) { next(e); }
+});
+
+function parseSilences(stderr) {
+  const starts = [...stderr.matchAll(/silence_start:\s*([0-9.]+)/g)].map(m => Number(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*([0-9.]+)/g)].map(m => Number(m[1]));
+  return ends.map((end, i) => ({ start: starts[i] ?? Math.max(0, end - 1), end })).filter(x => Number.isFinite(x.end));
+}
+function parseScenes(stderr) {
+  const matches = [...stderr.matchAll(/pts_time:([0-9.]+)/g)].map(m => Number(m[1]));
+  return [...new Set(matches.filter(Number.isFinite))];
+}
+
+function buildCandidates(duration, scenes, silences) {
+  const points = [];
+  scenes.forEach(t => points.push({ t, type: 'scene' }));
+  silences.forEach(s => points.push({ t: s.end, type: 'silence' }));
+  if (!points.length) {
+    for (let i = 1; i <= 8; i++) points.push({ t: duration * i / 9, type: 'fallback' });
+  }
+  const scored = points.map((p, idx) => {
+    const sceneDensity = scenes.filter(t => Math.abs(t - p.t) <= 18).length;
+    const silenceBefore = silences.some(s => p.t - s.end >= 0 && p.t - s.end < 2.5);
+    const centrality = duration ? 1 - Math.abs((p.t / duration) - .5) : 0;
+    const score = Math.min(99, Math.round(58 + sceneDensity * 6 + (silenceBefore ? 12 : 0) + centrality * 8));
+    return { ...p, idx, score, sceneDensity, silenceBefore };
+  }).sort((a,b) => b.score - a.score);
+
+  const selected = [];
+  for (const p of scored) {
+    const clipDuration = Math.max(18, Math.min(38, 22 + p.sceneDensity * 2));
+    const start = Math.max(0, Math.min(duration - clipDuration, p.t - (p.silenceBefore ? 1.2 : 5.5)));
+    const end = Math.min(duration, start + clipDuration);
+    if (selected.some(s => Math.abs(s.start - start) < 14)) continue;
+    const reason = p.silenceBefore
+      ? 'Clean speech entry after a pause'
+      : p.sceneDensity >= 3
+        ? 'High visual activity and fast pacing'
+        : 'Strong structural transition';
+    selected.push({
+      id: crypto.randomUUID(),
+      start: Number(start.toFixed(2)), end: Number(end.toFixed(2)),
+      duration: Number((end-start).toFixed(2)), score: p.score,
+      reason, signals: { sceneDensity: p.sceneDensity, cleanEntry: p.silenceBefore }
+    });
+    if (selected.length >= 5) break;
+  }
+  while (selected.length < 5 && duration > 5) {
+    const i = selected.length;
+    const clipDuration = Math.min(28, duration);
+    const start = Math.max(0, Math.min(duration - clipDuration, duration * (i + 1) / 6 - clipDuration / 2));
+    selected.push({ id: crypto.randomUUID(), start, end: start + clipDuration, duration: clipDuration, score: 72-i*2, reason: 'Balanced fallback segment', signals: {} });
+  }
+  return selected;
+}
+
+async function makeThumbnail(sourcePath, id, candidate, index) {
+  const dir = path.join(uploadsDir, id);
+  await fs.mkdir(dir, { recursive: true });
+  const out = path.join(dir, `candidate-${index}.jpg`);
+  const at = Math.min(candidate.end - .2, candidate.start + Math.min(3, candidate.duration / 2));
+  await run('ffmpeg', ['-y','-ss', String(Math.max(0, at)), '-i', sourcePath, '-frames:v','1','-vf','scale=720:-2','-q:v','3',out], { timeout: 90_000 });
+  return `/media/uploads/${id}/candidate-${index}.jpg`;
+}
+
+
+
+function localAiConfig() {
+  return {
+    python: String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim(),
+    whisperModel: String(process.env.LOCAL_WHISPER_MODEL || 'small').trim(),
+    whisperDevice: String(process.env.LOCAL_WHISPER_DEVICE || 'cpu').trim(),
+    whisperComputeType: String(process.env.LOCAL_WHISPER_COMPUTE_TYPE || 'int8').trim(),
+    ollamaUrl: String(process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, ''),
+    ollamaModel: String(process.env.OLLAMA_MODEL || 'qwen2.5:3b').trim()
+  };
+}
+
+function normalizeWord(word, offset = 0) {
+  return {
+    word: String(word?.word || word?.text || '').trim(),
+    start: Number((Number(word?.start || 0) + offset).toFixed(3)),
+    end: Number((Number(word?.end || word?.start || 0) + offset).toFixed(3))
+  };
+}
+
+function wordsToCaptions(words = []) {
+  const captions = [];
+  let current = [];
+  let start = null;
+  const flush = () => {
+    if (!current.length) return;
+    const end = current[current.length - 1].end;
+    const text = current.map(w => w.word).join(' ').replace(/\s+([,.;!?])/g, '$1').trim();
+    if (text) captions.push({
+      id: crypto.randomUUID(),
+      start: Number(start.toFixed(3)),
+      end: Number(end.toFixed(3)),
+      text
+    });
+    current = []; start = null;
+  };
+  for (const w of words) {
+    if (!w.word) continue;
+    if (start === null) start = w.start;
+    current.push(w);
+    const text = current.map(x => x.word).join(' ');
+    const duration = w.end - start;
+    if (current.length >= 5 || text.length >= 28 || duration >= 1.8 || /[.!?]$/.test(w.word)) flush();
+  }
+  flush();
+  return captions;
+}
+
+function transcriptBlocks(words = [], blockSeconds = 12) {
+  const blocks = [];
+  let block = [];
+  let blockStart = null;
+  for (const w of words) {
+    if (!w.word) continue;
+    if (blockStart === null) blockStart = w.start;
+    block.push(w);
+    if (w.end - blockStart >= blockSeconds || /[.!?]$/.test(w.word) && w.end - blockStart >= 6) {
+      blocks.push({
+        start: blockStart,
+        end: w.end,
+        text: block.map(x => x.word).join(' ').replace(/\s+([,.;!?])/g, '$1')
+      });
+      block = []; blockStart = null;
+    }
+  }
+  if (block.length) blocks.push({ start: blockStart || 0, end: block[block.length-1].end, text: block.map(x=>x.word).join(' ') });
+  return blocks;
+}
+
+async function runJsonProcess(command, args, options = {}) {
+  return await new Promise((resolve, reject) => {
+    const { onStderrLine, idleTimeout = 12 * 60_000, ...spawnOptions } = options;
+    const child = spawn(command, args, { cwd: root, windowsHide: true, ...spawnOptions });
+    let stdout = '';
+    let stderr = '';
+    let stderrLineBuffer = '';
+    let settled = false;
+    let idleTimer = null;
+    const touch = () => {
+      if (!idleTimeout) return;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        child.kill('SIGKILL');
+        reject(new Error(`Local transcription stalled for ${Math.round(idleTimeout/60000)} minutes. ClipBoost will retry with smaller chunks.`));
+      }, idleTimeout);
+    };
+    touch();
+    child.stdout?.on('data', d => { stdout += d.toString(); touch(); });
+    child.stderr?.on('data', d => {
+      touch();
+      const text = d.toString();
+      stderr += text;
+      stderrLineBuffer += text;
+      const lines = stderrLineBuffer.split(/\r?\n/);
+      stderrLineBuffer = lines.pop() || '';
+      if (typeof onStderrLine === 'function') {
+        for (const line of lines) {
+          try { onStderrLine(line); } catch {}
+        }
+      }
+    });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true; clearTimeout(idleTimer); child.kill('SIGKILL');
+      reject(new Error(`Local AI process timed out. ${stderr.slice(-500)}`));
+    }, options.timeout || 60 * 60_000);
+    child.on('error', err => { if (settled) return; settled = true; clearTimeout(timer); clearTimeout(idleTimer); reject(err); });
+    child.on('close', code => {
+      if (settled) return; settled = true;
+      clearTimeout(timer); clearTimeout(idleTimer);
+      if (code !== 0) return reject(new Error(stderr.trim() || `Local AI process exited with code ${code}.`));
+      try { resolve(JSON.parse(stdout.trim())); }
+      catch { reject(new Error(`Local transcription returned invalid JSON. ${stderr.slice(-500)}`)); }
+    });
+  });
+}
+
+async function transcribeLocally(meta) {
+  const cfg = localAiConfig();
+  if (meta.transcript?.words?.length) return meta.transcript;
+  const script = path.join(root, 'scripts', 'transcribe_local.py');
+  const preferredChunk = Math.max(45, Math.min(600, Number(process.env.LOCAL_WHISPER_CHUNK_SECONDS || 120)));
+  const whisperWorkers = Math.max(1, Math.min(4, Number(process.env.LOCAL_WHISPER_WORKERS || 2)));
+  const whisperCpuThreads = Math.max(0, Number(process.env.LOCAL_WHISPER_CPU_THREADS || 0));
+  const skipSilence = String(process.env.LOCAL_WHISPER_SKIP_SILENCE || 'true');
+  const attempts = [...new Set([preferredChunk, Math.max(60, Math.floor(preferredChunk / 2))])];
+  const cacheBase = path.join(storageRoot, 'transcript-cache', meta.id);
+  fsSync.mkdirSync(cacheBase, { recursive: true });
+  let lastError = null;
+
+  for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
+    const chunkSeconds = attempts[attemptIndex];
+    try {
+      if (attemptIndex > 0) {
+        const current = await readMeta(meta.id);
+        current.analysis = { ...(current.analysis || {}), stage: 'transcription-retry', progress: 43, retryChunkSeconds: chunkSeconds, warning: `Retrying transcription with ${chunkSeconds}s chunks.` };
+        await writeMeta(current);
+      }
+      const result = await runJsonProcess(cfg.python, [
+        script,
+        '--input', meta.sourcePath,
+        '--model', cfg.whisperModel,
+        '--device', cfg.whisperDevice,
+        '--compute-type', cfg.whisperComputeType,
+        '--chunk-seconds', String(chunkSeconds),
+        '--cache-dir', path.join(cacheBase, String(chunkSeconds)),
+        '--workers', String(whisperWorkers),
+        '--cpu-threads', String(whisperCpuThreads),
+        '--skip-silence', skipSilence
+      ], {
+        timeout: 90 * 60_000,
+        idleTimeout: Math.max(4 * 60_000, Number(process.env.LOCAL_WHISPER_CHUNK_TIMEOUT_MS || 10 * 60_000)),
+        onStderrLine: line => {
+          if (!line.startsWith('@@PROGRESS ')) return;
+          try {
+            const p = JSON.parse(line.slice('@@PROGRESS '.length));
+            const pct = Math.max(0, Math.min(100, Number(p.percent || 0)));
+            const mapped = Math.round(42 + pct * 0.28);
+            readMeta(meta.id).then(current => {
+              current.analysis = {
+                ...(current.analysis || {}),
+                stage: 'transcription',
+                progress: mapped,
+                transcriptionProgress: pct,
+                transcriptionChunk: Number(p.done || 0),
+                transcriptionChunks: Number(p.total || 0),
+                transcriptionChunkSeconds: chunkSeconds,
+                transcriptionWorkers: Number(p.workers || whisperWorkers),
+                transcriptionSpeechSeconds: Number(p.speech_seconds || 0),
+                transcriptionSkippedSeconds: Number(p.skipped_seconds || 0),
+                retryAttempt: attemptIndex
+              };
+              return writeMeta(current);
+            }).catch(() => {});
+          } catch {}
+        }
+      });
+      const words = (result.words || []).map(w => normalizeWord(w));
+      return {
+        text: String(result.text || '').trim(),
+        words,
+        captions: wordsToCaptions(words),
+        model: `faster-whisper:${result.model || cfg.whisperModel}`,
+        language: result.language || null,
+        duration: Number(result.duration || 0),
+        chunks: Number(result.chunks || 0),
+        chunkSeconds,
+        workers: Number(result.workers || whisperWorkers),
+        skippedSilenceSeconds: Number(result.skipped_silence_seconds || 0),
+        speechSeconds: Number(result.speech_seconds || 0)
+      };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Local transcription failed.');
+}
+
+async function ollamaGenerateJson(prompt) {
+  const cfg = localAiConfig();
+  const response = await fetch(`${cfg.ollamaUrl}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: cfg.ollamaModel,
+      prompt,
+      stream: false,
+      format: 'json',
+      options: { temperature: 0.2 }
+    }),
+    signal: AbortSignal.timeout(10 * 60_000)
+  });
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch {}
+  if (!response.ok) throw new Error(body?.error || `Ollama request failed (${response.status}).`);
+  const raw = String(body.response || '').trim();
+  try { return JSON.parse(raw); }
+  catch { throw new Error('Ollama returned invalid JSON. Try a different local model or run `ollama pull qwen2.5:3b`.'); }
+}
+
+function resolveClipTarget(durationSeconds = 0, preference = 'auto') {
+  const explicit = Number(preference);
+  if ([5, 10, 20].includes(explicit)) return explicit;
+  const minutes = Math.max(0, Number(durationSeconds || 0)) / 60;
+  if (minutes < 5) return 3;
+  if (minutes < 15) return 5;
+  if (minutes < 30) return 8;
+  if (minutes < 60) return 12;
+  if (minutes < 120) return 16;
+  return 20;
+}
+
+function textTokens(value='') {
+  return new Set(String(value).toLowerCase().replace(/[^a-z0-9à-ÿ\s]/gi,' ').split(/\s+/).filter(x=>x.length>3));
+}
+function textSimilarity(a='', b='') {
+  const A=textTokens(a), B=textTokens(b); if(!A.size||!B.size) return 0;
+  let both=0; for(const x of A) if(B.has(x)) both++;
+  return both/Math.max(1, Math.min(A.size,B.size));
+}
+function overlapRatio(a,b) {
+  const overlap=Math.max(0,Math.min(a.end,b.end)-Math.max(a.start,b.start));
+  return overlap/Math.max(1,Math.min(a.end-a.start,b.end-b.start));
+}
+function selectDiverseCandidates(input=[], target=8, duration=0) {
+  const cleaned=[...input].filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start+2)
+    .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+  const unique=[];
+  for(const c of cleaned){
+    if(unique.some(x=>overlapRatio(x,c)>0.42 || (Math.abs(x.start-c.start)<10 && textSimilarity(x.hook||x.title,c.hook||c.title)>.55))) continue;
+    unique.push(c);
+  }
+  if(unique.length<=target) return unique;
+  const bins=Math.min(target, Math.max(1, Math.ceil(Number(duration||0)/600)));
+  const selected=[];
+  for(let b=0;b<bins;b++){
+    const lo=(duration*b)/bins, hi=(duration*(b+1))/bins;
+    const best=unique.find(c=>c.start>=lo&&c.start<hi&&!selected.includes(c));
+    if(best) selected.push(best);
+  }
+  for(const c of unique){ if(selected.length>=target) break; if(!selected.includes(c)) selected.push(c); }
+  return selected.slice(0,target).sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+}
+
+function heuristicTranscriptCandidates(meta, transcript, fallbackCandidates = [], preference = 'auto') {
+  const duration = Number(meta.details?.duration || 0);
+  const target = resolveClipTarget(duration, preference);
+  const blocks = transcriptBlocks(transcript.words || [], 8);
+  if (!blocks.length) return selectDiverseCandidates(fallbackCandidates, target, duration);
+  const scored = blocks.map((b, i) => {
+    const text = b.text || '';
+    let score = 60;
+    if (/[!?]/.test(text)) score += 8;
+    if (/\b(why|how|never|best|worst|crazy|insane|secret|problem|actually|impossible|comment|pourquoi|comment|jamais|incroyable|secret|problème|vraiment|attends|regarde|wait|look)\b/i.test(text)) score += 9;
+    if (text.length >= 55 && text.length <= 180) score += 5;
+    const timelineBonus = duration > 0 ? Math.round(((b.start / duration) % .2) * 8) : 0;
+    return { ...b, score: Math.min(90, score + timelineBonus), i };
+  }).sort((a,b)=>b.score-a.score);
+  const out=[];
+  for (const b of scored) {
+    const start=Math.max(0,b.start-2.5);
+    const end=Math.min(duration, Math.max(start+18, Math.min(start+55,b.end+22)));
+    out.push({ id:crypto.randomUUID(), start:Number(start.toFixed(2)), end:Number(end.toFixed(2)), duration:Number((end-start).toFixed(2)), score:b.score, title:`Transcript moment ${out.length+1}`, hook:b.text.slice(0,140), reason:'Strong transcript segment selected locally', signals:{semantic:true,local:true} });
+  }
+  const diversified=selectDiverseCandidates(out, target, duration);
+  return diversified.length>=Math.min(3,target)?diversified:selectDiverseCandidates([...out,...fallbackCandidates],target,duration);
+}
+
+async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates = [], preference = 'auto') {
+  const blocks = transcriptBlocks(transcript.words || []);
+  const duration = Number(meta.details?.duration || 0);
+  const target = resolveClipTarget(duration, preference);
+  if (!blocks.length) return selectDiverseCandidates(fallbackCandidates, target, duration);
+
+  // Long-form videos are analyzed in timeline sections so the model cannot spend
+  // every recommendation on the beginning of a two-hour VOD.
+  const sectionCount = duration > 20*60 ? Math.min(6, Math.max(2, Math.ceil(target/4))) : 1;
+  const clips=[];
+  for(let section=0; section<sectionCount; section++){
+    const sectionStart=(duration*section)/sectionCount;
+    const sectionEnd=(duration*(section+1))/sectionCount;
+    const sectionBlocks=blocks.filter(b=>b.end>=sectionStart&&b.start<sectionEnd);
+    if(!sectionBlocks.length) continue;
+    const timedText=sectionBlocks.map(b=>`[${b.start.toFixed(1)}-${b.end.toFixed(1)}] ${b.text}`).join('\n');
+    const inputText=timedText.length>36000?timedText.slice(0,36000):timedText;
+    const ask=Math.min(6, Math.max(2, Math.ceil(target/sectionCount)+1));
+    const prompt=`You are an expert short-form video editor. Analyze ONLY this timeline section and select up to ${ask} complete, self-contained short clips. Each clip should usually be 18-60 seconds, begin on a strong hook, avoid cutting sentences in half, and end on a natural payoff. Prefer different ideas, emotions and story beats rather than duplicates. Score each 0-100 for hook, clarity, payoff, emotional energy and shareability.\n\nReturn ONLY JSON:\n{"clips":[{"start":0,"end":30,"score":85,"title":"Short title","hook":"Opening hook","reason":"Why this works"}]}\n\nFull video duration: ${duration.toFixed(1)} seconds.\nCurrent section: ${sectionStart.toFixed(1)}-${sectionEnd.toFixed(1)} seconds.\nTranscript:\n${inputText}`;
+    try{
+      const parsed=await ollamaGenerateJson(prompt);
+      for(const [i,c] of (parsed.clips||[]).entries()){
+        const start=Math.max(sectionStart,Math.min(sectionEnd,Number(c.start||sectionStart)));
+        const end=Math.max(start+3,Math.min(duration,sectionEnd+6,Number(c.end||start+30)));
+        clips.push({ id:crypto.randomUUID(), start:Number(start.toFixed(2)), end:Number(end.toFixed(2)), duration:Number((end-start).toFixed(2)), score:Math.max(0,Math.min(100,Math.round(Number(c.score||0)))), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by local AI'), signals:{semantic:true,local:true,section:section+1} });
+      }
+    }catch(err){
+      // A failed section should not discard the rest of a long-video analysis.
+    }
+  }
+  const diversified=selectDiverseCandidates(clips,target,duration);
+  // Local models sometimes return only one or two valid moments. Always fill the
+  // requested target with deterministic transcript candidates instead of exposing
+  // a single clip for a long-form video.
+  const heuristic=heuristicTranscriptCandidates(meta,transcript,[...clips,...fallbackCandidates],preference);
+  return selectDiverseCandidates([...diversified,...heuristic,...fallbackCandidates],target,duration);
+}
+
+function captionsForRange(transcript, start, end) {
+  return (transcript?.captions || []).filter(c => c.end >= start && c.start <= end).map(c => ({
+    ...c,
+    start: Math.max(0, c.start - start),
+    end: Math.max(0.05, Math.min(end, c.end) - start)
+  }));
+}
+
+function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanced') {
+  const start = Number(candidate.start || 0);
+  const end = Number(candidate.end || start + 30);
+  const clipDuration = Math.max(0, end - start);
+  const events = [];
+  const strength = intensity === 'high' ? 1.18 : intensity === 'low' ? 1.08 : 1.12;
+  events.push({ type: 'reframe', start: 0, end: clipDuration, mode: 'center-subject', confidence: 0.72 });
+  events.push({ type: 'punch-in', start: 0, end: Math.min(1.4, clipDuration), zoom: strength, reason: 'Strengthen the opening hook' });
+
+  for (const s of silences) {
+    const overlapStart = Math.max(start, Number(s.start || 0));
+    const overlapEnd = Math.min(end, Number(s.end || 0));
+    const dur = overlapEnd - overlapStart;
+    if (dur >= 0.55) events.push({ type: 'remove-silence', start: Number((overlapStart-start).toFixed(2)), end: Number((overlapEnd-start).toFixed(2)), duration: Number(dur.toFixed(2)) });
+  }
+
+  const caps = captionsForRange(transcript, start, end);
+  const keywords = /\b(never|why|how|crazy|insane|impossible|actually|wait|look|wow|jamais|pourquoi|comment|incroyable|impossible|attends|regarde)\b/i;
+  let lastEmphasis = -99;
+  for (const cap of caps) {
+    if ((/[!?]/.test(cap.text) || keywords.test(cap.text)) && cap.start - lastEmphasis >= 4.5) {
+      events.push({ type: 'dynamic-zoom', start: Number(cap.start.toFixed(2)), end: Number(Math.min(cap.end + .45, clipDuration).toFixed(2)), zoom: intensity === 'high' ? 1.16 : 1.1, reason: 'Speech emphasis' });
+      lastEmphasis = cap.start;
+    }
+  }
+  if (intensity !== 'low' && clipDuration > 14 && !events.some(e => e.type === 'dynamic-zoom')) {
+    const at = Math.min(clipDuration - 2, Math.max(5, clipDuration * .45));
+    events.push({ type: 'dynamic-zoom', start: Number(at.toFixed(2)), end: Number(Math.min(clipDuration, at + 1.3).toFixed(2)), zoom: 1.09, reason: 'Maintain visual rhythm' });
+  }
+  return {
+    style: 'Dynamic', intensity,
+    autoReframe: true, captions: true, silenceRemoval: true,
+    events: events.sort((a,b)=>a.start-b.start),
+    summary: { cuts: events.filter(e=>e.type==='remove-silence').length, zooms: events.filter(e=>/zoom|punch/.test(e.type)).length, reframes: events.filter(e=>e.type==='reframe').length }
+  };
+}
+
+function assTime(seconds) {
+  const cs = Math.max(0, Math.round(Number(seconds || 0) * 100));
+  const h = Math.floor(cs / 360000);
+  const m = Math.floor((cs % 360000) / 6000);
+  const s = Math.floor((cs % 6000) / 100);
+  const c = cs % 100;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`;
+}
+function assEscape(text='') {
+  return String(text).replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}').replace(/\n/g,'\\N');
+}
+async function writeAssCaptions(meta, start, end) {
+  const captions = captionsForRange(meta.transcript, start, end);
+  if (!captions.length) return null;
+  const file = path.join(exportsDir, `${meta.id}-${Date.now()}.ass`);
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,2,2,70,70,310,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(c.text.toUpperCase())}`).join('\n');
+  await fs.writeFile(file, header + body + '\n', 'utf8');
+  return file;
+}
+function ffmpegFilterPath(file) {
+  return path.resolve(file).replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+}
+
+
+function normalizeRenderOptions(raw = {}) {
+  const intensity = ['low','balanced','high'].includes(String(raw.intensity || '').toLowerCase()) ? String(raw.intensity).toLowerCase() : 'balanced';
+  return {
+    intensity,
+    autoReframe: raw.autoReframe !== false,
+    silenceRemoval: raw.silenceRemoval !== false,
+    dynamicZoom: raw.dynamicZoom !== false,
+    captions: raw.captions !== false
+  };
+}
+
+function subtractIntervals(totalDuration, removals = []) {
+  const duration = Math.max(0.25, Number(totalDuration || 0));
+  const normalized = removals
+    .map(r => ({ start: Math.max(0, Number(r.start || 0)), end: Math.min(duration, Number(r.end || 0)) }))
+    .filter(r => r.end - r.start >= 0.28)
+    .sort((a,b) => a.start - b.start);
+  const merged = [];
+  for (const r of normalized) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end + 0.06) last.end = Math.max(last.end, r.end);
+    else merged.push({ ...r });
+  }
+  const keep = [];
+  let cursor = 0;
+  for (const r of merged) {
+    if (r.start > cursor + 0.08) keep.push({ start: cursor, end: r.start });
+    cursor = Math.max(cursor, r.end);
+  }
+  if (cursor < duration - 0.08) keep.push({ start: cursor, end: duration });
+  return keep.filter(x => x.end - x.start >= 0.12);
+}
+
+function buildEditedTimeline(plan, clipDuration, options) {
+  const removalEvents = options.silenceRemoval
+    ? (plan?.events || []).filter(e => e.type === 'remove-silence').map(e => {
+        const a = Number(e.start || 0), b = Number(e.end || 0);
+        // Preserve a little room around speech so cuts do not feel unnaturally abrupt.
+        return { start: Math.min(b, a + 0.10), end: Math.max(a, b - 0.10) };
+      })
+    : [];
+  const keep = subtractIntervals(clipDuration, removalEvents);
+  const zoomEvents = options.dynamicZoom
+    ? (plan?.events || []).filter(e => e.type === 'dynamic-zoom' || e.type === 'punch-in')
+    : [];
+  const pieces = [];
+  for (const k of keep) {
+    const boundaries = new Set([k.start, k.end]);
+    for (const z of zoomEvents) {
+      const a = Math.max(k.start, Number(z.start || 0));
+      const b = Math.min(k.end, Number(z.end || 0));
+      if (b > a + 0.04) { boundaries.add(a); boundaries.add(b); }
+    }
+    const sorted = [...boundaries].sort((a,b)=>a-b);
+    for (let i=0; i<sorted.length-1; i++) {
+      const a=sorted[i], b=sorted[i+1];
+      if (b-a < 0.06) continue;
+      const mid=(a+b)/2;
+      const active=zoomEvents.filter(z => mid >= Number(z.start||0) && mid <= Number(z.end||0));
+      const zoom=active.reduce((m,z)=>Math.max(m, Number(z.zoom||1)), 1);
+      const prev=pieces[pieces.length-1];
+      if (prev && Math.abs(prev.end-a)<0.02 && Math.abs(prev.zoom-zoom)<0.001) prev.end=b;
+      else pieces.push({ start:a, end:b, zoom });
+    }
+  }
+  return { keep, pieces };
+}
+
+function remapCaptionsForEditedTimeline(meta, clipStart, keepIntervals = []) {
+  const sourceCaptions = meta?.transcript?.captions || [];
+  const out = [];
+  let offset = 0;
+  for (const k of keepIntervals) {
+    const absStart = clipStart + k.start;
+    const absEnd = clipStart + k.end;
+    for (const c of sourceCaptions) {
+      const overlapStart = Math.max(absStart, Number(c.start || 0));
+      const overlapEnd = Math.min(absEnd, Number(c.end || 0));
+      if (overlapEnd <= overlapStart + 0.04) continue;
+      out.push({
+        start: offset + (overlapStart - absStart),
+        end: offset + (overlapEnd - absStart),
+        text: String(c.text || '').trim()
+      });
+    }
+    offset += k.end - k.start;
+  }
+  return out;
+}
+
+async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height=1920) {
+  const captions = remapCaptionsForEditedTimeline(meta, clipStart, keepIntervals).filter(c => c.text);
+  if (!captions.length) return null;
+  const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
+  const fontSize = Math.max(38, Math.round(width * 0.068));
+  const outline = Math.max(3, Math.round(width * 0.0046));
+  const marginV = Math.round(height * 0.16);
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,Arial,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H70000000,-1,0,0,0,100,100,0,0,1,${outline},1,2,55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(c.text.toUpperCase())}`).join('\n');
+  await fs.writeFile(file, header + body + '\n', 'utf8');
+  return file;
+}
+
+async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, render = {}) {
+  if (!meta?.sourcePath || !fsSync.existsSync(meta.sourcePath)) throw Object.assign(new Error('Source file is not available for rendering.'), { status: 409 });
+  const options = normalizeRenderOptions(rawOptions);
+  const safeStart = Math.max(0, Number(start || 0));
+  const safeEnd = Math.min(Number(meta.details?.duration || end || safeStart + 30), Math.max(safeStart + .25, Number(end || safeStart + 30)));
+  const clipDuration = safeEnd - safeStart;
+  const silences = meta.analysis?.timeline?.silences || [];
+  const plan = buildEditPlan({ start: safeStart, end: safeEnd }, meta.transcript, silences, options.intensity);
+  const timeline = buildEditedTimeline(plan, clipDuration, options);
+  if (!timeline.pieces.length) timeline.pieces.push({ start:0, end:clipDuration, zoom:1 });
+
+  const preview = Boolean(render.preview);
+  const width = Number(render.width || (preview ? 540 : 1080));
+  const height = Number(render.height || (preview ? 960 : 1920));
+  const filter = [];
+  const hasAudio = Boolean(meta.details?.audioCodec);
+  for (let i=0; i<timeline.pieces.length; i++) {
+    const part = timeline.pieces[i];
+    const srcA = safeStart + part.start;
+    const srcB = safeStart + part.end;
+    let vf = options.autoReframe
+      ? `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`
+      : `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+    if (Number(part.zoom || 1) > 1.001) {
+      const zw = Math.max(width, Math.round(width * part.zoom));
+      const zh = Math.max(height, Math.round(height * part.zoom));
+      vf += `,scale=${zw}:${zh},crop=${width}:${height}`;
+    }
+    vf += ',setsar=1';
+    filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf}[v${i}]`);
+    if (hasAudio) filter.push(`[0:a]atrim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
+  }
+
+  let videoLabel = 'vcat';
+  let audioLabel = 'acat';
+  if (timeline.pieces.length === 1) {
+    filter.push(`[v0]null[${videoLabel}]`);
+    if (hasAudio) filter.push(`[a0]anull[${audioLabel}]`);
+  } else {
+    const concatInputs = timeline.pieces.map((_,i)=>`[v${i}]${hasAudio?`[a${i}]`:''}`).join('');
+    if (hasAudio) filter.push(`${concatInputs}concat=n=${timeline.pieces.length}:v=1:a=1[${videoLabel}][${audioLabel}]`);
+    else filter.push(`${timeline.pieces.map((_,i)=>`[v${i}]`).join('')}concat=n=${timeline.pieces.length}:v=1:a=0[${videoLabel}]`);
+  }
+
+  let assFile = null;
+  if (options.captions && meta.transcript?.captions?.length) {
+    assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height).catch(() => null);
+    if (assFile) {
+      filter.push(`[${videoLabel}]subtitles='${ffmpegFilterPath(assFile)}'[vout]`);
+      videoLabel = 'vout';
+    }
+  }
+
+  const args = ['-y','-i',meta.sourcePath,'-filter_complex',filter.join(';'),'-map',`[${videoLabel}]`];
+  if (hasAudio) args.push('-map',`[${audioLabel}]`);
+  args.push('-c:v','libx264','-preset',preview?'ultrafast':'veryfast','-crf',preview?'28':'21','-pix_fmt','yuv420p');
+  if (hasAudio) args.push('-c:a','aac','-b:a',preview?'96k':'160k','-ac','2'); else args.push('-an');
+  args.push('-movflags','+faststart',outputPath);
+  await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
+  return {
+    outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
+    editPlan: plan,
+    editApplied: {
+      silenceCuts: options.silenceRemoval ? plan.summary.cuts : 0,
+      zooms: options.dynamicZoom ? plan.summary.zooms : 0,
+      reframed: options.autoReframe,
+      captions: Boolean(assFile)
+    }
+  };
+}
+
+async function analyzeProject(projectId, options = {}) {
+  try {
+    const meta = await readMeta(projectId);
+    meta.status = 'analyzing';
+    meta.analysis = { ...(meta.analysis || {}), stage: 'signals', progress: 12 };
+    await writeMeta(meta);
+    const input = meta.sourcePath;
+    const duration = meta.details.duration || 0;
+    const clipCountPreference = options.clipCount ?? meta.clipCountPreference ?? 'auto';
+    meta.clipCountPreference = clipCountPreference;
+
+    const [silenceResult, sceneResult] = await Promise.all([
+      run('ffmpeg', ['-hide_banner','-i',input,'-vn','-af','silencedetect=noise=-34dB:d=0.35','-f','null','-'], { timeout: 20*60_000 }).catch(() => ({stderr:''})),
+      run('ffmpeg', ['-hide_banner','-i',input,'-an','-vf',"select='gt(scene,0.30)',showinfo",'-vsync','vfr','-f','null','-'], { timeout: 20*60_000 }).catch(() => ({stderr:''}))
+    ]);
+    const silences = parseSilences(silenceResult.stderr);
+    const scenes = parseScenes(sceneResult.stderr);
+    const signalCandidates = buildCandidates(duration, scenes, silences);
+
+    let candidates = signalCandidates;
+    let transcript = meta.transcript || null;
+    let aiError = null;
+    const aiConfigured = true;
+
+    if (aiConfigured) {
+      try {
+        meta.analysis = { scenesDetected: scenes.length, silencesDetected: silences.length, engine: 'FFmpeg + local AI', stage: 'transcription', progress: 42 };
+        await writeMeta(meta);
+        transcript = await transcribeLocally(meta);
+        meta.transcript = transcript;
+        meta.analysis = { ...meta.analysis, stage: 'semantic-clips', progress: 72, transcription: transcript.model, wordCount: transcript.words.length };
+        await writeMeta(meta);
+        candidates = await semanticClipCandidatesLocal(meta, transcript, signalCandidates, clipCountPreference);
+      } catch (err) {
+        aiError = err?.message || 'Local AI analysis failed';
+        candidates = transcript?.words?.length
+          ? heuristicTranscriptCandidates(meta, transcript, signalCandidates, clipCountPreference)
+          : selectDiverseCandidates(signalCandidates, resolveClipTarget(duration, clipCountPreference), duration);
+      }
+    }
+
+    for (let i=0; i<candidates.length; i++) {
+      candidates[i].thumbnailUrl = await makeThumbnail(input, meta.id, candidates[i], i).catch(() => null);
+      if (transcript) {
+        candidates[i].captions = captionsForRange(transcript, candidates[i].start, candidates[i].end);
+      }
+      candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced');
+    }
+    meta.status = 'ready';
+    meta.updatedAt = new Date().toISOString();
+    meta.analysis = {
+      scenesDetected: scenes.length,
+      silencesDetected: silences.length,
+      engine: transcript ? 'FFmpeg + chunked faster-whisper + AI Edit Planner' : 'FFmpeg signal analysis',
+      transcription: transcript?.model || 'not-configured',
+      wordCount: transcript?.words?.length || 0,
+      captionCount: transcript?.captions?.length || 0,
+      stage: 'done',
+      progress: 100,
+      aiConfigured: true,
+      aiError,
+      clipCountPreference,
+      clipTarget: resolveClipTarget(duration, clipCountPreference),
+      clipsGenerated: candidates.length,
+      timeline: {
+        scenes: scenes.slice(0, 1000),
+        silences: silences.filter(s => Number(s.end||0) > Number(s.start||0)).slice(0, 2000)
+      }
+    };
+    meta.candidates = candidates;
+    await writeMeta(meta);
+    return meta;
+  } catch (e) { throw e; }
+}
+
+const previewJobs = new Map();
+function previewCacheKey(projectId, start, end, options = {}) {
+  const variant = JSON.stringify(normalizeRenderOptions(options));
+  return crypto.createHash('sha1').update(`${projectId}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${variant}`).digest('hex').slice(0,20);
+}
+async function ensureCandidatePreview(meta, start, end, options = {}) {
+  const safeStart = Math.max(0, Number(start || 0));
+  const maxDuration = Math.max(0.25, Number(meta?.details?.duration || 0));
+  const safeEnd = Math.min(maxDuration, Math.max(safeStart + 0.25, Number(end || safeStart + 30)));
+  if (!(safeEnd > safeStart)) throw Object.assign(new Error('Invalid preview range.'), { status: 400 });
+  if (!meta?.sourcePath) throw Object.assign(new Error('Source file is not available for preview.'), { status: 409 });
+
+  const key = previewCacheKey(meta.id, safeStart, safeEnd, options);
+  const fileName = `${meta.id}-${key}.mp4`;
+  const filePath = path.join(previewsDir, fileName);
+  if (fsSync.existsSync(filePath) && fsSync.statSync(filePath).size > 1024) {
+    return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: true, edited: true };
+  }
+
+  if (!previewJobs.has(key)) {
+    const job = (async () => {
+      const tmpPath = `${filePath}.tmp.mp4`;
+      await fs.rm(tmpPath, { force: true }).catch(() => {});
+      try {
+        await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:540, height:960 });
+        await fs.rename(tmpPath, filePath);
+      } finally {
+        await fs.rm(tmpPath, { force: true }).catch(() => {});
+      }
+      return filePath;
+    })().finally(() => previewJobs.delete(key));
+    previewJobs.set(key, job);
+  }
+  await previewJobs.get(key);
+  return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: false, edited: true };
+}
+
+app.post('/api/videos/:id/analyze', async (req, res, next) => {
+  try { res.json(await analyzeProject(req.params.id, { clipCount: req.body?.clipCount ?? 'auto' })); } catch (e) { next(e); }
+});
+
+
+app.post('/api/videos/:id/preview', async (req, res, next) => {
+  try {
+    const meta = await readMeta(req.params.id);
+    const index = Number(req.body?.index);
+    const candidate = Number.isInteger(index) && index >= 0 ? meta.candidates?.[index] : null;
+    const start = Number(req.body?.start ?? candidate?.start ?? 0);
+    const end = Number(req.body?.end ?? candidate?.end ?? start + 30);
+    res.json(await ensureCandidatePreview(meta, start, end, req.body?.options || {}));
+  } catch (e) { next(e); }
+});
+
+app.post('/api/videos/:id/export', async (req, res, next) => {
+  try {
+    const meta = await readMeta(req.params.id);
+    const index = Number(req.body?.index);
+    const candidate = Number.isInteger(index) && index >= 0 ? meta.candidates?.[index] : null;
+    const start = Math.max(0, Number(req.body.start ?? candidate?.start ?? 0));
+    const end = Math.min(meta.details.duration, Number(req.body.end ?? candidate?.end ?? start + 30));
+    if (!(end > start)) return res.status(400).json({error:'Invalid clip range.'});
+    const outName = `${meta.id}-clip-${Number.isInteger(index)&&index>=0?String(index+1).padStart(2,'0'):'custom'}-${Date.now()}.mp4`;
+    const outPath = path.join(exportsDir, outName);
+    const result = await renderEditedClip(meta, start, end, outPath, req.body?.options || {}, { preview:false, width:1080, height:1920 });
+    res.json({ url: `/media/exports/${outName}`, filename: outName, ...result });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/videos/:id/export-all', async (req, res, next) => {
+  try {
+    const meta = await readMeta(req.params.id);
+    if (!Array.isArray(meta.candidates) || !meta.candidates.length) return res.status(400).json({ error:'No clip candidates to export.' });
+    const options = req.body?.options || {};
+    const limit = Math.min(40, Math.max(1, Number(req.body?.limit || meta.candidates.length)));
+    const results = [];
+    for (let i=0; i<Math.min(limit, meta.candidates.length); i++) {
+      const c = meta.candidates[i];
+      const outName = `${meta.id}-clip-${String(i+1).padStart(2,'0')}-${Date.now()}.mp4`;
+      const outPath = path.join(exportsDir, outName);
+      const rendered = await renderEditedClip(meta, Number(c.start||0), Number(c.end||0), outPath, options, { preview:false, width:1080, height:1920 });
+      results.push({ index:i, url:`/media/exports/${outName}`, filename:outName, ...rendered });
+    }
+    res.json({ exports: results, count: results.length, exportDir: exportsDir });
+  } catch (e) { next(e); }
+});
+
+app.get('/api/videos/:id', async (req,res,next) => {
+  try { res.json(await readMeta(req.params.id)); } catch (e) { next(e); }
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.message || 'Unexpected server error.' });
+});
+
+const port = Number(process.env.PORT || 8000);
+if (process.env.NODE_ENV === 'production') {
+  // Desktop runtime: serve the source UI directly. This avoids depending on a
+  // Vite bundle inside Electron and keeps the local app deterministic.
+  app.use('/src', express.static(path.join(root, 'src')));
+  app.use('/assets', express.static(path.join(root, 'public', 'assets')));
+  app.get(['/', '/index.html'], (req,res) => res.sendFile(path.join(root, 'index.html')));
+  app.use((req,res,next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/media/')) return next();
+    res.sendFile(path.join(root, 'index.html'));
+  });
+} else {
+  const vite = await createViteServer({ root, server: { middlewareMode: true }, appType: 'spa' });
+  app.use(vite.middlewares);
+}
+app.listen(port, () => console.log(`ClipBoost running at http://localhost:${port}`));

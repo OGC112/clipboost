@@ -1,0 +1,67 @@
+{
+  "name": "clipboost",
+  "productName": "ClipBoost",
+  "private": true,
+  "version": "21.0.2",
+  "description": "AI video clipping, real auto-edit rendering, creator library and analytics desktop app",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "build": "vite build",
+    "desktop": "npm run build && electron .",
+    "desktop:build": "npm run build && electron-builder --win nsis",
+    "desktop:dir": "npm run build && electron-builder --win dir"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "lucide-react": "latest",
+    "multer": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.clipboost.desktop",
+    "productName": "ClipBoost",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "scripts/**/*",
+      "desktop/**/*",
+      "requirements-local-ai.txt",
+      ".env.example",
+      "package.json",
+      "index.html",
+      "src/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "ClipBoost-Setup-${version}.${ext}",
+      "icon": "desktop/assets/clipboost.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClipBoost"
+    }
+  },
+  "author": "ClipBoost"
+}
