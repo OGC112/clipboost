@@ -1,3 +1,7 @@
+# ClipBoost v21.0.3 — Custom dialogs
+
+This build replaces native Windows/browser alerts with ClipBoost-styled dialogs for updates, creator removal, exports, errors, and project deletion.
+
 ## V21.0.2 fullscreen preview fix
 
 Short previews now keep their 9:16 aspect ratio in fullscreen instead of using `object-fit: cover`. The video stays centered on a black background with side bars on widescreen displays.
@@ -216,3 +220,26 @@ The repository must publish electron-builder release artifacts. When a new versi
 ## V20.6 preview reliability
 
 AI Studio now generates a lightweight cached 9:16 MP4 for each selected candidate clip. This makes the short preview independent from the full source video's seek state. Click any generated clip to prepare and play its own preview. Editing Start/End invalidates that cached preview and regenerates it automatically.
+
+## Automatic GitHub releases
+
+This version includes `.github/workflows/release-windows.yml`.
+
+After it is pushed to `main`, every subsequent code push to `main` automatically:
+
+1. Reads the latest `vX.Y.Z` Git tag.
+2. Increments the patch version for the build.
+3. Builds the Windows NSIS installer on GitHub Actions.
+4. Creates the new GitHub Release.
+5. Uploads `ClipBoost-Setup-X.Y.Z.exe`, `latest.yml`, and the `.blockmap` file.
+6. Makes the release available to ClipBoost's Electron auto-updater.
+
+The repository workflow requires **Settings → Actions → General → Workflow permissions → Read and write permissions** so GitHub Actions can create releases.
+
+### Publish an update from Windows
+
+Double-click `Publish ClipBoost Update.bat`. It stages changes, creates a commit, and pushes `main`. GitHub handles the Windows build and Release automatically.
+
+### Refresh the local development folder
+
+Double-click `Update ClipBoost Dev.bat` to run `git pull --rebase origin main` followed by `npm install`.

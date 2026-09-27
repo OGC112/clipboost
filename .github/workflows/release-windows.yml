@@ -1,0 +1,97 @@
+name: Build and publish ClipBoost update
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clipboost-release
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Choose next patch version
+        id: version
+        shell: pwsh
+        run: |
+          git fetch --tags --force
+          $latestTag = git tag --list "v*" --sort=-v:refname | Select-Object -First 1
+
+          if ($latestTag -and $latestTag -match '^v(\d+)\.(\d+)\.(\d+)$') {
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+            $patch = [int]$Matches[3] + 1
+            $version = "$major.$minor.$patch"
+          } else {
+            $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+            $version = [string]$pkg.version
+          }
+
+          Write-Host "Building ClipBoost $version"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Stamp build version
+        shell: pwsh
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: npm run desktop:build
+
+      - name: Verify updater files
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release -Filter "ClipBoost-Setup-*.exe" -File | Select-Object -First 1
+          $yml = Get-ChildItem release -Filter "latest.yml" -File | Select-Object -First 1
+          if (-not $exe) { throw "Windows installer was not generated." }
+          if (-not $yml) { throw "latest.yml was not generated." }
+          Write-Host "Installer: $($exe.Name)"
+          Write-Host "Updater metadata: $($yml.Name)"
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $version = "${{ steps.version.outputs.version }}"
+
+          gh release create $tag --target "$env:GITHUB_SHA" --title "ClipBoost v$version" --generate-notes
+
+          $assets = Get-ChildItem release -File | Where-Object {
+            $_.Name -eq 'latest.yml' -or
+            $_.Name -like 'ClipBoost-Setup-*.exe' -or
+            $_.Name -like '*.blockmap'
+          }
+
+          foreach ($asset in $assets) {
+            Write-Host "Uploading $($asset.Name)"
+            gh release upload $tag "$($asset.FullName)" --clobber
+          }

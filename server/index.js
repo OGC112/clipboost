@@ -861,6 +861,28 @@ app.get('/api/projects', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+app.delete('/api/projects/:id', async (req, res, next) => {
+  try {
+    const meta = await readMeta(req.params.id);
+    if (['ingesting','analyzing'].includes(meta.status)) return res.status(409).json({ error: 'Wait for the current analysis to finish before deleting this project.' });
+    const insideStorage = value => {
+      if (!value) return false;
+      const resolved = path.resolve(value);
+      const rel = path.relative(storageRoot, resolved);
+      return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+    };
+    if (insideStorage(meta.sourcePath)) await fs.rm(path.resolve(meta.sourcePath), { force:true }).catch(() => {});
+    await fs.rm(path.join(storageRoot, 'transcript-cache', meta.id), { recursive:true, force:true }).catch(() => {});
+    const previews = await fs.readdir(previewsDir).catch(() => []);
+    await Promise.all(previews.filter(name => name.startsWith(`${meta.id}-`)).map(name => fs.rm(path.join(previewsDir,name), { force:true }).catch(() => {})));
+    await fs.rm(path.join(metaDir, `${meta.id}.json`), { force:true });
+    res.json({ ok:true, id:meta.id });
+  } catch (e) {
+    if (e?.code === 'ENOENT') return res.status(404).json({ error:'Project not found.' });
+    next(e);
+  }
+});
+
 app.post('/api/videos', upload.single('video'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No video uploaded.' });

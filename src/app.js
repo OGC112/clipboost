@@ -4,7 +4,24 @@
     const raw=String(location.hash||'').replace(/^#\/?/,'').split(/[?&]/)[0].trim();
     return validPages.has(raw)?raw:'home';
   }
-  const state={page:pageFromHash(), video:null, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, libraryLoadMoreBusy:false, youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, clipCountPreference:'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editIntensity:'balanced', editOptions:{autoReframe:true,silenceRemoval:true,dynamicZoom:true,captions:true}, exportBusy:false, exportAllBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null};
+  const state={page:pageFromHash(), video:null, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, libraryLoadMoreBusy:false, youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, clipCountPreference:'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editIntensity:'balanced', editOptions:{autoReframe:true,silenceRemoval:true,dynamicZoom:true,captions:true}, exportBusy:false, exportAllBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, uiModal:null};
+  let uiModalResolve=null;
+  function modalIcon(kind='info'){
+    return {success:'✓',danger:'!',warning:'!',update:'↻',info:'i'}[kind]||'i';
+  }
+  function modalMarkup(){
+    const m=state.uiModal;if(!m)return '';
+    const kind=m.kind||'info';
+    const mode=m.mode||'notice';
+    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div><div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div></section></div>`;
+  }
+  function openModal(options={}){
+    if(uiModalResolve){try{uiModalResolve(false)}catch{}uiModalResolve=null}
+    return new Promise(resolve=>{uiModalResolve=resolve;state.uiModal={mode:'notice',kind:'info',eyebrow:'ClipBoost',confirmLabel:'OK',...options};render();});
+  }
+  function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(resolve)resolve(result)}
+  function showNotice(options={}){return openModal({mode:'notice',...options})}
+  function confirmAction(options={}){return openModal({mode:'confirm',cancelLabel:'Cancel',confirmLabel:'Confirm',...options})}
   function navigate(page,{replace=false}={}){
     if(!validPages.has(page)) page='home';
     state.page=page;
@@ -121,23 +138,23 @@
       state.video=uploaded; try{localStorage.setItem('clipboost:lastProjectId',uploaded.id)}catch{} state.uploadStatus='analyzing'; state.uploadProgress=78; render();
       const r=await fetch(`/api/videos/${uploaded.id}/analyze`,{method:'POST'}); const data=await readJsonResponse(r,'Analysis failed');
       state.video=data; state.selectedCandidate=0; state.uploadStatus='idle'; state.uploadProgress=100; render();
-    }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; alert(e.message||'Upload failed'); render();}
+    }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; showNotice({kind:'danger',title:'Upload failed',message:e.message||'Upload failed'}); render();}
   }
 
   function currentRenderOptions(){return {...state.editOptions,intensity:state.editIntensity}}
   function invalidateRenderedPreviews(){for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false}state.candidatePreviewError='';state.candidatePreviewLoading=false;}
   async function exportCurrent(){
-    const v=state.video; if(!v?.sourceUrl) return alert('Upload the source file first.');
+    const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     state.exportBusy=true;render();
     try{const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export failed');window.open(data.url,'_blank');}
-    catch(e){alert(e.message||'Export failed')} finally {state.exportBusy=false;render()}
+    catch(e){showNotice({kind:'danger',title:'Export failed',message:e.message||'Export failed'})} finally {state.exportBusy=false;render()}
   }
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
     if(state.exportAllBusy)return;state.exportAllBusy=true;render();
-    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');alert(`${data.count||0} edited clips exported.`);if(window.clipboostDesktop?.openExportsFolder)window.clipboostDesktop.openExportsFolder();}
-    catch(e){alert(e.message||'Export all failed')}finally{state.exportAllBusy=false;render()}
+    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');showNotice({kind:'success',title:'Export complete',message:`${data.count||0} edited clips exported successfully.`});if(window.clipboostDesktop?.openExportsFolder)window.clipboostDesktop.openExportsFolder();}
+    catch(e){showNotice({kind:'danger',title:'Export failed',message:e.message||'Export all failed'})}finally{state.exportAllBusy=false;render()}
   }
   function chart(){return `<svg viewBox="0 0 900 260" preserveAspectRatio="none">${[40,90,140,190,240].map(y=>`<line class="gridline" x1="0" x2="900" y1="${y}" y2="${y}"/>`).join('')}<polyline class="line1" points="0,215 70,198 140,202 210,168 280,175 350,141 420,150 490,112 560,130 630,92 700,104 780,55 900,31"/><polyline class="line2" points="0,224 70,215 140,204 210,190 280,193 350,166 420,172 490,152 560,160 630,137 700,145 780,105 900,88"/><polyline class="line3" points="0,230 70,225 140,218 210,209 280,214 350,198 420,202 490,183 560,188 630,172 700,178 780,150 900,134"/></svg>`}
   function analytics(){let heat='';['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((d,r)=>{heat+=`<div class="heatrow"><span>${d}</span>${Array.from({length:10},(_,c)=>`<i class="heatcell" style="opacity:${.18+(((r*3+c*5)%8)+1)*.09}"></i>`).join('')}</div>`});let bars=[['Gaming / Reaction',32],['Hot takes',27],['Storytelling',21],['News / Drama',12],['Tutorials / Tips',8]].map(x=>`<div class="barrow"><span>${x[0]}</span><div class="bar"><i style="width:${x[1]*2.3}%"></i></div><b>${x[1]}%</b></div>`).join('');return `<div class="content"><div class="page-title"><div><div class="eyebrow">Multi-platform intelligence</div><h1>Account analytics</h1><p>Understand what performs and why.</p></div><div class="tabs"><button class="tab active">▶ YouTube</button><button class="tab">♪ TikTok</button><button class="tab">◎ Instagram</button><button class="tab">Last 30 days</button></div></div><div class="kpis">${kpi('Total views','18.7M','+24.8%',0)}${kpi('Followers','1.42M','+12.4%',1)}${kpi('Engagement rate','7.8%','+12.1%',2)}${kpi('Average views','482K','+18.3%',3)}</div><div class="analytics-grid"><section class="card chart"><div class="section-head"><h3>Views over time</h3><span class="muted">Views</span></div>${chart()}</section><section class="card donut-card"><div class="section-head"><h3>Views distribution</h3></div><div class="donut"></div><div class="legend"><span><i class="yt"></i>YouTube 48%</span><span><i class="tt"></i>TikTok 34%</span><span><i class="ig"></i>Instagram 18%</span></div></section><section class="card top-content span2"><div class="section-head"><h3>Top content</h3><span class="muted">View all ›</span></div><div class="topclips">${Array.from({length:5},(_,i)=>`<div class="topclip">${mediaThumb(i)}<span>${['2.4M','1.8M','1.2M','960K','742K'][i]} views</span></div>`).join('')}</div></section><section class="card heat"><h3>Best posting times</h3><div class="heatmap">${heat}</div></section><section class="card dna"><h3>Top performing content types</h3>${bars}</section></div></div>`}
@@ -267,7 +284,7 @@
     try{const r=await fetch('/api/projects');state.projects=await readJsonResponse(r,'Could not load projects')}catch(e){state.projects=[]}finally{state.projectsLoading=false;render()}
   }
   async function openProject(id){
-    try{const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);state.video=await readJsonResponse(r,'Could not open project');state.selectedCandidate=0;try{localStorage.setItem('clipboost:lastProjectId',id)}catch{}navigate('studio');if(['ingesting','analyzing'].includes(state.video?.status))pollProjectUntilSettled(id)}catch(e){alert(e.message||'Could not open project')}
+    try{const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);state.video=await readJsonResponse(r,'Could not open project');state.selectedCandidate=0;try{localStorage.setItem('clipboost:lastProjectId',id)}catch{}navigate('studio');if(['ingesting','analyzing'].includes(state.video?.status))pollProjectUntilSettled(id)}catch(e){showNotice({kind:'danger',title:'Could not open project',message:e.message||'Could not open project'})}
   }
   async function restoreLastStudioProject(){
     if(state.page!=='studio'||state.video||state.restoringProject)return;
@@ -305,10 +322,12 @@
     finally{state.creatorSearchLoading=false;render();setTimeout(()=>{const el=document.getElementById('creatorInput');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},0)}
   }
   async function removeCreator(platform,id,name){
-    if(!confirm(`Remove ${name||'this creator'} from your library?`))return;
+    const label=name||'this creator';
+    const ok=await confirmAction({kind:'danger',eyebrow:'Library',title:`Remove ${label}?`,message:'This creator and the videos currently loaded from them will disappear from your Library.',detail:'You can add the creator again later. Existing AI Studio projects are not deleted.',confirmLabel:'Remove creator'});
+    if(!ok)return;
     state.libraryError='';
-    try{const r=await fetch(`/api/library/creators/${encodeURIComponent(platform)}/${encodeURIComponent(id)}`,{method:'DELETE'});const data=await readJsonResponse(r,'Could not remove creator');state.library=data;state.libraryLoaded=true}
-    catch(e){state.libraryError=e.message||'Could not remove creator'}finally{render()}
+    try{const r=await fetch(`/api/library/creators/${encodeURIComponent(platform)}/${encodeURIComponent(id)}`,{method:'DELETE'});const data=await readJsonResponse(r,'Could not remove creator');state.library=data;state.libraryLoaded=true;showNotice({kind:'success',eyebrow:'Library',title:'Creator removed',message:`${label} was removed from your Library.`})}
+    catch(e){state.libraryError=e.message||'Could not remove creator';showNotice({kind:'danger',title:'Could not remove creator',message:state.libraryError})}finally{render()}
   }
   async function refreshCurrentLibrary(){const platform=state.libraryPlatform||'youtube';if(platform==='youtube')state.youtubeHistoryExpanded=false;const creators=(state.library?.creators||[]).filter(x=>x.platform===platform);if(!creators.length)return;state.libraryLoading=true;state.libraryError='';render();try{for(const c of creators){const r=await fetch(`/api/library/${platform}/refresh/${encodeURIComponent(c.id)}`,{method:'POST'});const data=await readJsonResponse(r,`Could not refresh ${c.name}`);state.library=data.library;}state.libraryLoaded=true;}catch(e){state.libraryError=e.message||'Refresh failed'}finally{state.libraryLoading=false;render()}}
   async function loadMoreYoutubeHistory(){
@@ -329,10 +348,23 @@
   function trends(){return `<div class="content"><div class="page-title"><div><div class="eyebrow">Trend intelligence</div><h1>Trends</h1><p>Track the topics, clips, creators and sounds gaining momentum.</p></div><button class="btn secondary">◉ Live monitoring</button></div><div class="tabs trend-tabs"><button class="tab active">Topics</button><button class="tab">Viral clips</button><button class="tab">Creators</button><button class="tab">Sounds</button><button class="tab">Hashtags</button></div><div class="trend-grid"><section class="card topics"><div class="section-head"><h3>Trending topics</h3><span class="muted">Real time</span></div>${topics.map((t,i)=>`<div class="trend-row"><span class="rank">${i+1}</span><span class="topicball">${t[0][0]}</span><div class="grow"><strong>${t[0]}</strong><small>${t[1]}</small></div>${minichart(i)}</div>`).join('')}</section><section class="card trend-clips"><div class="section-head"><h3>Clips gaining traction</h3><span class="muted">Velocity</span></div>${['1.2M views','960K views','740K views','680K views'].map((v,i)=>`<div class="trend-row"><span class="rank">${i+1}</span><div class="trend-thumb">${avatar(colors[i%5],'sm')}</div><div class="grow"><strong>${v}</strong><small>+${14-i*2}K/h</small></div><span>♡</span></div>`).join('')}</section><section class="card sounds"><h3>Trending sounds</h3>${['Original sound','No way','Gaming vibe','The moment'].map((s,i)=>`<div class="trend-row"><span class="rank">${i+1}</span><span class="topicball">♪</span><div class="grow"><strong>${s}</strong><small>${480-i*72}K uses</small></div><span>▶</span></div>`).join('')}</section><section class="card hashtags"><h3>Trending hashtags</h3>${[['#gta6','2.4M videos'],['#twitchfr','1.8M videos'],['#valorant','1.2M videos'],['#gaming','980K videos']].map((s,i)=>`<div class="trend-row"><span class="topicball">#</span><div class="grow"><strong>${s[0]}</strong><small>${s[1]}</small></div>${minichart(i+4)}</div>`).join('')}</section></div></div>`}
   function projects(){
     const list=Array.isArray(state.projects)?state.projects:[];
-    const rows=list.length?list.map((p,i)=>`<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div><strong>${escapeHtml(p.originalName||'Untitled project')}</strong><div class="muted">${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}</div></div><div class="project-progress"><div class="progress"><i style="width:${p.status==='ready'?100:p.status==='linked'?15:55}%"></i></div><span>${p.status==='ready'?'Ready':p.status==='linked'?'Linked':'Processing'}</span></div><span class="status ${p.status==='ready'?'done':''}">${p.status==='linked'?'Needs source file':p.status==='ready'?'Ready':'In progress'}</span><button class="btn secondary" data-open-project="${escapeHtml(p.id)}">Open</button></div>`).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
+    const rows=list.length?list.map((p,i)=>`<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div><strong>${escapeHtml(p.originalName||'Untitled project')}</strong><div class="muted">${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}</div></div><div class="project-progress"><div class="progress"><i style="width:${p.status==='ready'?100:p.status==='linked'?15:55}%"></i></div><span>${p.status==='ready'?'Ready':p.status==='linked'?'Linked':'Processing'}</span></div><span class="status ${p.status==='ready'?'done':''}">${p.status==='linked'?'Needs source file':p.status==='ready'?'Ready':'In progress'}</span><div class="project-row-actions"><button class="btn secondary" data-open-project="${escapeHtml(p.id)}">Open</button><button class="icon-btn project-delete-btn" type="button" data-delete-project="${escapeHtml(p.id)}" data-delete-project-name="${escapeHtml(p.originalName||'Untitled project')}" title="Delete project">×</button></div></div>`).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
     return `<div class="content"><div class="page-title"><div><div class="eyebrow">Workflow</div><h1>My projects</h1><p>Sources sent from your Library appear here automatically.</p></div><button class="btn primary" data-page="library">+ From Library</button></div><section class="card projects">${state.projectsLoading?'<div class="projects-empty">Loading projects…</div>':rows}</section></div>`
   }
 
+  async function removeProject(id,name){
+    const label=name||'this project';
+    const ok=await confirmAction({kind:'danger',eyebrow:'Projects',title:`Delete ${label}?`,message:'This removes the project, its local source file, cached transcript and generated previews from ClipBoost.',detail:'Previously exported MP4 files are kept in your exports folder.',confirmLabel:'Delete project'});
+    if(!ok)return;
+    try{
+      const r=await fetch(`/api/projects/${encodeURIComponent(id)}`,{method:'DELETE'});
+      await readJsonResponse(r,'Could not delete project');
+      if(state.video?.id===id)state.video=null;
+      try{if(localStorage.getItem('clipboost:lastProjectId')===id)localStorage.removeItem('clipboost:lastProjectId')}catch{}
+      state.projects=null;await loadProjects();
+      showNotice({kind:'success',eyebrow:'Projects',title:'Project deleted',message:`${label} was removed from ClipBoost.`});
+    }catch(e){showNotice({kind:'danger',eyebrow:'Projects',title:'Could not delete project',message:e.message||'Could not delete project'})}
+  }
   async function loadSettings(){
     if(state.settingsLoading)return;state.settingsLoading=true;
     try{
@@ -426,8 +458,12 @@
     else prepareCandidatePreview(index,{autoplay});
   }
 
-  function render(){const pages={home,studio,analytics,library,trends,projects,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>`;bind()}
+  function render(){const pages={home,studio,analytics,library,trends,projects,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${modalMarkup()}`;bind()}
   function bind(){
+    const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
+    const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
+    const modalBackdrop=document.getElementById('cbModalBackdrop');if(modalBackdrop)modalBackdrop.onclick=e=>{if(e.target===modalBackdrop&&state.uiModal?.mode==='confirm')finishModal(false)};
+
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
     const file=document.getElementById('videoFile'),drop=document.getElementById('dropZone');
@@ -493,18 +529,19 @@
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:state.clipCountPreference})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
         state.video=data;state.selectedCandidate=0;
-      }catch(e){alert(e.message||'Could not generate clip variations')}
+      }catch(e){showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
       finally{state.regenerating=false;render()}
     };
     const autoIngest=document.getElementById('autoIngestBtn');if(autoIngest)autoIngest.onclick=()=>state.video?.id&&startProjectIngestion(state.video.id);
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
+    document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
     if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
     if(state.page==='settings'){
       const save=document.getElementById('saveSettingsBtn');if(save)save.onclick=saveSettings;
       const openConfig=document.getElementById('openConfigBtn');if(openConfig)openConfig.onclick=()=>window.clipboostDesktop?.openConfig?.();
       const openExports=document.getElementById('openExportsBtn');if(openExports)openExports.onclick=()=>window.clipboostDesktop?.openExportsFolder?.();
       const openData=document.getElementById('openDataBtn');if(openData)openData.onclick=()=>window.clipboostDesktop?.openDataFolder?.();
-      const check=document.getElementById('checkUpdatesBtn');if(check)check.onclick=()=>window.clipboostDesktop?.checkForUpdates?.();
+      const check=document.getElementById('checkUpdatesBtn');if(check)check.onclick=async()=>{check.disabled=true;try{await window.clipboostDesktop?.checkForUpdates?.()}finally{check.disabled=false}};
       const restart=document.getElementById('restartAppBtn');if(restart)restart.onclick=()=>window.clipboostDesktop?.restartApp?.();
     }
     if(state.page==='library'&&!state.libraryLoaded&&!state.libraryLoading)setTimeout(loadLibrary,0);
@@ -531,6 +568,20 @@
     const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;render()};
     document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
+  async function handleDesktopUpdateEvent(evt={}){
+    const status=evt.status||evt.updateState?.status||'info';
+    if(status==='current') return showNotice({kind:'success',eyebrow:'Updates',title:'ClipBoost is up to date',message:`You are running the latest published version.`,detail:`Version ${evt.version||evt.currentVersion||''}`});
+    if(status==='unconfigured') return showNotice({kind:'warning',eyebrow:'Updates',title:'Update channel not configured',message:'Connect ClipBoost to a GitHub Releases repository in Settings.',detail:'Set CLIPBOOST_UPDATE_OWNER and CLIPBOOST_UPDATE_REPO.'});
+    if(status==='dev') return showNotice({kind:'info',eyebrow:'Updates',title:'Development build',message:'Automatic updates are only available in the installed ClipBoost build.'});
+    if(status==='error') return showNotice({kind:'danger',eyebrow:'Updates',title:'Update check failed',message:evt.message||'ClipBoost could not check for updates.'});
+    if(status==='ready'){
+      const ok=await confirmAction({kind:'update',eyebrow:'Update ready',title:`ClipBoost ${evt.version||''} is ready`,message:'The update has finished downloading.',detail:'Restart ClipBoost now to install it. Your projects and settings will be kept.',confirmLabel:'Restart & install',cancelLabel:'Later'});
+      if(ok)window.clipboostDesktop?.installUpdate?.();
+      return;
+    }
+    if(status==='available') return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
+  }
+  if(window.clipboostDesktop?.onUpdateEvent&&!window.__clipboostUpdateEventsBound){window.__clipboostUpdateEventsBound=true;window.clipboostDesktop.onUpdateEvent(handleDesktopUpdateEvent)}
   if(!location.hash) history.replaceState(null,'','#/home');
   const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0)}};
   window.addEventListener('hashchange',syncRouteFromLocation);

@@ -12,6 +12,7 @@ let updater = null;
 let tray = null;
 let isQuitting = false;
 let updateState = { status: 'idle', version: null, percent: 0 };
+let manualUpdateCheck = false;
 
 function appRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
@@ -93,58 +94,72 @@ async function startBackend() {
   return baseUrl;
 }
 
+function emitUpdateEvent(payload = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:update-event', payload);
+}
+function setupUpdater(owner, repo) {
+  if (updater) return updater;
+  updater = require('electron-updater').autoUpdater;
+  updater.autoDownload = Boolean(readDesktopSettings().autoDownloadUpdates);
+  updater.autoInstallOnAppQuit = true;
+  updater.setFeedURL({ provider:'github', owner, repo });
+  updater.on('checking-for-update', () => { updateState = { status:'checking', version:null, percent:0 }; });
+  updater.on('update-available', info => {
+    updateState = { status:'downloading', version:info.version, percent:0 };
+    if (manualUpdateCheck) emitUpdateEvent({ status:'available', version:info.version, downloading:Boolean(updater.autoDownload), updateState });
+    if (!updater.autoDownload) manualUpdateCheck = false;
+  });
+  updater.on('download-progress', p => {
+    updateState = { ...updateState, status:'downloading', percent:Math.round(p.percent || 0) };
+    emitUpdateEvent({ status:'progress', version:updateState.version, percent:updateState.percent, updateState });
+  });
+  updater.on('update-not-available', info => {
+    updateState = { status:'current', version:info.version || app.getVersion(), percent:100 };
+    if (manualUpdateCheck) emitUpdateEvent({ status:'current', version:app.getVersion(), updateState });
+    manualUpdateCheck = false;
+  });
+  updater.on('error', err => {
+    updateState = { status:'error', version:null, percent:0 };
+    console.error('[ClipBoost Updater]', err);
+    if (manualUpdateCheck) emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
+    manualUpdateCheck = false;
+  });
+  updater.on('update-downloaded', info => {
+    updateState = { status:'ready', version:info.version, percent:100 };
+    emitUpdateEvent({ status:'ready', version:info.version, updateState });
+    manualUpdateCheck = false;
+  });
+  return updater;
+}
 async function checkForUpdates(manual = false) {
   if (!app.isPackaged) {
-    if (manual) dialog.showMessageBox({ type:'info', title:'ClipBoost Updates', message:'Auto-update is available in the installed ClipBoost build.' });
-    return;
+    const result = { ok:true, status:'dev', currentVersion:app.getVersion(), updateState };
+    if (manual) emitUpdateEvent(result);
+    return result;
   }
   const cfg = readDesktopEnv();
   const owner = String(cfg.CLIPBOOST_UPDATE_OWNER || '').trim();
   const repo = String(cfg.CLIPBOOST_UPDATE_REPO || '').trim();
   if (!owner || !repo) {
-    if (manual) dialog.showMessageBox({
-      type:'info', title:'ClipBoost Updates',
-      message:'Update channel is not configured yet.',
-      detail:'Add CLIPBOOST_UPDATE_OWNER and CLIPBOOST_UPDATE_REPO to ClipBoost .env after creating the GitHub repository.'
-    });
-    return;
+    const result = { ok:false, status:'unconfigured', currentVersion:app.getVersion(), updateState };
+    if (manual) emitUpdateEvent(result);
+    return result;
   }
   try {
-    if (!updater) {
-      updater = require('electron-updater').autoUpdater;
-      updater.autoDownload = Boolean(readDesktopSettings().autoDownloadUpdates);
-      updater.autoInstallOnAppQuit = true;
-      updater.setFeedURL({ provider:'github', owner, repo });
-      updater.on('checking-for-update', () => { updateState = { status:'checking', version:null, percent:0 }; });
-      updater.on('update-available', info => { updateState = { status:'downloading', version:info.version, percent:0 }; });
-      updater.on('download-progress', p => { updateState = { ...updateState, status:'downloading', percent:Math.round(p.percent || 0) }; });
-      updater.on('update-not-available', info => {
-        updateState = { status:'current', version:info.version, percent:100 };
-        if (manual) dialog.showMessageBox({ type:'info', title:'ClipBoost Updates', message:'ClipBoost is up to date.', detail:`Version ${app.getVersion()}` });
-      });
-      updater.on('error', err => {
-        updateState = { status:'error', version:null, percent:0 };
-        console.error('[ClipBoost Updater]', err);
-        if (manual) dialog.showErrorBox('Update check failed', err?.message || String(err));
-      });
-      updater.on('update-downloaded', async info => {
-        updateState = { status:'ready', version:info.version, percent:100 };
-        const result = await dialog.showMessageBox(mainWindow, {
-          type:'info', title:'ClipBoost update ready',
-          message:`ClipBoost ${info.version} is ready to install.`,
-          detail:'Restart ClipBoost now to install the update?',
-          buttons:['Restart & Install','Later'], defaultId:0, cancelId:1
-        });
-        if (result.response === 0) updater.quitAndInstall(false, true);
-      });
-    }
-    await updater.checkForUpdates();
+    manualUpdateCheck = Boolean(manual);
+    const client = setupUpdater(owner, repo);
+    client.autoDownload = Boolean(readDesktopSettings().autoDownloadUpdates);
+    await client.checkForUpdates();
+    return { ok:true, status:updateState.status, updateState };
   } catch (err) {
     console.error('[ClipBoost Updater]', err);
-    if (manual) dialog.showErrorBox('Update check failed', err?.message || String(err));
+    const result = { ok:false, status:'error', message:err?.message || String(err), updateState:{ status:'error', version:null, percent:0 } };
+    updateState = result.updateState;
+    if (manual) emitUpdateEvent(result);
+    manualUpdateCheck = false;
+    return result;
   }
 }
-
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -259,7 +274,8 @@ function stopBackend() {
 
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:save-settings', (_event, settings) => ({ ok:true, settings:writeDesktopSettings(settings) }));
-ipcMain.handle('desktop:check-updates', async () => { await checkForUpdates(true); return { ok:true, updateState }; });
+ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
+ipcMain.handle('desktop:install-update', () => { if (updater && updateState.status === 'ready') { isQuitting = true; updater.quitAndInstall(false, true); return { ok:true }; } return { ok:false, error:'No downloaded update is ready.' }; });
 ipcMain.handle('desktop:open-data-folder', () => shell.openPath(ensureUserFiles().dataDir));
 ipcMain.handle('desktop:open-config', () => shell.openPath(ensureUserFiles().envPath));
 ipcMain.handle('desktop:open-exports-folder', () => { const env=readDesktopEnv(); const target=env.CLIPBOOST_EXPORT_DIR || path.join(ensureUserFiles().dataDir,'exports'); fs.mkdirSync(target,{recursive:true}); return shell.openPath(target); });
