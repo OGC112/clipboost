@@ -59,7 +59,7 @@ jobs:
 
       - name: Stamp build version
         shell: pwsh
-        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Build Windows installer
         shell: pwsh
