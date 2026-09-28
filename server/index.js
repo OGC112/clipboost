@@ -2221,7 +2221,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v3`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v4`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -2235,7 +2235,7 @@ async function ensureFaceTracking(meta, start, end, options) {
   const python = String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim();
   const script = path.join(root, 'scripts', 'track_faces.py');
   try {
-    const result = await runJsonProcess(python, [script,'--input',meta.sourcePath,'--start',String(start),'--end',String(end),'--mode',options.trackingMode,'--movement',options.cameraMovement,'--step',options.cameraMovement==='high'?'0.25':options.cameraMovement==='low'?'0.55':'0.36'], { timeout: 8*60_000, idleTimeout: 0 });
+    const result = await runJsonProcess(python, [script,'--input',meta.sourcePath,'--start',String(start),'--end',String(end),'--mode',options.trackingMode,'--movement',options.cameraMovement,'--step',options.speakerTracking?'0.24':(options.cameraMovement==='high'?'0.25':options.cameraMovement==='low'?'0.48':'0.34')], { timeout: 8*60_000, idleTimeout: 0 });
     if (result?.keyframes?.length) await fs.writeFile(cacheFile, JSON.stringify(result), 'utf8').catch(()=>{});
     return result;
   } catch (error) {
@@ -2266,32 +2266,49 @@ function nearestTrackingFrame(tracking, time) {
 function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
-  if(tracking?.keyframes?.length){
-    const minGap=options.cameraMovement==='high'?0.72:options.cameraMovement==='low'?2.0:1.20;
+  const frames=tracking?.keyframes||[];
+  const switchTimes=(tracking?.summary?.speakerSwitchTimes||[]).map(Number).filter(Number.isFinite);
+  if(frames.length){
+    // Reframe from the original source often enough to visibly follow the active speaker.
+    // Camera movement now controls smoothing, not whether we sample the speaker often enough.
+    const maxGap=options.cameraMovement==='high'?.34:options.cameraMovement==='low'?.54:.42;
     let lastTime=-99,lastX=.5,lastY=.45,lastId=null,lastSafe=null;
-    for(const f of tracking.keyframes){
+    for(const f of frames){
       const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null, safe=Boolean(f.safeFrame);
-      const moved=Math.hypot(x-lastX,y-lastY)>0.045;
+      const moved=Math.hypot(x-lastX,y-lastY)>0.018;
       const speakerChanged=id&&lastId&&id!==lastId;
       const safeChanged=lastSafe!==null&&safe!==lastSafe;
-      if(t-lastTime>=minGap || moved || speakerChanged || safeChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;}
+      if(t-lastTime>=maxGap || moved || speakerChanged || safeChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;}
     }
+    // Create a short zoom-out bridge around real speaker changes so the frame never has to teleport.
+    for(const t of switchTimes){ boundaries.push(Math.max(0,t-.22),t,Math.min(Number(timeline?.pieces?.at(-1)?.end||t+.22),t+.24)); }
   }
   const pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
     const mid=(Number(part.start)+Number(part.end))/2;
     const frame=nearestTrackingFrame(tracking,mid);
+    const speakerConfidence=frame?Number(frame.speakerConfidence||frame.confidence||0):0;
+    const faceCount=Number(frame?.faceCount||0);
+    const safeFrame=Boolean(frame?.safeFrame || (frame && faceCount>1 && speakerConfidence<.24));
+    const nearSwitch=switchTimes.some(t=>Math.abs(mid-t)<=.24);
+    const mode=String(frame?.mode||'');
+    const groupLike=safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1;
+    const faceHeight=Math.max(0,Number(frame?.faceHeight||0));
+    // Speaker shots can zoom in slightly when the face is tiny, but never beyond a restrained social crop.
+    const speakerZoom=faceHeight>0 ? Math.max(1,Math.min(1.18,1.13-(faceHeight-.10)*.55)) : 1.04;
     return {...part,
       focusX:frame?Number(frame.x||.5):.5,
       focusY:frame?Number(frame.y||.44):.44,
       trackingConfidence:frame?Number(frame.confidence||0):0,
-      speakerConfidence:frame?Number(frame.speakerConfidence||frame.confidence||0):0,
+      speakerConfidence,
       activeFaceId:frame?.activeFaceId??null,
-      faceCount:frame?.faceCount||0,
+      faceCount,
       faceWidth:frame?Number(frame.faceWidth||0):0,
-      faceHeight:frame?Number(frame.faceHeight||0):0,
-      // A single detected subject is safe to follow even when mouth confidence is low.
-      // With multiple people, fall back wide only when speaker identity is genuinely ambiguous.
-      safeFrame:Boolean(frame?.safeFrame || (frame && Number(frame.faceCount||0)>1 && Number(frame.speakerConfidence||frame.confidence||0)<.28))
+      faceHeight,
+      spreadX:frame?Number(frame.spreadX||0):0,
+      safeFrame,
+      frameMode:groupLike?'wide':'speaker',
+      speakerZoom:groupLike?1:speakerZoom,
+      switchBridge:nearSwitch
     };
   });
   return {...timeline,pieces};
@@ -2441,6 +2458,41 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   return file;
 }
 
+
+function evenFloor(value, min=2){ const n=Math.max(min,Math.floor(Number(value)||min)); return n%2===0?n:n-1; }
+function sourceCropForSpeaker(srcW,srcH,outW,outH,part,extraZoom=1){
+  const targetAspect=outW/outH;
+  const sourceAspect=srcW/srcH;
+  let cropW,cropH;
+  if(sourceAspect>=targetAspect){ cropH=srcH; cropW=srcH*targetAspect; }
+  else { cropW=srcW; cropH=srcW/targetAspect; }
+  const zoom=Math.max(1,Math.min(1.22,Number(part.speakerZoom||1)*Number(extraZoom||1)));
+  cropW/=zoom; cropH/=zoom;
+  cropW=evenFloor(Math.min(srcW,cropW)); cropH=evenFloor(Math.min(srcH,cropH));
+  const fx=Math.max(.02,Math.min(.98,Number(part.focusX??.5)));
+  const fy=Math.max(.04,Math.min(.96,Number(part.focusY??.44)));
+  const cx=fx*srcW, cy=fy*srcH;
+  const x=evenFloor(Math.max(0,Math.min(srcW-cropW,cx-cropW/2)),0);
+  const y=evenFloor(Math.max(0,Math.min(srcH-cropH,cy-cropH*.40)),0);
+  return {cropW,cropH,x,y,zoom};
+}
+function sourceCropForWide(srcW,srcH,outW,outH,part){
+  const sourceAspect=srcW/srcH;
+  const baseAspect=outW/outH;
+  const spread=Math.max(0,Number(part.spreadX||0));
+  // Wider than 9:16 during speaker changes / groups. It is then placed over a blurred vertical canvas.
+  const desiredAspect=Math.min(sourceAspect,Math.max(.78,Math.min(1.36,baseAspect+spread*1.55+(part.switchBridge?.18:.08))));
+  let cropW,cropH;
+  if(sourceAspect>=desiredAspect){ cropH=srcH; cropW=srcH*desiredAspect; }
+  else { cropW=srcW; cropH=srcW/desiredAspect; }
+  cropW=evenFloor(Math.min(srcW,cropW)); cropH=evenFloor(Math.min(srcH,cropH));
+  const fx=Math.max(.02,Math.min(.98,Number(part.focusX??.5)));
+  const fy=Math.max(.04,Math.min(.96,Number(part.focusY??.46)));
+  const x=evenFloor(Math.max(0,Math.min(srcW-cropW,fx*srcW-cropW/2)),0);
+  const y=evenFloor(Math.max(0,Math.min(srcH-cropH,fy*srcH-cropH/2)),0);
+  return {cropW,cropH,x,y,aspect:desiredAspect};
+}
+
 async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, render = {}) {
   if (!meta?.sourcePath || !fsSync.existsSync(meta.sourcePath)) throw Object.assign(new Error('Source file is not available for rendering.'), { status: 409 });
   const safeStart = Math.max(0, Number(start || 0));
@@ -2488,46 +2540,30 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   const height = Number(render.height || (preview ? 960 : 1920));
   const srcW=Math.max(2,Number(meta.details?.width||width));
   const srcH=Math.max(2,Number(meta.details?.height||height));
-  const fillScale=Math.max(width/srcW,height/srcH);
-  const scaledW=Math.max(width,Math.ceil(srcW*fillScale/2)*2);
-  const scaledH=Math.max(height,Math.ceil(srcH*fillScale/2)*2);
   const filter = [];
   const hasAudio = Boolean(meta.details?.audioCodec);
   for (let i=0; i<timeline.pieces.length; i++) {
     const part = timeline.pieces[i];
     const srcA = safeStart + part.start;
     const srcB = safeStart + part.end;
-    const zoom=Number(part.zoom||1);
-    if(options.autoReframe && part.safeFrame){
-      // When face detection is uncertain or multiple faces are spread out, never gamble on a tight crop.
-      // Keep the entire source visible over a blurred 9:16 background.
-      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[sbg${i}][sfg${i}]`);
-      filter.push(`[sbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=18[bg${i}]`);
-      filter.push(`[sfg${i}]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg${i}]`);
-      const safeLabel=`safe${i}`;
-      filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[${safeLabel}]`);
-      if(zoom>1.001){
-        const zw=Math.max(width,Math.round(width*zoom)), zh=Math.max(height,Math.round(height*zoom));
-        filter.push(`[${safeLabel}]scale=${zw}:${zh},crop=${width}:${height},setsar=1[v${i}]`);
-      }else filter.push(`[${safeLabel}]null[v${i}]`);
+    const editZoom=Number(part.zoom||1);
+    if(options.autoReframe && part.frameMode==='wide'){
+      // True zoom-out: build from the ORIGINAL source, not from an already cropped 9:16 frame.
+      // A wider source crop sits over a blurred 9:16 background, so both people/context can re-enter frame.
+      const wide=sourceCropForWide(srcW,srcH,width,height,part);
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[wbg${i}][wfg${i}]`);
+      filter.push(`[wbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
+      filter.push(`[wfg${i}]crop=${wide.cropW}:${wide.cropH}:${wide.x}:${wide.y},scale=${width}:-2:force_original_aspect_ratio=decrease[fg${i}]`);
+      filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
+    }else if(options.autoReframe){
+      // Speaker crop is calculated in source pixels, then scaled once to 9:16.
+      // This means panning/reframing is never constrained by a previously resized social frame.
+      const crop=sourceCropForSpeaker(srcW,srcH,width,height,part,editZoom);
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,crop=${crop.cropW}:${crop.cropH}:${crop.x}:${crop.y},scale=${width}:${height}:flags=lanczos,setsar=1[v${i}]`);
     }else{
-      let vf;
-      if(options.autoReframe){
-        const focusX=Math.max(0.02,Math.min(.98,Number(part.focusX??.5)));
-        const focusY=Math.max(0.08,Math.min(.92,Number(part.focusY??.44)));
-        const cropX=Math.max(0,Math.min(Math.max(0,scaledW-width),Math.round(focusX*scaledW-width/2)));
-        const cropY=Math.max(0,Math.min(Math.max(0,scaledH-height),Math.round(focusY*scaledH-height/2)));
-        vf=`scale=${scaledW}:${scaledH},crop=${width}:${height}:${cropX}:${cropY}`;
-      }else{
-        vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
-      }
-      if (zoom > 1.001) {
-        const zw = Math.max(width, Math.round(width * zoom));
-        const zh = Math.max(height, Math.round(height * zoom));
-        vf += `,scale=${zw}:${zh},crop=${width}:${height}`;
-      }
-      vf += ',setsar=1';
-      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf}[v${i}]`);
+      let vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+      if(editZoom>1.001){const zw=Math.max(width,Math.round(width*editZoom)),zh=Math.max(height,Math.round(height*editZoom));vf+=`,scale=${zw}:${zh},crop=${width}:${height}`;}
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf},setsar=1[v${i}]`);
     }
     if (hasAudio) filter.push(`[0:a]atrim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
   }
@@ -2573,6 +2609,8 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       zoomStyle: options.zoomStyle,
       reframed: options.autoReframe,
       speakerTracking: Boolean(options.speakerTracking && tracking?.keyframes?.length),
+      dynamicSourceReframe: Boolean(options.autoReframe && tracking?.keyframes?.length),
+      reframeEngine: options.autoReframe ? 'source-space-v4' : 'native',
       reactionDetection: options.reactionDetection,
       sceneAwareCuts: options.sceneAwareCuts,
       captions: Boolean(assFile),

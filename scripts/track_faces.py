@@ -90,7 +90,7 @@ def main():
     resize_scale=min(1.0,760.0/max(src_w,src_h)); work_w=max(1,int(round(src_w*resize_scale))); work_h=max(1,int(round(src_h*resize_scale)))
     sample_frames=max(1,int(round(step*fps)))
     tracks={}; next_id=1; last_selected_id=None; challenger_id=None; challenger_streak=0
-    speaker_switches=0; keyframes=[]; reaction_peaks=[]; last_reaction_t=-99.0
+    speaker_switches=0; speaker_switch_times=[]; keyframes=[]; reaction_peaks=[]; last_reaction_t=-99.0
     total_faces=0; max_faces=0; sample_index=0; smooth_x,smooth_y=.5,.43
     base_alpha={'low':.20,'balanced':.34,'high':.50}[args.movement]
     frame_idx=int(round(start*fps)); end_frame=int(round(end*fps))
@@ -145,7 +145,7 @@ def main():
         max_faces=max(max_faces,len(faces)); total_faces+=len(faces)
 
         def speaker_score(f):
-            continuity=.16 if f['id']==last_selected_id else 0.0
+            continuity=.075 if f['id']==last_selected_id else 0.0
             stability=min(.14,float(f.get('stableSeen',0))*.018)
             return f.get('mouthEma',0.0)*13.5+f.get('faceEma',0.0)*1.4+f['area']*3.2+continuity+stability
 
@@ -162,11 +162,12 @@ def main():
             candidate=top
             if current is not None and candidate['id']!=current['id']:
                 cand_score=speaker_score(candidate); cur_score=speaker_score(current)
-                decisive=(candidate.get('mouthEma',0.0)>=current.get('mouthEma',0.0)+.0045 and cand_score>=cur_score*1.16)
+                decisive=(candidate.get('mouthEma',0.0)>=current.get('mouthEma',0.0)+.0025 and cand_score>=cur_score*1.08)
+                very_decisive=(candidate.get('mouthEma',0.0)>=current.get('mouthEma',0.0)+.0080 and cand_score>=cur_score*1.20)
                 if decisive:
                     if challenger_id==candidate['id']: challenger_streak+=1
                     else: challenger_id=candidate['id']; challenger_streak=1
-                    if challenger_streak<2: candidate=current
+                    if challenger_streak<2 and not very_decisive: candidate=current
                 else:
                     challenger_id=None; challenger_streak=0; candidate=current
             else:
@@ -211,7 +212,9 @@ def main():
             move_alpha=.76 if changed else base_alpha
             smooth_x += (target_x-smooth_x)*move_alpha
             smooth_y += (target_y-smooth_y)*min(.52,move_alpha)
-            if changed: speaker_switches+=1
+            if changed:
+                speaker_switches+=1
+                speaker_switch_times.append(round(t_rel,3))
             if effective_mode=='speaker' and selected_id>0: last_selected_id=selected_id
             reaction=clamp(float(selected.get('faceEma',0.0))*6.8)
             confidence=clamp(.36+float(selected.get('area',0.0))*5.0+speaker_confidence*.46)
@@ -228,7 +231,7 @@ def main():
         sample_index+=1; frame_idx+=sample_frames
 
     cap.release()
-    summary={'samples':len(keyframes),'facesDetected':total_faces,'faceCountMax':max_faces,'speakerSwitches':speaker_switches,'reactionPeaks':len(reaction_peaks),'reactionPeakTimes':reaction_peaks[:24],'mode':args.mode,'movement':args.movement,'safeFrames':sum(1 for f in keyframes if f.get('safeFrame')),'speakerFocusedFrames':speaker_frames,'groupFrames':group_frames,'averageSpeakerConfidence':round(confidence_sum/max(1,len(keyframes)),4),'engine':'opencv-speaker-reframe-v3'}
+    summary={'samples':len(keyframes),'facesDetected':total_faces,'faceCountMax':max_faces,'speakerSwitches':speaker_switches,'reactionPeaks':len(reaction_peaks),'reactionPeakTimes':reaction_peaks[:24],'mode':args.mode,'movement':args.movement,'safeFrames':sum(1 for f in keyframes if f.get('safeFrame')),'speakerFocusedFrames':speaker_frames,'groupFrames':group_frames,'averageSpeakerConfidence':round(confidence_sum/max(1,len(keyframes)),4),'speakerSwitchTimes':speaker_switch_times[:40],'engine':'opencv-speaker-reframe-v4'}
     emit({'ok':True,'keyframes':keyframes,'summary':summary}); return 0
 
 

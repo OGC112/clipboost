@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.3.4",
-  "description": "AI video clipping with quality-gated selection, social caption color presets, punctuation-free captions, speaker-first automatic reframing, in-app Twitch live player and seamless updates",
+  "version": "21.3.5",
+  "description": "AI video clipping with dynamic source-space speaker reframing, social captions, quality-gated selection, in-app Twitch live player and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
