@@ -218,3 +218,29 @@
 
 .cb-modal-installing{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:23px;color:#c6b8ff;font-size:12px;font-weight:800;letter-spacing:.01em}.cb-modal-spinner{width:17px;height:17px;border:2px solid rgba(173,137,255,.28);border-top-color:#9c5cff;border-radius:50%;animation:cbSpin .75s linear infinite}.cb-modal-progress .cb-modal-icon{animation:cbUpdatePulse 1.15s ease-in-out infinite}.cb-modal-progress .cb-modal-detail{border-color:rgba(133,85,255,.35);background:rgba(69,36,126,.12)}
 @keyframes cbSpin{to{transform:rotate(360deg)}}@keyframes cbUpdatePulse{0%,100%{box-shadow:0 14px 34px rgba(117,53,255,.24);transform:scale(1)}50%{box-shadow:0 18px 46px rgba(117,53,255,.42);transform:scale(1.035)}}
+
+
+/* 21.3.3 — In-app Twitch live player */
+.live-media-row .live-copy{cursor:pointer;border-radius:8px;padding:5px 7px;margin:-5px -7px;transition:background .15s ease}
+.live-media-row .live-copy:hover,.live-media-row .live-copy:focus{background:rgba(145,70,255,.08);outline:none}
+.live-open-trigger .preview-play{opacity:.86;background:rgba(80,30,135,.86);border-color:rgba(194,142,255,.55)}
+.live-open-trigger:hover .preview-play{opacity:1;transform:translate(-50%,-50%) scale(1.06)}
+.twitch-live-backdrop{z-index:125;padding:18px;background:rgba(2,4,10,.88);backdrop-filter:blur(12px)}
+.twitch-live-modal{width:min(1280px,96vw);height:min(820px,94vh);padding:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid #33224e;background:#080d16;box-shadow:0 32px 90px #000c,0 0 0 1px rgba(145,70,255,.08)}
+.twitch-live-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px;border-bottom:1px solid #202a3b;background:linear-gradient(180deg,#101423,#0a0f19)}
+.twitch-live-status{display:flex;align-items:flex-start;gap:12px;min-width:0}
+.live-pulse{width:10px;height:10px;border-radius:50%;background:#e91916;box-shadow:0 0 0 5px rgba(233,25,22,.13);margin-top:8px;animation:livePulse 1.8s infinite}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 4px rgba(233,25,22,.12)}50%{box-shadow:0 0 0 9px rgba(233,25,22,0)}}
+.twitch-live-head h2{margin:1px 0 3px;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
+.twitch-live-head p{margin:0;color:#8e9bb0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:620px}
+.twitch-live-actions{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.twitch-live-meta{font-size:10px;color:#bca8dd;white-space:nowrap}
+.twitch-live-close{position:static;flex:0 0 auto}
+.twitch-live-stage{position:relative;flex:1;min-height:420px;background:#05070b;overflow:hidden}
+.twitch-live-webview{display:flex;width:100%;height:100%;min-height:420px;background:#05070b}
+.twitch-live-loading{position:absolute;inset:0;z-index:2;display:grid;place-content:center;justify-items:center;gap:8px;background:radial-gradient(circle at center,#151126 0,#070a11 58%,#05070b 100%);color:#fff;text-align:center;pointer-events:none;transition:opacity .2s ease}
+.twitch-live-loading.hidden{opacity:0}
+.twitch-live-loading strong{font-size:13px}
+.twitch-live-loading small{color:#7f8ba0;font-size:10px}
+.twitch-live-footer{height:48px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 14px;border-top:1px solid #202a3b;background:#090e17;color:#748198;font-size:9px}
+@media(max-width:900px){.twitch-live-backdrop{padding:8px}.twitch-live-modal{width:100%;height:96vh}.twitch-live-head{align-items:flex-start}.twitch-live-actions{flex-wrap:wrap;justify-content:flex-end}.twitch-live-meta{display:none}.twitch-live-head p{max-width:46vw}.twitch-live-stage,.twitch-live-webview{min-height:360px}}

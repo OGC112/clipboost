@@ -272,11 +272,34 @@ async function createWindow() {
     width:1600, height:980, minWidth:1100, minHeight:720,
     backgroundColor:'#050913', show:false, autoHideMenuBar:true,
     icon:path.join(appRoot(), 'desktop', 'assets', 'clipboost.ico'),
-    webPreferences:{ contextIsolation:true, nodeIntegration:false, sandbox:true, preload:path.join(__dirname,'preload.cjs') }
+    webPreferences:{ contextIsolation:true, nodeIntegration:false, sandbox:true, webviewTag:true, preload:path.join(__dirname,'preload.cjs') }
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action:'deny' };
+  });
+  mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    const target = String(params?.src || '');
+    // The live guest is intentionally limited to Twitch and gets no preload/Node bridge.
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    if (!/^https:\/\/www\.twitch\.tv\/[A-Za-z0-9_]+(?:[/?#].*)?$/i.test(target)) {
+      event.preventDefault();
+    }
+  });
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    guest.setWindowOpenHandler(({ url }) => {
+      if (/^https:\/\/(?:www\.)?twitch\.tv\//i.test(url)) shell.openExternal(url);
+      return { action:'deny' };
+    });
+    guest.on('will-navigate', (event, url) => {
+      try {
+        const parsed = new URL(url);
+        if (!/(^|\.)twitch\.tv$/i.test(parsed.hostname)) event.preventDefault();
+      } catch { event.preventDefault(); }
+    });
   });
   mainWindow.webContents.on('did-fail-load', (_event, code, description, validatedURL) => {
     console.error('[ClipBoost Desktop] Page failed to load:', code, description, validatedURL);
