@@ -244,3 +244,17 @@
 .twitch-live-loading small{color:#7f8ba0;font-size:10px}
 .twitch-live-footer{height:48px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 14px;border-top:1px solid #202a3b;background:#090e17;color:#748198;font-size:9px}
 @media(max-width:900px){.twitch-live-backdrop{padding:8px}.twitch-live-modal{width:100%;height:96vh}.twitch-live-head{align-items:flex-start}.twitch-live-actions{flex-wrap:wrap;justify-content:flex-end}.twitch-live-meta{display:none}.twitch-live-head p{max-width:46vw}.twitch-live-stage,.twitch-live-webview{min-height:360px}}
+
+
+/* 21.3.4 — social caption presets */
+.caption-color-control{padding:11px 0 10px;border-bottom:1px solid #182231}
+.caption-color-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#abb4c4;margin-bottom:9px}
+.caption-color-head small{font-size:8px;color:#65738a;text-transform:uppercase;letter-spacing:.08em}
+.caption-color-palette{display:flex;gap:6px;flex-wrap:wrap}
+.caption-color-chip{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1px solid #263249;background:#0e1521;color:#8d99ad;font-size:9px;font-weight:800;cursor:pointer;transition:.14s ease}
+.caption-color-chip:hover{border-color:#4a5b77;color:#d9dfeb;transform:translateY(-1px)}
+.caption-color-chip.active{border-color:#8e56ff;background:#1b1230;color:#fff;box-shadow:0 0 0 1px rgba(142,86,255,.16) inset}
+.caption-swatch{width:14px;height:14px;border-radius:50%;display:grid;place-items:center;border:2px solid rgba(255,255,255,.18);box-shadow:0 0 0 1px rgba(0,0,0,.35);font-size:7px;font-style:normal;font-weight:950;color:#fff;text-shadow:0 1px 2px #000}
+.swatch-auto{background:linear-gradient(135deg,#fff 0 20%,#ffd54a 20% 40%,#5cff75 40% 60%,#35e7ff 60% 80%,#ff4fd8 80%)}
+.swatch-white{background:#fff}.swatch-yellow{background:#ffd54a}.swatch-lime{background:#5cff75}.swatch-cyan{background:#35e7ff}.swatch-pink{background:#ff4fd8}.swatch-red{background:#ff4b55}
+.caption-format-note{padding:8px 0;border-bottom:1px solid #182231;color:#758299;font-size:9px}

@@ -1204,29 +1204,19 @@ function looksLikeQuestion(words=[]){
   return false;
 }
 
-function formatCaptionGroup(group=[], nextWord=null, reason='length'){
-  if(!group.length) return '';
-  const lastRaw=String(group[group.length-1]?.word||'').trim();
-  let text=group.map(w=>String(w.word||''))
-    .join(' ')
-    // Short-form captions read better without editorial punctuation injected every few words.
-    .replace(/[;,]+/g,'')
-    .replace(/[.!?…](?=\s+\S)/g,'')
-    .replace(/\s+([.!?…])/g,'$1')
+function stripCaptionPunctuation(text='') {
+  return String(text||'')
+    // User-facing social captions contain zero punctuation. Semantic word data stays untouched.
+    .replace(/\p{P}+/gu,'')
     .replace(/\s+/g,' ')
     .trim();
-  text=capitalizeCaption(text).replace(/[.!?…]+$/,'').trim();
-  if(!text) return '';
-  const gap=nextWord?Math.max(0,Number(nextWord.start||0)-Number(group[group.length-1].end||0)):9;
-  const sourceQuestion=/\?$/.test(lastRaw);
-  const sourceExclaim=/!$/.test(lastRaw);
-  const sourcePeriod=/[.…]$/.test(lastRaw);
-  // Keep punctuation only when it carries meaning. Never append commas just because a caption wrapped.
-  if(sourceQuestion || (looksLikeQuestion(group) && (reason==='terminal'||gap>=.72))) text+='?';
-  else if(sourceExclaim) text+='!';
-  else if(sourcePeriod && reason==='terminal') text+='.';
-  else if(reason==='pause' && gap>=1.05) text+='.';
-  return text;
+}
+
+function formatCaptionGroup(group=[], nextWord=null, reason='length'){
+  if(!group.length) return '';
+  // Social caption display is deliberately punctuation-free.
+  // Phrase punctuation remains available in the underlying word transcript for semantic scoring.
+  return stripCaptionPunctuation(group.map(w=>String(w.word||'')).join(' '));
 }
 
 function wordsToCaptions(words = []) {
@@ -2045,7 +2035,7 @@ async function writeAssCaptions(meta, start, end) {
   if (!captions.length) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}.ass`);
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,Arial,72,&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,2,2,70,70,310,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
-  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(c.text.toUpperCase())}`).join('\n');
+  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(stripCaptionPunctuation(c.text).toUpperCase())}`).join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
   return file;
 }
@@ -2060,7 +2050,7 @@ function normalizeRenderOptions(raw = {}) {
   const captionStyle = ['bold','clean','neon','minimal'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
   const captionPosition = ['top','center','bottom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const captionSize = ['small','medium','large'].includes(String(raw.captionSize || '').toLowerCase()) ? String(raw.captionSize).toLowerCase() : 'medium';
-  const captionColor = ['white','yellow','red','green','blue','purple','orange','black'].includes(String(raw.captionColor || '').toLowerCase()) ? String(raw.captionColor).toLowerCase() : 'white';
+  const captionColor = ['white','yellow','lime','cyan','pink','red','green','blue','purple','orange','black'].includes(String(raw.captionColor || '').toLowerCase()) ? String(raw.captionColor).toLowerCase() : 'white';
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
@@ -2150,7 +2140,11 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     : 'auto';
   const captions = captionPreference === 'off' ? false : Boolean(transcript?.captions?.length || words.length);
   const captionStyle = contentType === 'podcast' || contentType === 'talking' ? 'clean' : (contentType === 'visual' ? 'minimal' : 'bold');
-  const captionColor = contentType === 'gaming' || contentType === 'reaction' ? 'yellow' : 'white';
+  const captionColorPreference = ['auto','white','yellow','lime','cyan','pink','red'].includes(String(raw.captionColor||'').toLowerCase())
+    ? String(raw.captionColor).toLowerCase()
+    : 'auto';
+  const automaticCaptionColor = contentType === 'gaming' || contentType === 'reaction' ? 'yellow' : 'white';
+  const captionColor = captionColorPreference === 'auto' ? automaticCaptionColor : captionColorPreference;
   const captionSize = wordsPerMinute > 175 ? 'small' : wordsPerMinute < 85 ? 'large' : 'medium';
 
   const sceneAwareCuts = scenes.length > 0;
@@ -2208,7 +2202,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
   return {
     options,
     profile: {
-      engine:'Auto Director v2',
+      engine:'Auto Director v3',
       contentType,
       labels,
       reason: reasonParts.length ? `Detected ${reasonParts.join(', ')}.` : 'Balanced automatically from the clip content.',
@@ -2227,7 +2221,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:face-safe-v2`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v3`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -2290,9 +2284,14 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
       focusX:frame?Number(frame.x||.5):.5,
       focusY:frame?Number(frame.y||.44):.44,
       trackingConfidence:frame?Number(frame.confidence||0):0,
+      speakerConfidence:frame?Number(frame.speakerConfidence||frame.confidence||0):0,
       activeFaceId:frame?.activeFaceId??null,
       faceCount:frame?.faceCount||0,
-      safeFrame:Boolean(frame?.safeFrame || (frame && Number(frame.confidence||0)<.34))
+      faceWidth:frame?Number(frame.faceWidth||0):0,
+      faceHeight:frame?Number(frame.faceHeight||0):0,
+      // A single detected subject is safe to follow even when mouth confidence is low.
+      // With multiple people, fall back wide only when speaker identity is genuinely ambiguous.
+      safeFrame:Boolean(frame?.safeFrame || (frame && Number(frame.faceCount||0)>1 && Number(frame.speakerConfidence||frame.confidence||0)<.28))
     };
   });
   return {...timeline,pieces};
@@ -2421,7 +2420,11 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const colorMap={
     white:'&H00FFFFFF',
     yellow:'&H004AD5FF',
-    red:'&H00674DFF',
+    lime:'&H0075FF5C',
+    cyan:'&H00FFE735',
+    pink:'&H00D84FFF',
+    red:'&H00554BFF',
+    // Legacy project values remain supported.
     green:'&H007DD143',
     blue:'&H00FFA34D',
     purple:'&H00FF6C9B',
@@ -2433,7 +2436,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,100,100,${st.spacing},0,1,${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
-  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(transform(c.text))}`).join('\n');
+  const body = captions.map(c => `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${assEscape(transform(stripCaptionPunctuation(c.text)))}`).join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
   return file;
 }
@@ -2681,8 +2684,9 @@ function previewCacheKey(meta, start, end, options = {}) {
   const variant = JSON.stringify({
     ...normalizeRenderOptions(options),
     autoDirector: options?.autoDirector !== false,
-    autoDirectorVersion: 'v1',
-    captionPreference
+    autoDirectorVersion: 'v3',
+    captionPreference,
+    captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
   const sourceVersion = String(meta?.updatedAt || meta?.createdAt || 'project');
   return crypto.createHash('sha1').update(`${meta?.id||'project'}:${sourceVersion}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${variant}`).digest('hex').slice(0,20);
