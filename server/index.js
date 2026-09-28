@@ -1248,7 +1248,7 @@ function upgradeTranscriptQuality(transcript=null) {
       ...(transcript.cleanup||{}),
       ...cleaned.stats,
       removedRanges: cleaned.removedRanges,
-      engine: 'ClipBoost Quality Engine v1'
+      engine: 'ClipBoost Quality Engine v2'
     }
   };
 }
@@ -1458,25 +1458,134 @@ function scoreHookText(text=''){
   return clampScore(score);
 }
 
+const WEAK_CLIP_STARTERS = new Set([
+  'et','mais','donc','alors','puis','ensuite','parce','car','si','quand','lorsque',
+  'and','but','so','then','because','if','when','while'
+]);
+const REFERENTIAL_CLIP_STARTERS = new Set([
+  'il','elle','ils','elles','ça','cela','ceci','celui','celle','eux','lui','y','en',
+  'he','she','they','it','this','that','these','those','him','her','them'
+]);
+const WEAK_CLIP_ENDERS = new Set([
+  'et','mais','donc','alors','parce','car','avec','sans','pour','de','du','des','que','qui','comme',
+  'and','but','so','then','because','with','without','for','of','that','which','like'
+]);
+
+function transcriptWordsInRange(transcript,start,end,pad=0){
+  return (transcript?.words||[]).filter(w=>Number(w.end||0)>=start-pad&&Number(w.start||0)<=end+pad);
+}
+
+function speechPhraseUnits(transcript,maxSeconds=15){
+  const words=(transcript?.words||[]).filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)));
+  if(!words.length)return [];
+  const out=[];
+  let group=[];
+  let groupStart=null;
+  const flush=(reason='pause')=>{
+    if(!group.length)return;
+    const last=group[group.length-1];
+    out.push({
+      start:Number(groupStart.toFixed(3)),
+      end:Number(Number(last.end||groupStart).toFixed(3)),
+      text:formatCaptionGroup(group,null,reason),
+      terminal:/[.!?…]$/.test(String(last.word||'')),
+      reason
+    });
+    group=[]; groupStart=null;
+  };
+  for(let i=0;i<words.length;i++){
+    const w=words[i], next=words[i+1]||null;
+    if(groupStart===null)groupStart=Number(w.start||0);
+    group.push(w);
+    const duration=Number(w.end||0)-groupStart;
+    const gap=next?Math.max(0,Number(next.start||0)-Number(w.end||0)):9;
+    const terminal=/[.!?…]$/.test(String(w.word||''));
+    if(terminal)flush('terminal');
+    else if(gap>=.62)flush('pause');
+    else if(duration>=maxSeconds && gap>=.18)flush('length');
+    else if(duration>=maxSeconds+4)flush('length');
+  }
+  flush('terminal');
+  return out;
+}
+
+function speechBoundaryQuality(transcript,start,end){
+  const all=(transcript?.words||[]).filter(w=>w?.word);
+  const inside=[];
+  for(let i=0;i<all.length;i++){
+    const w=all[i];
+    if(Number(w.end||0)>=start-.06&&Number(w.start||0)<=end+.06)inside.push({w,i});
+  }
+  if(!inside.length)return {start:45,end:45,payoff:45,completeness:45,startGap:0,endGap:0};
+  const firstEntry=inside[0], lastEntry=inside[inside.length-1];
+  const first=firstEntry.w, last=lastEntry.w;
+  const prev=firstEntry.i>0?all[firstEntry.i-1]:null;
+  const next=lastEntry.i<all.length-1?all[lastEntry.i+1]:null;
+  const firstLex=wordLexeme(first.word);
+  const secondLex=wordLexeme(inside[1]?.w?.word||'');
+  const lastLex=wordLexeme(last.word);
+  const startGap=prev?Math.max(0,Number(first.start||0)-Number(prev.end||0)):1.2;
+  const endGap=next?Math.max(0,Number(next.start||0)-Number(last.end||0)):1.2;
+  const opening=(inside.slice(0,8).map(x=>x.w.word).join(' '));
+  const closing=(inside.slice(-12).map(x=>x.w.word).join(' '));
+
+  let startScore=66;
+  if(startGap>=.75)startScore+=20;
+  else if(startGap>=.42)startScore+=12;
+  else if(startGap<.12)startScore-=10;
+  if(prev&&/[.!?…]$/.test(String(prev.word||'')))startScore+=12;
+  if(WEAK_CLIP_STARTERS.has(firstLex))startScore-=14;
+  if(REFERENTIAL_CLIP_STARTERS.has(firstLex)&&startGap<.55)startScore-=12;
+  if((firstLex==='parce'&&secondLex==='que')||(firstLex==='because'))startScore-=16;
+  if(scoreHookText(opening)>=76)startScore+=8;
+  startScore=clampScore(startScore);
+
+  let endScore=64;
+  const terminal=/[.!?…]$/.test(String(last.word||''));
+  if(terminal)endScore+=20;
+  if(endGap>=.75)endScore+=18;
+  else if(endGap>=.42)endScore+=10;
+  else if(endGap<.12)endScore-=12;
+  if(WEAK_CLIP_ENDERS.has(lastLex))endScore-=22;
+  if(/\b(parce que|because|si|if|quand|when|mais|but|et|and)\s*$/i.test(closing.trim()))endScore-=18;
+  endScore=clampScore(endScore);
+
+  let payoff=48;
+  if(/\b(donc|finalement|au final|résultat|résultat final|voilà|bref|c'est pourquoi|en fait|la réponse|so|finally|in the end|result|that's why|the answer|turns out)\b/i.test(closing))payoff+=24;
+  if(/[!…]$/.test(String(last.word||'')))payoff+=8;
+  if(terminal&&endGap>=.42)payoff+=10;
+  if(WEAK_CLIP_ENDERS.has(lastLex))payoff-=18;
+  payoff=clampScore(payoff);
+
+  const completeness=clampScore(startScore*.42+endScore*.38+payoff*.20);
+  return {start:startScore,end:endScore,payoff,completeness,startGap:Number(startGap.toFixed(3)),endGap:Number(endGap.toFixed(3))};
+}
+
 function candidateQuality(meta, transcript, start, end, baseScore=70){
   const duration=Math.max(.1,end-start);
   const caps=clipCaptionsAbsolute(transcript,start,end);
   const first=caps.slice(0,2).map(c=>c.text).join(' ');
   const last=caps.slice(-2).map(c=>c.text).join(' ');
   const text=caps.map(c=>c.text).join(' ');
-  const words=(transcript?.words||[]).filter(w=>Number(w.end||0)>=start&&Number(w.start||0)<=end);
+  const words=transcriptWordsInRange(transcript,start,end);
   const rawWords=(transcript?.rawWords||transcript?.words||[]).filter(w=>Number(w.end||0)>=start&&Number(w.start||0)<=end);
   const removed=(transcript?.cleanup?.removedRanges||[]).filter(r=>Number(r.end||0)>=start&&Number(r.start||0)<=end);
   const scenes=(meta?.analysis?.timeline?.scenes||[]).map(Number).filter(t=>Number.isFinite(t)&&t>start&&t<end);
+  const boundary=speechBoundaryQuality(transcript,start,end);
 
-  const hook=scoreHookText(first);
-  let story=58;
-  if(caps.length>=3)story+=8;
-  if(/[.!?…]$/.test(String(caps[0]?.text||'')))story+=2;
-  if(/[.!?…]$/.test(String(caps[caps.length-1]?.text||'')))story+=14;
-  if(/\b(donc|finalement|au final|résultat|voilà|bref|so|finally|in the end|result|that's why)\b/i.test(last))story+=9;
-  if(duration>=18&&duration<=52)story+=8;
-  if(duration>58)story-=8;
+  let hook=scoreHookText(first);
+  if(boundary.start<55)hook-=10;
+  hook=clampScore(hook);
+
+  let story=48;
+  if(caps.length>=3)story+=7;
+  if(caps.length>=5)story+=5;
+  story+=Math.round((boundary.completeness-50)*.34);
+  if(boundary.end>=78)story+=7;
+  if(boundary.payoff>=72)story+=10;
+  if(duration>=20&&duration<=52)story+=8;
+  if(duration<17)story-=12;
+  if(duration>58)story-=10;
   story=clampScore(story);
 
   let emotion=48;
@@ -1486,13 +1595,15 @@ function candidateQuality(meta, transcript, start, end, baseScore=70){
   emotion=clampScore(emotion);
 
   const wps=words.length/duration;
-  let retention=56;
+  let retention=54;
   if(wps>=1.7&&wps<=3.5)retention+=16;
   else if(wps<1.15)retention-=12;
-  if(duration>=22&&duration<=45)retention+=10;
+  if(duration>=22&&duration<=45)retention+=9;
   if(caps.length>=4)retention+=5;
   if(scenes.length>=1&&scenes.length<=5)retention+=5;
   if(scenes.length>9)retention-=5;
+  if(boundary.start>=72)retention+=5;
+  if(boundary.end<52)retention-=9;
   retention=clampScore(retention);
 
   const removalRatio=removed.length/Math.max(1,rawWords.length);
@@ -1505,30 +1616,51 @@ function candidateQuality(meta, transcript, start, end, baseScore=70){
   if(scenes.length>8)visual-=5;
   visual=clampScore(visual);
 
-  const local=Math.round(hook*.25+story*.23+emotion*.14+retention*.22+cleanSpeech*.11+visual*.05);
-  const overall=clampScore(local*.78+clampScore(baseScore,70)*.22);
-  return {hook,story,emotion,retention,cleanSpeech,visual,overall};
+  const completeness=boundary.completeness;
+  const payoff=boundary.payoff;
+  const local=Math.round(hook*.22+story*.23+emotion*.10+retention*.18+cleanSpeech*.09+visual*.04+completeness*.10+payoff*.04);
+  let overall=clampScore(local*.90+clampScore(baseScore,70)*.10);
+  // Hard guardrails: a clip that begins or ends awkwardly cannot rank as an elite pick.
+  if(boundary.start<45)overall=Math.min(overall,72);
+  if(boundary.end<45)overall=Math.min(overall,70);
+  if(boundary.completeness<48)overall=Math.min(overall,68);
+  return {hook,story,emotion,retention,cleanSpeech,visual,completeness,payoff,overall,boundary};
 }
 
 function snapCandidateToSpeech(transcript,start,end,duration){
   let a=Math.max(0,Number(start||0)), b=Math.min(duration,Math.max(a+3,Number(end||a+30)));
-  const caps=transcript?.captions||[];
-  if(!caps.length)return {start:a,end:b};
-  const aroundStart=caps.filter(c=>Number(c.end||0)>=a-1.8&&Number(c.start||0)<=a+2.4);
-  if(aroundStart.length){
-    const hit=aroundStart.reduce((best,c)=>Math.abs(Number(c.start||0)-a)<Math.abs(Number(best.start||0)-a)?c:best,aroundStart[0]);
-    a=Math.max(0,Number(hit.start||a));
+  const units=speechPhraseUnits(transcript);
+  if(!units.length)return {start:a,end:b};
+
+  const startChoices=units.filter(u=>u.start>=Math.max(0,a-4.2)&&u.start<=a+2.4);
+  if(startChoices.length){
+    const ranked=startChoices.map(u=>{
+      const q=speechBoundaryQuality(transcript,u.start,Math.min(duration,Math.max(u.end,u.start+18)));
+      const distance=Math.abs(u.start-a);
+      return {u,rank:q.start-distance*5+(u.reason==='terminal'||u.reason==='pause'?4:0)};
+    }).sort((x,y)=>y.rank-x.rank);
+    a=Math.max(0,Number(ranked[0].u.start||a));
   }
+
   const minEnd=Math.min(duration,a+18);
   if(b<minEnd)b=minEnd;
-  const aroundEnd=caps.filter(c=>Number(c.end||0)>=b-1.2&&Number(c.end||0)<=Math.min(duration,b+3.8));
-  if(aroundEnd.length){
-    const hit=aroundEnd.reduce((best,c)=>Math.abs(Number(c.end||0)-b)<Math.abs(Number(best.end||0)-b)?c:best,aroundEnd[0]);
-    b=Math.min(duration,Number(hit.end||b));
+  const maxEnd=Math.min(duration,a+60);
+  const endChoices=units.filter(u=>u.end>=Math.max(minEnd,b-3.2)&&u.end<=Math.min(maxEnd,b+6.2));
+  if(endChoices.length){
+    const ranked=endChoices.map(u=>{
+      const q=speechBoundaryQuality(transcript,a,u.end);
+      const distance=Math.abs(u.end-b);
+      return {u,rank:q.end*.55+q.payoff*.35-distance*2.6+(u.terminal?5:0)};
+    }).sort((x,y)=>y.rank-x.rank);
+    b=Math.min(duration,Number(ranked[0].u.end||b));
   }
+
   if(b-a>60){
-    const before=caps.filter(c=>Number(c.end||0)>a+18&&Number(c.end||0)<=a+60);
-    b=before.length?Number(before[before.length-1].end):a+60;
+    const before=units.filter(u=>u.end>a+18&&u.end<=a+60);
+    if(before.length){
+      before.sort((x,y)=>speechBoundaryQuality(transcript,a,y.end).end-speechBoundaryQuality(transcript,a,x.end).end);
+      b=Number(before[0].end);
+    }else b=a+60;
   }
   if(b-a<18)b=Math.min(duration,a+18);
   return {start:Number(a.toFixed(2)),end:Number(b.toFixed(2))};
@@ -1539,7 +1671,9 @@ function finalizeCandidate(meta,transcript,candidate={}){
   const snapped=snapCandidateToSpeech(transcript,Number(candidate.start||0),Number(candidate.end||0),duration);
   const quality=candidateQuality(meta,transcript,snapped.start,snapped.end,candidate.score||70);
   const caps=clipCaptionsAbsolute(transcript,snapped.start,snapped.end);
-  const hook=(candidate.hook&&String(candidate.hook).trim())||caps.slice(0,2).map(x=>x.text).join(' ').slice(0,180);
+  const actualOpening=caps.slice(0,2).map(x=>x.text).join(' ').trim();
+  const hook=actualOpening||String(candidate.hook||'').trim();
+  const selectionText=clipTextAbsolute(transcript,snapped.start,snapped.end).slice(0,1800);
   return {
     ...candidate,
     start:snapped.start,
@@ -1547,8 +1681,9 @@ function finalizeCandidate(meta,transcript,candidate={}){
     duration:Number((snapped.end-snapped.start).toFixed(2)),
     score:quality.overall,
     quality,
-    hook,
-    qualityEngine:'v1'
+    hook:hook.slice(0,180),
+    selectionText,
+    qualityEngine:'v2'
   };
 }
 
@@ -1557,11 +1692,20 @@ function selectDiverseCandidates(input=[], target=8, duration=0) {
     .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
   const unique=[];
   for(const c of cleaned){
-    if(unique.some(x=>overlapRatio(x,c)>0.34 || (Math.abs(x.start-c.start)<12 && textSimilarity(x.hook||x.title,c.hook||c.title)>.48))) continue;
+    const cText=c.selectionText||c.hook||c.title||'';
+    const duplicate=unique.some(x=>{
+      const xText=x.selectionText||x.hook||x.title||'';
+      const sim=textSimilarity(xText,cText);
+      if(overlapRatio(x,c)>.28)return true;
+      if(sim>.64)return true;
+      if(Math.abs(x.start-c.start)<48&&sim>.43)return true;
+      return false;
+    });
+    if(duplicate)continue;
     unique.push(c);
   }
   if(unique.length<=target) return unique;
-  const bins=Math.min(target, Math.max(1, Math.ceil(Number(duration||0)/480)));
+  const bins=Math.min(target, Math.max(1, Math.ceil(Number(duration||0)/420)));
   const selected=[];
   for(let b=0;b<bins;b++){
     const lo=(duration*b)/bins, hi=(duration*(b+1))/bins;
@@ -1575,24 +1719,68 @@ function selectDiverseCandidates(input=[], target=8, duration=0) {
 function heuristicTranscriptCandidates(meta, transcript, fallbackCandidates = [], preference = 'auto') {
   const duration = Number(meta.details?.duration || 0);
   const target = resolveClipTarget(duration, preference);
-  const blocks = transcriptBlocks(transcript.words || [], 8);
-  if (!blocks.length) return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)), target, duration);
-  const scored = blocks.map((b, i) => {
-    const text = b.text || '';
-    let score = 56;
-    score += Math.round((scoreHookText(text)-50)*.6);
-    if (text.length >= 45 && text.length <= 210) score += 7;
-    if (/[.!?…]$/.test(text)) score += 5;
-    return { ...b, score: clampScore(score), i };
-  }).sort((a,b)=>b.score-a.score);
-  const out=[];
-  for (const b of scored) {
-    const start=Math.max(0,b.start-1.4);
-    const end=Math.min(duration, Math.max(start+20, Math.min(start+52,b.end+20)));
-    out.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), start, end, score:b.score, title:`Quality moment ${out.length+1}`, hook:b.text.slice(0,160), reason:'Quality Engine: complete thought, hook and retention signals', signals:{semantic:true,local:true,quality:true} }));
+  const units=speechPhraseUnits(transcript);
+  if(!units.length)return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)),target,duration);
+  const seeds=[];
+  const payoffPattern=/\b(donc|finalement|au final|résultat|voilà|bref|c'est pourquoi|la réponse|so|finally|in the end|result|that's why|the answer|turns out)\b/i;
+
+  // Build one strong 18-60s window per plausible opener using cheap phrase-level signals first.
+  // Expensive word-level scoring only runs after the candidate pool has been capped.
+  for(let i=0;i<units.length;i++){
+    const first=units[i];
+    const opener=String(first.text||'');
+    const firstLex=wordLexeme(opener.split(/\s+/)[0]||'');
+    let openerRank=scoreHookText(opener);
+    if(first.reason==='terminal'||first.reason==='pause')openerRank+=6;
+    if(WEAK_CLIP_STARTERS.has(firstLex))openerRank-=12;
+    if(openerRank<50)continue;
+
+    let best=null;
+    for(let j=i;j<Math.min(units.length,i+11);j++){
+      const end=Number(units[j].end||first.end);
+      const clipDuration=end-first.start;
+      if(clipDuration<18)continue;
+      if(clipDuration>60)break;
+      const endingText=String(units[j].text||'');
+      let endRank=58;
+      if(units[j].terminal)endRank+=15;
+      if(units[j].reason==='pause')endRank+=9;
+      if(payoffPattern.test(endingText))endRank+=16;
+      if(/[!…]$/.test(endingText.trim()))endRank+=5;
+      if(clipDuration>=22&&clipDuration<=48)endRank+=8;
+      if(clipDuration>55)endRank-=6;
+      const lastLex=wordLexeme(endingText.split(/\s+/).filter(Boolean).slice(-1)[0]||'');
+      if(WEAK_CLIP_ENDERS.has(lastLex))endRank-=18;
+      const rank=openerRank*.54+endRank*.46;
+      if(!best||rank>best.rank)best={start:first.start,end,rank};
+    }
+    if(best){
+      seeds.push({
+        id:crypto.randomUUID(),start:best.start,end:best.end,score:clampScore(best.rank),
+        title:`Quality moment ${seeds.length+1}`,
+        hook:opener.slice(0,160),
+        reason:'Quality Engine v2: complete opening, strong payoff and retention signals',
+        signals:{semantic:true,local:true,quality:true,boundaryAware:true}
+      });
+    }
   }
+
+  // Keep the best openers plus a smaller timeline-spread sample so long videos stay diverse.
+  const seedCap=Math.max(target*10,64);
+  const ranked=[...seeds].sort((a,b)=>b.score-a.score);
+  const strongest=ranked.slice(0,Math.min(ranked.length,Math.floor(seedCap*.72)));
+  const remainder=ranked.filter(x=>!strongest.includes(x)).sort((a,b)=>a.start-b.start);
+  const spread=[];
+  const need=Math.max(0,seedCap-strongest.length);
+  for(let k=0;k<need&&remainder.length;k++){
+    const idx=Math.min(remainder.length-1,Math.floor((k+.5)*remainder.length/need));
+    const pick=remainder[idx];
+    if(pick&&!spread.includes(pick))spread.push(pick);
+  }
+  const sampled=[...strongest,...spread].slice(0,seedCap);
+  const out=sampled.map(c=>finalizeCandidate(meta,transcript,c));
   const fallback=fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c));
-  const diversified=selectDiverseCandidates(out, target, duration);
+  const diversified=selectDiverseCandidates(out,target,duration);
   return diversified.length>=Math.min(3,target)?diversified:selectDiverseCandidates([...out,...fallback],target,duration);
 }
 
@@ -1612,19 +1800,21 @@ async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates 
     const timedText=sectionBlocks.map(b=>`[${b.start.toFixed(1)}-${b.end.toFixed(1)}] ${b.text}`).join('\n');
     const inputText=timedText.length>38000?timedText.slice(0,38000):timedText;
     const ask=Math.min(7, Math.max(3, Math.ceil(target/sectionCount)+2));
-    const prompt=`You are ClipBoost Quality Engine, an expert short-form editor. Analyze ONLY this timeline section and choose up to ${ask} genuinely strong, self-contained clips.
+    const prompt=`You are ClipBoost Quality Engine v2, an expert short-form editor. Analyze ONLY this timeline section and choose up to ${ask} genuinely strong, self-contained clips.
 
-Rules:
-- Usually 18-60 seconds.
-- Start at the beginning of a complete sentence or immediately on a strong hook.
-- End on a natural payoff, answer, reaction or conclusion. Never end mid-sentence.
-- Prefer moments with a clear idea, surprise, emotion, useful insight, conflict or punchline.
-- Penalize rambling, filler, stutters, repeated wording, weak context and long setup.
-- Do not return near-duplicate moments or multiple clips telling the same story.
-- A high score must require BOTH a strong opening and a satisfying ending.
+Selection rules, in priority order:
+1. CONTEXT: the first line must make sense to a viewer who has seen nothing before it. Do not start on a dangling pronoun, connector, answer fragment or mid-sentence clause unless it is an exceptional hook.
+2. PAYOFF: the ending must contain the answer, reveal, punchline, reaction, conclusion or useful takeaway. Never cut before the payoff and never end mid-sentence.
+3. HOOK: the opening 1-3 seconds should create curiosity, tension, surprise, usefulness or emotion without requiring missing setup.
+4. RETENTION: prefer dense, clear speech and a coherent progression; penalize rambling, filler, stutters, long setup and repeated wording.
+5. DIVERSITY: do not return multiple variants of the same story or near-duplicate time ranges.
+6. LENGTH: usually 20-55 seconds, hard maximum 60 seconds.
+7. TIMESTAMPS: choose start/end values that correspond to natural phrase boundaries visible in the transcript. Do not invent content outside this section.
+
+A score above 85 is allowed only when BOTH the opening is self-contained and the ending has a satisfying payoff.
 
 Return ONLY JSON:
-{"clips":[{"start":0,"end":30,"score":85,"title":"Short title","hook":"Exact opening idea","reason":"Why viewers would keep watching"}]}
+{"clips":[{"start":0,"end":30,"score":85,"title":"Short title","hook":"Exact opening idea","reason":"Why the opening and payoff make this self-contained"}]}
 
 Full video duration: ${duration.toFixed(1)} seconds.
 Current section: ${sectionStart.toFixed(1)}-${sectionEnd.toFixed(1)} seconds.
@@ -1635,7 +1825,7 @@ ${inputText}`;
       for(const c of (parsed.clips||[])){
         const start=Math.max(sectionStart,Math.min(sectionEnd,Number(c.start||sectionStart)));
         const end=Math.max(start+3,Math.min(duration,sectionEnd+6,Number(c.end||start+30)));
-        clips.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), start, end, score:clampScore(c.score,70), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by ClipBoost Quality Engine'), signals:{semantic:true,local:true,quality:true,section:section+1} }));
+        clips.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), start, end, score:clampScore(c.score,70), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by ClipBoost Quality Engine v2'), signals:{semantic:true,local:true,quality:true,boundaryAware:true,section:section+1} }));
       }
     }catch(err){
       // A failed model section should not discard deterministic Quality Engine candidates.
@@ -2159,7 +2349,7 @@ async function analyzeProject(projectId, options = {}) {
         meta.analysis = {
           scenesDetected: scenes.length,
           silencesDetected: silences.length,
-          engine: 'FFmpeg + local Quality Engine',
+          engine: 'FFmpeg + local Quality Engine v2',
           stage: 'transcription',
           progress: 42,
           timeline: {
@@ -2193,7 +2383,7 @@ async function analyzeProject(projectId, options = {}) {
     meta.analysis = {
       scenesDetected: scenes.length,
       silencesDetected: silences.length,
-      engine: transcript ? 'FFmpeg + faster-whisper + Quality Engine' : 'FFmpeg signal analysis',
+      engine: transcript ? 'FFmpeg + faster-whisper + Quality Engine v2' : 'FFmpeg signal analysis',
       transcription: transcript?.model || 'not-configured',
       wordCount: transcript?.words?.length || 0,
       captionCount: transcript?.captions?.length || 0,
@@ -2202,7 +2392,7 @@ async function analyzeProject(projectId, options = {}) {
         repetitions: transcript.cleanup.repetitions || 0,
         fillers: transcript.cleanup.fillers || 0
       } : null,
-      qualityEngine: transcript ? 'v1' : null,
+      qualityEngine: transcript ? 'v2' : null,
       stage: 'done',
       progress: 100,
       aiConfigured: true,

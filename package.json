@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.2.5",
-  "description": "AI video clipping with Quality Engine, seamless one-popup-per-version updates, silent NSIS installation via electron-updater, automatic relaunch, Twitch Live refresh, cleaned captions, natural auto-zooms and smart speaker tracking",
+  "version": "21.3.0",
+  "description": "AI video clipping with Clip Intelligence v2, boundary-aware clip selection, complete-story scoring, semantic deduplication, seamless silent updates, cleaned captions and smart speaker tracking",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

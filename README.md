@@ -1,4 +1,25 @@
-# ClipBoost 21.2.4 — Seamless Updater hardening
+# ClipBoost 21.3.0 — Clip Intelligence v2
+
+V21.3.0 improves the editorial decision layer in AI Studio. It focuses on choosing clips that make sense without missing context and that end on a real payoff instead of simply scoring energetic transcript windows.
+
+## Major changes
+
+- **Boundary-aware selection**: candidate starts are snapped to natural speech/phrase boundaries rather than caption chunks.
+- **Context completeness scoring**: dangling connectors, pronouns and mid-thought openings are penalized.
+- **Payoff-aware endings**: conclusions, answers, reveals and natural pauses are rewarded; unfinished endings are capped.
+- **Hard quality guardrails**: a clip with a weak opening or weak ending can no longer receive an elite overall score only because another model supplied a high base score.
+- **Semantic deduplication v2**: candidates are compared using the full selected transcript, not only the hook/title, reducing repeated versions of the same story.
+- **Phrase-aware deterministic fallback**: when Ollama cannot select a section, ClipBoost builds complete 18–60 second windows from local speech phrases instead of fixed transcript blocks.
+- **Long-video coverage**: the deterministic pool keeps both top-ranked moments and timeline-spread candidates before final ranking.
+- **Visible completeness metric** on candidate cards alongside Hook, Story, Retention and Clean Speech.
+- **Quality Engine v2 prompt** explicitly prioritizes Context → Payoff → Hook → Retention → Diversity.
+- The validated **21.2.5 seamless updater is unchanged**.
+
+## Recommended first test
+
+Open an existing project with a cached transcript and click **Generate variations**. Compare the top 5–10 clips against the previous version, especially the first and last spoken sentence of each clip.
+
+---
 
 # ClipBoost v21.2.0 — Quality Engine
 
