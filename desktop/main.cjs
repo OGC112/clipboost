@@ -16,7 +16,6 @@ let manualUpdateCheck = false;
 let lastReadyEventVersion = null;
 let installUpdateInProgress = false;
 let updateCheckInFlight = null;
-let downloadedInstallerPath = null;
 let lastProgressEventPercent = -1;
 
 function appRoot() {
@@ -113,8 +112,8 @@ function setupUpdater(owner, repo) {
   updater.setFeedURL({ provider:'github', owner, repo });
   updater.on('checking-for-update', () => { updateState = { status:'checking', version:null, percent:0 }; });
   updater.on('update-available', info => {
-    downloadedInstallerPath = null;
     lastProgressEventPercent = -1;
+    lastReadyEventVersion = null;
     updateState = { status:'downloading', version:info.version, percent:0 };
     if (manualUpdateCheck) emitUpdateEvent({ status:'available', version:info.version, downloading:Boolean(updater.autoDownload), updateState, manual:true });
     if (!updater.autoDownload) manualUpdateCheck = false;
@@ -136,16 +135,24 @@ function setupUpdater(owner, repo) {
   updater.on('error', err => {
     updateState = { status:'error', version:null, percent:0 };
     console.error('[ClipBoost Updater]', err);
-    if (manualUpdateCheck) emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
+    const duringInstall = installUpdateInProgress;
+    if (duringInstall) {
+      installUpdateInProgress = false;
+      isQuitting = false;
+      lastReadyEventVersion = null;
+    }
+    if (manualUpdateCheck || duringInstall) {
+      emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
+    }
     manualUpdateCheck = false;
   });
   updater.on('update-downloaded', info => {
     const version = String(info?.version || updateState.version || '').trim();
-    downloadedInstallerPath = String(info?.downloadedFile || '').trim() || null;
+    const wasManual = manualUpdateCheck;
     updateState = { status:'ready', version, percent:100 };
     if (version && lastReadyEventVersion !== version) {
       lastReadyEventVersion = version;
-      emitUpdateEvent({ status:'ready', version, updateState, manual:false });
+      emitUpdateEvent({ status:'ready', version, updateState, manual:wasManual });
     }
     manualUpdateCheck = false;
   });
@@ -319,45 +326,20 @@ ipcMain.handle('desktop:install-update', async () => {
   if (!updater || updateState.status !== 'ready') return { ok:false, error:'No downloaded update is ready.' };
   if (installUpdateInProgress) return { ok:true, alreadyStarting:true, silent:true };
 
-  const installerPath = downloadedInstallerPath;
-  if (!installerPath || !fs.existsSync(installerPath)) {
-    return { ok:false, error:'The downloaded installer could not be found. Check for updates again.' };
-  }
-
   installUpdateInProgress = true;
+  // Prevent the close-to-tray handler from intercepting electron-updater's shutdown.
   isQuitting = true;
 
   try {
-    // Launch a detached hidden helper. It waits for ClipBoost to exit, then
-    // starts the verified NSIS installer with /S and --force-run.
-    const helperPath = path.join(userRoot(), 'clipboost-silent-update.ps1');
-    const escapedInstaller = installerPath.replace(/'/g, "''");
-    const helper = [
-      "$ErrorActionPreference = 'SilentlyContinue'",
-      `$parentPid = ${process.pid}`,
-      "for ($i = 0; $i -lt 300; $i++) {",
-      "  if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { break }",
-      "  Start-Sleep -Milliseconds 100",
-      "}",
-      `Start-Process -FilePath '${escapedInstaller}' -ArgumentList @('--updated','/S','--force-run') -WindowStyle Hidden`,
-      "Start-Sleep -Milliseconds 500",
-      "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue"
-    ].join("\\r\\n");
-    fs.writeFileSync(helperPath, helper, 'utf8');
-
-    const helperProcess = spawn(
-      'powershell.exe',
-      ['-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',helperPath],
-      { detached:true, windowsHide:true, stdio:'ignore' }
-    );
-    helperProcess.unref();
-
-    // Keep the custom ClipBoost installation state visible briefly, then exit.
-    setTimeout(() => app.quit(), 650);
-    return { ok:true, silent:true, restart:true, method:'clipboost-hidden-helper' };
+    // electron-updater 6.x:
+    //   isSilent=true        -> NSIS /S (no installer window)
+    //   isForceRunAfter=true -> NSIS --force-run (relaunch ClipBoost)
+    updater.quitAndInstall(true, true);
+    return { ok:true, silent:true, restart:true, method:'electron-updater' };
   } catch (err) {
     installUpdateInProgress = false;
     isQuitting = false;
+    lastReadyEventVersion = null;
     console.error('[ClipBoost Updater] Silent install failed:', err);
     emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
     return { ok:false, error:err?.message || String(err) };

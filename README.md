@@ -1,4 +1,4 @@
-# ClipBoost 21.2.3 — Seamless Updater
+# ClipBoost 21.2.4 — Seamless Updater hardening
 
 # ClipBoost v21.2.0 — Quality Engine
 

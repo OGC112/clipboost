@@ -665,7 +665,7 @@
     if(rawStatus==='current') return showNotice({kind:'success',eyebrow:'Updates',title:'ClipBoost is up to date',message:`You are running the latest published version.`,detail:`Version ${evt.version||evt.currentVersion||''}`});
     if(rawStatus==='unconfigured') return showNotice({kind:'warning',eyebrow:'Updates',title:'Update channel not configured',message:'Connect ClipBoost to a GitHub Releases repository in Settings.',detail:'Set CLIPBOOST_UPDATE_OWNER and CLIPBOOST_UPDATE_REPO.'});
     if(rawStatus==='dev') return showNotice({kind:'info',eyebrow:'Updates',title:'Development build',message:'Automatic updates are only available in the installed ClipBoost build.'});
-    if(rawStatus==='error') return showNotice({kind:'danger',eyebrow:'Updates',title:'Update check failed',message:evt.message||'ClipBoost could not check for updates.'});
+    if(rawStatus==='error'){updateInstallStarting=false;return showNotice({kind:'danger',eyebrow:'Updates',title:'Update failed',message:evt.message||'ClipBoost could not complete the update.'});}
     if(rawStatus==='ready'){
       await promptReadyUpdate(evt.version||evt.updateState?.version,{force:Boolean(evt.manual)});
       return;
