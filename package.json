@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.3.6",
-  "description": "AI video clipping with safe full-source reframe recovery, FFmpeg tracking proxy fallback, social captions, quality-gated selection, in-app Twitch live player and seamless silent updates",
+  "version": "21.3.7",
+  "description": "AI video clipping with Context Engine v3 narrative clip selection, safe reframe recovery, social captions, in-app Twitch live player and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
