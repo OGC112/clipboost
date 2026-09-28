@@ -1,3 +1,5 @@
+# ClipBoost 21.2.3 — Seamless Updater
+
 # ClipBoost v21.2.0 — Quality Engine
 
 V21.2.0 focuses on editorial quality rather than adding more surface features. The goal is to make generated clips feel cleaner, more intentional and closer to what a human short-form editor would choose.

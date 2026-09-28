@@ -16,6 +16,8 @@ let manualUpdateCheck = false;
 let lastReadyEventVersion = null;
 let installUpdateInProgress = false;
 let updateCheckInFlight = null;
+let downloadedInstallerPath = null;
+let lastProgressEventPercent = -1;
 
 function appRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
@@ -104,19 +106,27 @@ function setupUpdater(owner, repo) {
   if (updater) return updater;
   updater = require('electron-updater').autoUpdater;
   updater.autoDownload = Boolean(readDesktopSettings().autoDownloadUpdates);
-  // Updates are installed only after the user confirms in the ClipBoost UI.
-  // This avoids Windows installer UI appearing unexpectedly after choosing Later.
-  updater.autoInstallOnAppQuit = false;
+  // Keep installation strictly manual. electron-updater v26 uses
+  // autoInstallOnAppQuit while newer releases use autoInstallEvent.
+  try { updater.autoInstallOnAppQuit = false; } catch {}
+  try { if ('autoInstallEvent' in updater) updater.autoInstallEvent = 'manual'; } catch {}
   updater.setFeedURL({ provider:'github', owner, repo });
   updater.on('checking-for-update', () => { updateState = { status:'checking', version:null, percent:0 }; });
   updater.on('update-available', info => {
+    downloadedInstallerPath = null;
+    lastProgressEventPercent = -1;
     updateState = { status:'downloading', version:info.version, percent:0 };
-    if (manualUpdateCheck) emitUpdateEvent({ status:'available', version:info.version, downloading:Boolean(updater.autoDownload), updateState });
+    if (manualUpdateCheck) emitUpdateEvent({ status:'available', version:info.version, downloading:Boolean(updater.autoDownload), updateState, manual:true });
     if (!updater.autoDownload) manualUpdateCheck = false;
   });
   updater.on('download-progress', p => {
-    updateState = { ...updateState, status:'downloading', percent:Math.round(p.percent || 0) };
-    emitUpdateEvent({ status:'progress', version:updateState.version, percent:updateState.percent, updateState });
+    const percent = Math.max(0, Math.min(100, Math.round(p.percent || 0)));
+    updateState = { ...updateState, status:'downloading', percent };
+    // Throttle updater events so the renderer is not rebuilt continuously.
+    if (percent === 100 || lastProgressEventPercent < 0 || Math.abs(percent - lastProgressEventPercent) >= 2) {
+      lastProgressEventPercent = percent;
+      emitUpdateEvent({ status:'progress', version:updateState.version, percent, updateState });
+    }
   });
   updater.on('update-not-available', info => {
     updateState = { status:'current', version:info.version || app.getVersion(), percent:100 };
@@ -131,12 +141,11 @@ function setupUpdater(owner, repo) {
   });
   updater.on('update-downloaded', info => {
     const version = String(info?.version || updateState.version || '').trim();
+    downloadedInstallerPath = String(info?.downloadedFile || '').trim() || null;
     updateState = { status:'ready', version, percent:100 };
-    // electron-updater can emit update-downloaded more than once when checks overlap.
-    // Only notify the renderer once for a given version to prevent modal flicker.
     if (version && lastReadyEventVersion !== version) {
       lastReadyEventVersion = version;
-      emitUpdateEvent({ status:'ready', version, updateState });
+      emitUpdateEvent({ status:'ready', version, updateState, manual:false });
     }
     manualUpdateCheck = false;
   });
@@ -310,23 +319,49 @@ ipcMain.handle('desktop:install-update', async () => {
   if (!updater || updateState.status !== 'ready') return { ok:false, error:'No downloaded update is ready.' };
   if (installUpdateInProgress) return { ok:true, alreadyStarting:true, silent:true };
 
+  const installerPath = downloadedInstallerPath;
+  if (!installerPath || !fs.existsSync(installerPath)) {
+    return { ok:false, error:'The downloaded installer could not be found. Check for updates again.' };
+  }
+
   installUpdateInProgress = true;
   isQuitting = true;
 
-  // Reply to the renderer first so it can display the ClipBoost installing state,
-  // then run the NSIS updater silently and relaunch the app afterwards.
-  setTimeout(() => {
-    try {
-      updater.quitAndInstall(true, true);
-    } catch (err) {
-      installUpdateInProgress = false;
-      isQuitting = false;
-      console.error('[ClipBoost Updater] Silent install failed:', err);
-      emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
-    }
-  }, 350);
+  try {
+    // Launch a detached hidden helper. It waits for ClipBoost to exit, then
+    // starts the verified NSIS installer with /S and --force-run.
+    const helperPath = path.join(userRoot(), 'clipboost-silent-update.ps1');
+    const escapedInstaller = installerPath.replace(/'/g, "''");
+    const helper = [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$parentPid = ${process.pid}`,
+      "for ($i = 0; $i -lt 300; $i++) {",
+      "  if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { break }",
+      "  Start-Sleep -Milliseconds 100",
+      "}",
+      `Start-Process -FilePath '${escapedInstaller}' -ArgumentList @('--updated','/S','--force-run') -WindowStyle Hidden`,
+      "Start-Sleep -Milliseconds 500",
+      "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue"
+    ].join("\\r\\n");
+    fs.writeFileSync(helperPath, helper, 'utf8');
 
-  return { ok:true, silent:true, restart:true };
+    const helperProcess = spawn(
+      'powershell.exe',
+      ['-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',helperPath],
+      { detached:true, windowsHide:true, stdio:'ignore' }
+    );
+    helperProcess.unref();
+
+    // Keep the custom ClipBoost installation state visible briefly, then exit.
+    setTimeout(() => app.quit(), 650);
+    return { ok:true, silent:true, restart:true, method:'clipboost-hidden-helper' };
+  } catch (err) {
+    installUpdateInProgress = false;
+    isQuitting = false;
+    console.error('[ClipBoost Updater] Silent install failed:', err);
+    emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
+    return { ok:false, error:err?.message || String(err) };
+  }
 });
 ipcMain.handle('desktop:open-data-folder', () => shell.openPath(ensureUserFiles().dataDir));
 ipcMain.handle('desktop:open-config', () => shell.openPath(ensureUserFiles().envPath));

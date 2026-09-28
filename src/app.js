@@ -9,8 +9,15 @@
   const state={page:pageFromHash(), video:null, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, libraryLoadMoreBusy:false, youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, clipCountPreference:editorPrefs.clipCountPreference||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionPosition:editorPrefs.captionPosition||'bottom', captionSize:editorPrefs.captionSize||'medium', captionColor:editorPrefs.captionColor||'white', cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, uiModal:null};
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({clipCountPreference:state.clipCountPreference,editPreset:state.editPreset,editIntensity:state.editIntensity,trackingMode:state.trackingMode,cameraMovement:state.cameraMovement,captionStyle:state.captionStyle,captionPosition:state.captionPosition,captionSize:state.captionSize,captionColor:state.captionColor,cleanupMode:state.cleanupMode,zoomStyle:state.zoomStyle,editOptions:state.editOptions}))}catch{}}
   let uiModalResolve=null;
-  const updateReadyPromptedVersions=new Set();
+  let rememberedReadyVersions=[];
+  try{rememberedReadyVersions=JSON.parse(sessionStorage.getItem('clipboost:updateReadyPrompted')||'[]');if(!Array.isArray(rememberedReadyVersions))rememberedReadyVersions=[]}catch{rememberedReadyVersions=[]}
+  const updateReadyPromptedVersions=new Set(rememberedReadyVersions.map(String));
   let updateInstallStarting=false;
+  function rememberReadyVersion(version){
+    const key=String(version||'unknown');
+    updateReadyPromptedVersions.add(key);
+    try{sessionStorage.setItem('clipboost:updateReadyPrompted',JSON.stringify([...updateReadyPromptedVersions].slice(-8)))}catch{}
+  }
   function modalIcon(kind='info'){
     return {success:'✓',danger:'!',warning:'!',update:'↻',info:'i'}[kind]||'i';
   }
@@ -33,12 +40,12 @@
     if(updateInstallStarting)return;
     if(state.uiModal?.purpose==='update-ready'&&state.uiModal?.updateVersion===key)return;
     if(!force&&updateReadyPromptedVersions.has(key))return;
-    updateReadyPromptedVersions.add(key);
-    const ok=await confirmAction({purpose:'update-ready',updateVersion:key,kind:'update',eyebrow:'Update ready',title:`ClipBoost ${key==='unknown'?'':key} is ready`,message:'The update has finished downloading.',detail:'One-click update: ClipBoost will close, install silently and reopen automatically. No Windows installer steps are required.',confirmLabel:'Restart & install',cancelLabel:'Later'});
+    rememberReadyVersion(key);
+    const ok=await confirmAction({purpose:'update-ready',updateVersion:key,kind:'update',eyebrow:'Update ready',title:`ClipBoost ${key==='unknown'?'':key} is ready`,message:'The update has finished downloading.',detail:'One click only. ClipBoost will close, update invisibly in the background, then reopen automatically.',confirmLabel:'Restart & install',cancelLabel:'Later'});
     if(!ok)return;
     updateInstallStarting=true;
     uiModalResolve=null;
-    state.uiModal={mode:'progress',kind:'update',eyebrow:'Installing update',title:'Updating ClipBoost…',message:'ClipBoost is applying the new version now.',detail:'No action is required. ClipBoost will restart automatically when the installation is complete.',progressLabel:'Installing silently…'};
+    state.uiModal={mode:'progress',kind:'update',eyebrow:'Seamless update',title:'Installing ClipBoost…',message:'Preparing a clean restart with the new version.',detail:'You will not see the Windows installer. ClipBoost will reopen automatically when the update is finished.',progressLabel:'Applying update in the background…'};
     render();
     await new Promise(resolve=>setTimeout(resolve,120));
     try{
@@ -647,18 +654,23 @@
     document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
   async function handleDesktopUpdateEvent(evt={}){
-    const status=evt.status||evt.updateState?.status||'info';
-    state.desktopUpdate={status,version:evt.version||evt.updateState?.version||null,percent:Number(evt.percent??evt.updateState?.percent??0),message:evt.message||''};
-    render();
-    if(status==='current') return showNotice({kind:'success',eyebrow:'Updates',title:'ClipBoost is up to date',message:`You are running the latest published version.`,detail:`Version ${evt.version||evt.currentVersion||''}`});
-    if(status==='unconfigured') return showNotice({kind:'warning',eyebrow:'Updates',title:'Update channel not configured',message:'Connect ClipBoost to a GitHub Releases repository in Settings.',detail:'Set CLIPBOOST_UPDATE_OWNER and CLIPBOOST_UPDATE_REPO.'});
-    if(status==='dev') return showNotice({kind:'info',eyebrow:'Updates',title:'Development build',message:'Automatic updates are only available in the installed ClipBoost build.'});
-    if(status==='error') return showNotice({kind:'danger',eyebrow:'Updates',title:'Update check failed',message:evt.message||'ClipBoost could not check for updates.'});
-    if(status==='ready'){
-      await promptReadyUpdate(evt.version||evt.updateState?.version);
+    const rawStatus=evt.status||evt.updateState?.status||'info';
+    const status=rawStatus==='progress'||rawStatus==='available'?'downloading':rawStatus;
+    state.desktopUpdate={status,version:evt.version||evt.updateState?.version||state.desktopUpdate?.version||null,percent:Number(evt.percent??evt.updateState?.percent??state.desktopUpdate?.percent??0),message:evt.message||''};
+
+    // Do not rebuild the full DOM during updater progress while a modal is open.
+    // The old behavior recreated the dialog repeatedly and caused visible flicker.
+    if(!state.uiModal || !['checking','downloading'].includes(status)) render();
+
+    if(rawStatus==='current') return showNotice({kind:'success',eyebrow:'Updates',title:'ClipBoost is up to date',message:`You are running the latest published version.`,detail:`Version ${evt.version||evt.currentVersion||''}`});
+    if(rawStatus==='unconfigured') return showNotice({kind:'warning',eyebrow:'Updates',title:'Update channel not configured',message:'Connect ClipBoost to a GitHub Releases repository in Settings.',detail:'Set CLIPBOOST_UPDATE_OWNER and CLIPBOOST_UPDATE_REPO.'});
+    if(rawStatus==='dev') return showNotice({kind:'info',eyebrow:'Updates',title:'Development build',message:'Automatic updates are only available in the installed ClipBoost build.'});
+    if(rawStatus==='error') return showNotice({kind:'danger',eyebrow:'Updates',title:'Update check failed',message:evt.message||'ClipBoost could not check for updates.'});
+    if(rawStatus==='ready'){
+      await promptReadyUpdate(evt.version||evt.updateState?.version,{force:Boolean(evt.manual)});
       return;
     }
-    if(status==='available') return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
+    if(rawStatus==='available'&&evt.manual) return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
   }
   if(window.clipboostDesktop?.onUpdateEvent&&!window.__clipboostUpdateEventsBound){window.__clipboostUpdateEventsBound=true;window.clipboostDesktop.onUpdateEvent(handleDesktopUpdateEvent)}
   if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',e=>{const tag=String(e.target?.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;if(state.page!=='studio')return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'){e.preventDefault();if(e.shiftKey)exportAll();else exportCurrent();return}if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const list=state.video?.candidates||[];if(!list.length)return;e.preventDefault();const dir=e.key==='ArrowRight'?1:-1;const next=(Math.min(state.selectedCandidate||0,list.length-1)+dir+list.length)%list.length;selectCandidatePreview(next,{autoplay:false})}})}
