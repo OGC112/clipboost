@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.3.0",
-  "description": "AI video clipping with Clip Intelligence v2, boundary-aware clip selection, complete-story scoring, semantic deduplication, seamless silent updates, cleaned captions and smart speaker tracking",
+  "version": "21.3.1",
+  "description": "AI video clipping with Auto Director, automatic per-video editing decisions, working YouTube/Twitch library refresh, Clip Intelligence v2, seamless silent updates and local smart reframing",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

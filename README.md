@@ -381,3 +381,10 @@ Double-click `Update ClipBoost Dev.bat` to run `git pull --rebase origin main` f
 - Replaces the assisted NSIS installer with a current-user one-click installer, removing the **Just me / all users** and **Next** steps.
 - Adds an in-app **Installing silently…** state before ClipBoost closes for the update.
 
+
+
+## 21.3.1 — Auto Director + Library Refresh Fix
+
+- AI Studio now exposes only clip count and caption preference; technical edit controls are automatic per clip.
+- Auto Director adapts framing, face/duo tracking, speech cleanup, scene cuts, camera motion, caption design and zoom behavior from the source.
+- YouTube and Twitch Refresh buttons now use dedicated refresh-all backend endpoints with visible progress/result feedback.

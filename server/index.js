@@ -837,6 +837,44 @@ app.post('/api/library/twitch/live', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+async function refreshLibraryPlatform(platform) {
+  const library = await readLibrary();
+  const targets = library.creators.filter(c => c.platform === platform && c.id);
+  let refreshed = 0;
+  const errors = [];
+
+  // Keep this sequential. It avoids bursty API usage and makes YouTube quota
+  // consumption predictable while still refreshing every followed creator.
+  for (const existingCreator of targets) {
+    try {
+      const fresh = platform === 'youtube'
+        ? await fetchYoutubeCreator(existingCreator.id, existingCreator)
+        : await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name);
+      const index = library.creators.findIndex(c => c.platform === platform && c.id === fresh.id);
+      if (index >= 0) library.creators[index] = fresh;
+      else library.creators.unshift(fresh);
+      refreshed += 1;
+    } catch (error) {
+      errors.push({
+        id: existingCreator.id,
+        name: existingCreator.name || existingCreator.login || existingCreator.handle || existingCreator.id,
+        error: error?.message || 'Refresh failed'
+      });
+    }
+  }
+
+  await writeLibrary(library);
+  return { library, refreshed, errors, refreshedAt:new Date().toISOString() };
+}
+
+app.post('/api/library/youtube/refresh-all', async (req, res, next) => {
+  try { res.json(await refreshLibraryPlatform('youtube')); } catch (e) { next(e); }
+});
+
+app.post('/api/library/twitch/refresh-all', async (req, res, next) => {
+  try { res.json(await refreshLibraryPlatform('twitch')); } catch (e) { next(e); }
+});
+
 app.delete('/api/library/creators/:platform/:id', async (req, res, next) => {
   try {
     const library = await readLibrary();
@@ -1978,7 +2016,7 @@ function normalizeRenderOptions(raw = {}) {
   const captionColor = ['white','yellow','red','green','blue','purple','orange','black'].includes(String(raw.captionColor || '').toLowerCase()) ? String(raw.captionColor).toLowerCase() : 'white';
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
-  const trackingMode = ['speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
+  const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
   return {
     intensity,preset,captionStyle,captionPosition,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,
@@ -1989,6 +2027,154 @@ function normalizeRenderOptions(raw = {}) {
     silenceRemoval: raw.silenceRemoval !== false,
     dynamicZoom: raw.dynamicZoom !== false,
     captions: raw.captions !== false
+  };
+}
+
+function intervalOverlapSeconds(aStart, aEnd, bStart, bEnd) {
+  return Math.max(0, Math.min(Number(aEnd||0), Number(bEnd||0)) - Math.max(Number(aStart||0), Number(bStart||0)));
+}
+
+function autoDirectorRenderOptions(meta, start, end, raw = {}) {
+  const base = normalizeRenderOptions(raw);
+  const duration = Math.max(.25, Number(end||0) - Number(start||0));
+  const minuteScale = 60 / duration;
+  const details = meta?.details || {};
+  const width = Number(details.width || 0), height = Number(details.height || 0);
+  const sourceIsVertical = width > 0 && height > 0 && (width / height) <= .72;
+  const sourceIsSquareish = width > 0 && height > 0 && (width / height) > .72 && (width / height) < 1.18;
+
+  const scenes = (meta?.analysis?.timeline?.scenes || []).map(Number).filter(t => Number.isFinite(t) && t >= start && t <= end);
+  const sceneRate = scenes.length * minuteScale;
+  const silences = (meta?.analysis?.timeline?.silences || []).filter(s => Number(s?.end||0) > Number(s?.start||0));
+  const silenceSeconds = silences.reduce((sum,s) => sum + intervalOverlapSeconds(start,end,s.start,s.end), 0);
+  const silenceRatio = Math.min(1, silenceSeconds / duration);
+
+  const transcript = meta?.transcript || {};
+  const rawWords = (transcript.rawWords?.length ? transcript.rawWords : transcript.words || []).filter(w => Number(w?.end||0) >= start && Number(w?.start||0) <= end);
+  const words = (transcript.words || []).filter(w => Number(w?.end||0) >= start && Number(w?.start||0) <= end);
+  const wordsPerMinute = rawWords.length * minuteScale;
+  const removed = (transcript.cleanup?.removedRanges || []).filter(r => intervalOverlapSeconds(start,end,r.start,r.end) > .02);
+  const removedSeconds = removed.reduce((sum,r) => sum + intervalOverlapSeconds(start,end,r.start,r.end), 0);
+  const hasSpeech = rawWords.length >= 4;
+
+  const text = [
+    meta?.originalName,
+    meta?.externalSource?.title,
+    meta?.externalSource?.creatorName,
+    words.slice(0,80).map(w=>w.word).join(' ')
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const gamingHint = /\b(gaming|gameplay|valorant|fortnite|minecraft|gta|league of legends|lol|counter[- ]?strike|cs2|warzone|rocket league|apex|overwatch|twitch|ranked|speedrun)\b/i.test(text);
+  const podcastHint = /\b(podcast|interview|discussion|talk show|talkshow|débat|debat|entretien|conversation)\b/i.test(text);
+  const reactionHint = /\b(react|reaction|réaction|reagit|réagit|drama|incroyable|insane|crazy|wow|no way)\b/i.test(text);
+
+  let contentType = 'dynamic';
+  if (gamingHint) contentType = 'gaming';
+  else if (podcastHint || (Number(details.duration||0) >= 20*60 && sceneRate < 6 && wordsPerMinute >= 70)) contentType = 'podcast';
+  else if (reactionHint || (sceneRate >= 10 && wordsPerMinute >= 65)) contentType = 'reaction';
+  else if (hasSpeech && sceneRate < 5) contentType = 'talking';
+  else if (!hasSpeech && sceneRate >= 8) contentType = 'visual';
+
+  let preset = 'dynamic';
+  if (contentType === 'gaming') preset = 'gaming';
+  else if (contentType === 'podcast') preset = 'podcast';
+  else if (contentType === 'talking' && sceneRate < 3.5) preset = 'clean';
+
+  let intensity = 'balanced';
+  if (contentType === 'podcast' || sceneRate >= 16) intensity = 'low';
+  else if (contentType === 'gaming' && sceneRate < 10) intensity = 'high';
+
+  // Avoid mechanical zooms on footage that is already visually active.
+  let zoomStyle = 'natural';
+  if (preset === 'podcast' || preset === 'clean' || sceneRate >= 10) zoomStyle = 'minimal';
+  else if (contentType === 'gaming' && sceneRate < 5 && reactionHint) zoomStyle = 'energetic';
+
+  const autoReframe = !sourceIsVertical;
+  const cameraMovement = sourceIsVertical || contentType === 'podcast' || sceneRate >= 15 ? 'low' : 'balanced';
+  const trackingMode = autoReframe ? 'auto' : 'center';
+
+  // Only cut actual audio disfluencies when the cleanup is confident and limited.
+  // Otherwise captions are cleaned while original speech remains untouched.
+  const safeSpeechCleanup = hasSpeech && removed.length >= 2 && removedSeconds <= Math.min(2.6, duration * .09) && wordsPerMinute >= 80;
+  const cleanupMode = safeSpeechCleanup ? 'speech' : (hasSpeech ? 'captions' : 'off');
+
+  const captionPreference = ['auto','on','off'].includes(String(raw.captionPreference||'').toLowerCase())
+    ? String(raw.captionPreference).toLowerCase()
+    : 'auto';
+  const captions = captionPreference === 'off' ? false : Boolean(transcript?.captions?.length || words.length);
+  const captionStyle = contentType === 'podcast' || contentType === 'talking' ? 'clean' : (contentType === 'visual' ? 'minimal' : 'bold');
+  const captionColor = contentType === 'gaming' || contentType === 'reaction' ? 'yellow' : 'white';
+  const captionSize = wordsPerMinute > 175 ? 'small' : wordsPerMinute < 85 ? 'large' : 'medium';
+
+  const sceneAwareCuts = scenes.length > 0;
+  const silenceRemoval = silenceSeconds >= .55 && silenceRatio >= .018;
+  const reactionDetection = autoReframe && ['gaming','reaction','dynamic'].includes(contentType);
+  const dynamicZoom = zoomStyle !== 'minimal' && sceneRate < 10 && hasSpeech;
+
+  const options = {
+    ...base,
+    intensity,
+    preset,
+    captionStyle,
+    captionPosition:'bottom',
+    captionSize,
+    captionColor,
+    cleanupMode,
+    zoomStyle,
+    trackingMode,
+    cameraMovement,
+    autoReframe,
+    speakerTracking:autoReframe,
+    reactionDetection,
+    sceneAwareCuts,
+    silenceRemoval,
+    dynamicZoom,
+    captions
+  };
+
+  const contentLabel = {
+    gaming:'Gaming',
+    podcast:'Podcast / conversation',
+    reaction:'Reaction',
+    talking:'Talking head',
+    visual:'Visual-first',
+    dynamic:'Dynamic'
+  }[contentType] || 'Dynamic';
+
+  const labels = [
+    contentLabel,
+    autoReframe ? 'Smart 9:16' : 'Keeps native framing',
+    cleanupMode === 'speech' ? 'Speech cleanup' : cleanupMode === 'captions' ? 'Clean captions' : 'No speech cleanup',
+    dynamicZoom ? `${zoomStyle[0].toUpperCase()+zoomStyle.slice(1)} zoom` : 'No unnecessary zoom'
+  ];
+  if (captions) labels.push(`${captionStyle[0].toUpperCase()+captionStyle.slice(1)} captions`);
+  else labels.push('Captions off');
+
+  const reasonParts = [];
+  if (sceneRate >= 10) reasonParts.push('high visual activity');
+  else if (sceneRate <= 4) reasonParts.push('calm visual pacing');
+  if (wordsPerMinute >= 145) reasonParts.push('dense speech');
+  else if (hasSpeech) reasonParts.push('speech-led content');
+  if (removed.length >= 2) reasonParts.push('detected stutters/fillers');
+  if (sourceIsVertical) reasonParts.push('source already vertical');
+
+  return {
+    options,
+    profile: {
+      engine:'Auto Director v1',
+      contentType,
+      labels,
+      reason: reasonParts.length ? `Detected ${reasonParts.join(', ')}.` : 'Balanced automatically from the clip content.',
+      metrics: {
+        sceneRate:Number(sceneRate.toFixed(2)),
+        wordsPerMinute:Number(wordsPerMinute.toFixed(1)),
+        silenceRatio:Number(silenceRatio.toFixed(3)),
+        cleanupEvents:removed.length,
+        sourceAspect:width&&height?Number((width/height).toFixed(3)):null,
+        sourceIsVertical,
+        sourceIsSquareish
+      }
+    }
   };
 }
 
@@ -2199,10 +2385,14 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
 
 async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, render = {}) {
   if (!meta?.sourcePath || !fsSync.existsSync(meta.sourcePath)) throw Object.assign(new Error('Source file is not available for rendering.'), { status: 409 });
-  const options = normalizeRenderOptions(rawOptions);
   const safeStart = Math.max(0, Number(start || 0));
   const safeEnd = Math.min(Number(meta.details?.duration || end || safeStart + 30), Math.max(safeStart + .25, Number(end || safeStart + 30)));
   const clipDuration = safeEnd - safeStart;
+  const autoDirectorEnabled = rawOptions?.autoDirector !== false;
+  const resolved = autoDirectorEnabled
+    ? autoDirectorRenderOptions(meta, safeStart, safeEnd, rawOptions)
+    : { options: normalizeRenderOptions(rawOptions), profile:null };
+  const options = resolved.options;
   const silences = meta.analysis?.timeline?.silences || [];
   const absoluteScenes = meta.analysis?.timeline?.scenes || [];
   const sceneTimes = absoluteScenes.map(Number).filter(t=>Number.isFinite(t)&&t>safeStart+.05&&t<safeEnd-.05).map(t=>Number((t-safeStart).toFixed(3)));
@@ -2297,10 +2487,12 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
   return {
     outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
+    autoDirector: resolved.profile,
     editPlan: plan,
     tracking: tracking?.summary || { samples:0,faceCountMax:0,speakerSwitches:0,reactionPeaks:0,mode:options.trackingMode,movement:options.cameraMovement },
     trackingWarning: tracking?.ok===false ? tracking.error : null,
     editApplied: {
+      autoDirector: Boolean(resolved.profile),
       silenceCuts: options.silenceRemoval ? plan.summary.cuts : 0,
       speechCleanupCuts: options.cleanupMode==='speech' ? (plan.summary.disfluencies||0) : 0,
       cleanupMode: options.cleanupMode,
@@ -2412,9 +2604,16 @@ async function analyzeProject(projectId, options = {}) {
 }
 
 const previewJobs = new Map();
-function previewCacheKey(projectId, start, end, options = {}) {
-  const variant = JSON.stringify(normalizeRenderOptions(options));
-  return crypto.createHash('sha1').update(`${projectId}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${variant}`).digest('hex').slice(0,20);
+function previewCacheKey(meta, start, end, options = {}) {
+  const captionPreference = ['auto','on','off'].includes(String(options?.captionPreference||'').toLowerCase()) ? String(options.captionPreference).toLowerCase() : 'auto';
+  const variant = JSON.stringify({
+    ...normalizeRenderOptions(options),
+    autoDirector: options?.autoDirector !== false,
+    autoDirectorVersion: 'v1',
+    captionPreference
+  });
+  const sourceVersion = String(meta?.updatedAt || meta?.createdAt || 'project');
+  return crypto.createHash('sha1').update(`${meta?.id||'project'}:${sourceVersion}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${variant}`).digest('hex').slice(0,20);
 }
 async function ensureCandidatePreview(meta, start, end, options = {}) {
   const safeStart = Math.max(0, Number(start || 0));
@@ -2423,7 +2622,7 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
   if (!(safeEnd > safeStart)) throw Object.assign(new Error('Invalid preview range.'), { status: 400 });
   if (!meta?.sourcePath) throw Object.assign(new Error('Source file is not available for preview.'), { status: 409 });
 
-  const key = previewCacheKey(meta.id, safeStart, safeEnd, options);
+  const key = previewCacheKey(meta, safeStart, safeEnd, options);
   const fileName = `${meta.id}-${key}.mp4`;
   const filePath = path.join(previewsDir, fileName);
   const renderMetaFile = `${filePath}.json`;

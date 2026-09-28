@@ -12,7 +12,7 @@ def main():
     ap.add_argument('--start', type=float, default=0.0)
     ap.add_argument('--end', type=float, required=True)
     ap.add_argument('--step', type=float, default=0.35)
-    ap.add_argument('--mode', choices=['speaker','center','split'], default='speaker')
+    ap.add_argument('--mode', choices=['auto','speaker','center','split'], default='speaker')
     ap.add_argument('--movement', choices=['low','balanced','high'], default='balanced')
     args = ap.parse_args()
 
@@ -123,9 +123,17 @@ def main():
 
         selected = None
         mode = args.mode
+        ranked_faces = sorted(faces, key=lambda f: (f['area'] + f['activity'] * 0.9), reverse=True)
+        effective_mode = mode
+        if mode == 'auto':
+            meaningful_pair = (
+                len(ranked_faces) >= 2
+                and ranked_faces[1]['area'] >= max(0.0035, ranked_faces[0]['area'] * 0.30)
+            )
+            effective_mode = 'split' if meaningful_pair else 'speaker'
         if faces:
-            if mode == 'split' and len(faces) >= 2:
-                top = sorted(faces, key=lambda f: (f['area'] + f['activity'] * 0.9), reverse=True)[:2]
+            if effective_mode == 'split' and len(ranked_faces) >= 2:
+                top = ranked_faces[:2]
                 selected = {
                     'id': -1,
                     'x': sum(f['x'] for f in top) / len(top),
@@ -137,7 +145,7 @@ def main():
             else:
                 def score(f):
                     center_bonus = 1.0 - min(1.0, abs(f['x'] - 0.5) * 1.6)
-                    if mode == 'speaker':
+                    if effective_mode == 'speaker':
                         return f['activity'] * 4.2 + f['area'] * 7.0 + center_bonus * 0.22
                     return f['area'] * 7.5 + center_bonus * 0.65
                 selected = max(faces, key=score)
@@ -149,7 +157,7 @@ def main():
             smooth_x = smooth_x + (target_x - smooth_x) * alpha
             smooth_y = smooth_y + (target_y - smooth_y) * alpha
             selected_id = int(selected.get('id', -1))
-            if mode == 'speaker' and selected_id > 0 and last_selected_id and selected_id != last_selected_id:
+            if effective_mode == 'speaker' and selected_id > 0 and last_selected_id and selected_id != last_selected_id:
                 speaker_switches += 1
             if selected_id > 0:
                 last_selected_id = selected_id
@@ -176,7 +184,7 @@ def main():
             'activity': round(float(selected.get('activity', 0.0) if selected else 0.0), 5),
             'reaction': round(reaction, 4),
             'confidence': round(confidence, 4),
-            'mode': 'split' if mode == 'split' and len(faces) >= 2 else mode
+            'mode': effective_mode
         })
 
         prev_gray = gray
