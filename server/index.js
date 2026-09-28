@@ -2221,7 +2221,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v4`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v5`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -2230,16 +2230,44 @@ async function ensureFaceTracking(meta, start, end, options) {
   const cacheFile = path.join(trackingDir, `${meta.id}-${key}.json`);
   try {
     const cached = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
-    if (cached?.keyframes?.length) return cached;
+    if (cached?.keyframes?.length && cached?.ok !== false) return cached;
   } catch {}
   const python = String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim();
   const script = path.join(root, 'scripts', 'track_faces.py');
+  const step = options.speakerTracking?'0.24':(options.cameraMovement==='high'?'0.25':options.cameraMovement==='low'?'0.48':'0.34');
+  const runTracker = async (input, trackStart, trackEnd) => await runJsonProcess(python, [script,'--input',input,'--start',String(trackStart),'--end',String(trackEnd),'--mode',options.trackingMode,'--movement',options.cameraMovement,'--step',step], { timeout: 8*60_000, idleTimeout: 0 });
+  let directError = null;
   try {
-    const result = await runJsonProcess(python, [script,'--input',meta.sourcePath,'--start',String(start),'--end',String(end),'--mode',options.trackingMode,'--movement',options.cameraMovement,'--step',options.speakerTracking?'0.24':(options.cameraMovement==='high'?'0.25':options.cameraMovement==='low'?'0.48':'0.34')], { timeout: 8*60_000, idleTimeout: 0 });
-    if (result?.keyframes?.length) await fs.writeFile(cacheFile, JSON.stringify(result), 'utf8').catch(()=>{});
-    return result;
+    const result = await runTracker(meta.sourcePath,start,end);
+    if (result?.ok !== false && result?.keyframes?.length) {
+      result.summary={...(result.summary||{}),transport:'direct-source'};
+      await fs.writeFile(cacheFile, JSON.stringify(result), 'utf8').catch(()=>{});
+      return result;
+    }
+    directError = result?.error || 'Direct source tracking returned no usable frames.';
   } catch (error) {
-    return { ok:false, error:error?.message || 'Face tracking unavailable.', keyframes:[], summary:{ samples:0, facesDetected:0, faceCountMax:0, speakerSwitches:0, reactionPeaks:0, mode:options.trackingMode, movement:options.cameraMovement } };
+    directError = error?.message || 'Direct source tracking failed.';
+  }
+
+  // Some downloaded sources use codecs / long-GOP seeking that OpenCV cannot decode reliably.
+  // Build a small temporary H.264 proxy ONLY for visual analysis. Coordinates stay normalized and
+  // are applied later to the original source, so export quality is never reduced.
+  const proxyFile = path.join(trackingDir, `${meta.id}-${key}-tracking-proxy.mp4`);
+  try {
+    const duration=Math.max(.25,Number(end)-Number(start));
+    await run('ffmpeg', ['-y','-ss',String(Math.max(0,Number(start)||0)),'-i',meta.sourcePath,'-t',String(duration),'-an','-vf','scale=760:-2','-c:v','libx264','-preset','ultrafast','-crf','30','-pix_fmt','yuv420p','-movflags','+faststart',proxyFile], { timeout: 6*60_000 });
+    const recovered = await runTracker(proxyFile,0,duration);
+    if (recovered?.ok !== false && recovered?.keyframes?.length) {
+      recovered.summary={...(recovered.summary||{}),transport:'ffmpeg-proxy',recoveredFrom:directError||null};
+      await fs.writeFile(cacheFile, JSON.stringify(recovered), 'utf8').catch(()=>{});
+      return recovered;
+    }
+    const proxyError=recovered?.error || 'Tracking proxy returned no usable frames.';
+    return { ok:false, error:`${directError || 'Face tracking failed.'} Proxy retry: ${proxyError}`, keyframes:[], summary:{ samples:0, facesDetected:0, faceCountMax:0, speakerSwitches:0, reactionPeaks:0, mode:options.trackingMode, movement:options.cameraMovement, transport:'safe-full-frame' } };
+  } catch (error) {
+    return { ok:false, error:`${directError || 'Face tracking failed.'} Proxy retry: ${error?.message || 'unavailable.'}`, keyframes:[], summary:{ samples:0, facesDetected:0, faceCountMax:0, speakerSwitches:0, reactionPeaks:0, mode:options.trackingMode, movement:options.cameraMovement, transport:'safe-full-frame' } };
+  } finally {
+    await fs.rm(proxyFile,{force:true}).catch(()=>{});
   }
 }
 
@@ -2288,12 +2316,15 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
     const frame=nearestTrackingFrame(tracking,mid);
     const speakerConfidence=frame?Number(frame.speakerConfidence||frame.confidence||0):0;
     const faceCount=Number(frame?.faceCount||0);
-    const safeFrame=Boolean(frame?.safeFrame || (frame && faceCount>1 && speakerConfidence<.24));
+    const trackingUnavailable=tracking?.ok===false || !frames.length || !frame;
+    const noFace=faceCount<=0;
+    const safeFrame=Boolean(trackingUnavailable || noFace || frame?.safeFrame || (frame && faceCount>1 && speakerConfidence<.24));
     const nearSwitch=switchTimes.some(t=>Math.abs(mid-t)<=.24);
     const mode=String(frame?.mode||'');
-    const groupLike=safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1;
+    const fullSource=safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1;
     const faceHeight=Math.max(0,Number(frame?.faceHeight||0));
-    // Speaker shots can zoom in slightly when the face is tiny, but never beyond a restrained social crop.
+    // A confident speaker uses a source-space 9:16 crop. Any ambiguity, tracking failure or
+    // speaker transition returns to the COMPLETE source frame instead of a center crop.
     const speakerZoom=faceHeight>0 ? Math.max(1,Math.min(1.18,1.13-(faceHeight-.10)*.55)) : 1.04;
     return {...part,
       focusX:frame?Number(frame.x||.5):.5,
@@ -2306,8 +2337,9 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
       faceHeight,
       spreadX:frame?Number(frame.spreadX||0):0,
       safeFrame,
-      frameMode:groupLike?'wide':'speaker',
-      speakerZoom:groupLike?1:speakerZoom,
+      trackingFallback:trackingUnavailable,
+      frameMode:fullSource?'full':'speaker',
+      speakerZoom:fullSource?1:speakerZoom,
       switchBridge:nearSwitch
     };
   });
@@ -2547,9 +2579,15 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     const srcA = safeStart + part.start;
     const srcB = safeStart + part.end;
     const editZoom=Number(part.zoom||1);
-    if(options.autoReframe && part.frameMode==='wide'){
-      // True zoom-out: build from the ORIGINAL source, not from an already cropped 9:16 frame.
-      // A wider source crop sits over a blurred 9:16 background, so both people/context can re-enter frame.
+    if(options.autoReframe && part.frameMode==='full'){
+      // Safety / speaker-switch view: preserve the COMPLETE original frame. The foreground is never cropped.
+      // A blurred copy fills the vertical canvas, while the original source is scaled down to fit inside it.
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[fbg${i}][ffg${i}]`);
+      filter.push(`[fbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
+      filter.push(`[ffg${i}]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg${i}]`);
+      filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
+    }else if(options.autoReframe && part.frameMode==='wide'){
+      // Wider source-space bridge retained for compatibility; safety fallbacks now use the full source above.
       const wide=sourceCropForWide(srcW,srcH,width,height,part);
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[wbg${i}][wfg${i}]`);
       filter.push(`[wbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);

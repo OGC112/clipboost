@@ -231,7 +231,7 @@ def main():
         sample_index+=1; frame_idx+=sample_frames
 
     cap.release()
-    summary={'samples':len(keyframes),'facesDetected':total_faces,'faceCountMax':max_faces,'speakerSwitches':speaker_switches,'reactionPeaks':len(reaction_peaks),'reactionPeakTimes':reaction_peaks[:24],'mode':args.mode,'movement':args.movement,'safeFrames':sum(1 for f in keyframes if f.get('safeFrame')),'speakerFocusedFrames':speaker_frames,'groupFrames':group_frames,'averageSpeakerConfidence':round(confidence_sum/max(1,len(keyframes)),4),'speakerSwitchTimes':speaker_switch_times[:40],'engine':'opencv-speaker-reframe-v4'}
+    summary={'samples':len(keyframes),'facesDetected':total_faces,'faceCountMax':max_faces,'speakerSwitches':speaker_switches,'reactionPeaks':len(reaction_peaks),'reactionPeakTimes':reaction_peaks[:24],'mode':args.mode,'movement':args.movement,'safeFrames':sum(1 for f in keyframes if f.get('safeFrame')),'speakerFocusedFrames':speaker_frames,'groupFrames':group_frames,'averageSpeakerConfidence':round(confidence_sum/max(1,len(keyframes)),4),'speakerSwitchTimes':speaker_switch_times[:40],'engine':'opencv-speaker-reframe-v5'}
     emit({'ok':True,'keyframes':keyframes,'summary':summary}); return 0
 
 
