@@ -1206,14 +1206,26 @@ function looksLikeQuestion(words=[]){
 
 function formatCaptionGroup(group=[], nextWord=null, reason='length'){
   if(!group.length) return '';
-  let text=group.map(w=>w.word).join(' ').replace(/\s+([,.;!?])/g,'$1').replace(/\s+/g,' ').trim();
-  text=capitalizeCaption(text);
-  if(!/[.!?…]$/.test(text)){
-    const gap=nextWord?Math.max(0,Number(nextWord.start||0)-Number(group[group.length-1].end||0)):1;
-    if(looksLikeQuestion(group)) text+='?';
-    else if(reason==='pause'||reason==='terminal'||!nextWord||gap>.58) text+='.';
-    else text+=',';
-  }
+  const lastRaw=String(group[group.length-1]?.word||'').trim();
+  let text=group.map(w=>String(w.word||''))
+    .join(' ')
+    // Short-form captions read better without editorial punctuation injected every few words.
+    .replace(/[;,]+/g,'')
+    .replace(/[.!?…](?=\s+\S)/g,'')
+    .replace(/\s+([.!?…])/g,'$1')
+    .replace(/\s+/g,' ')
+    .trim();
+  text=capitalizeCaption(text).replace(/[.!?…]+$/,'').trim();
+  if(!text) return '';
+  const gap=nextWord?Math.max(0,Number(nextWord.start||0)-Number(group[group.length-1].end||0)):9;
+  const sourceQuestion=/\?$/.test(lastRaw);
+  const sourceExclaim=/!$/.test(lastRaw);
+  const sourcePeriod=/[.…]$/.test(lastRaw);
+  // Keep punctuation only when it carries meaning. Never append commas just because a caption wrapped.
+  if(sourceQuestion || (looksLikeQuestion(group) && (reason==='terminal'||gap>=.72))) text+='?';
+  else if(sourceExclaim) text+='!';
+  else if(sourcePeriod && reason==='terminal') text+='.';
+  else if(reason==='pause' && gap>=1.05) text+='.';
   return text;
 }
 
@@ -1238,14 +1250,15 @@ function wordsToCaptions(words = []) {
     const w=list[i], next=list[i+1]||null;
     if (start === null) start = w.start;
     current.push(w);
-    const raw=current.map(x=>x.word).join(' ');
-    const duration=w.end-start;
+    const raw=current.map(x=>String(x.word||'')).join(' ');
+    const duration=Number(w.end||0)-Number(start||0);
     const nextGap=next?Math.max(0,Number(next.start||0)-Number(w.end||0)):9;
-    const terminal=/[.!?…]$/.test(w.word);
+    const terminal=/[.!?…]$/.test(String(w.word||''));
     let reason='';
-    if(terminal) reason='terminal';
-    else if(nextGap>.58) reason='pause';
-    else if(current.length>=7||raw.length>=42||duration>=2.65) reason='length';
+    // Deliberately concise: usually 2-4 words / about 1.5 seconds per caption beat.
+    if(terminal && current.length>=2) reason='terminal';
+    else if(nextGap>.50) reason='pause';
+    else if(current.length>=4 || raw.length>=28 || duration>=1.75) reason='length';
     if(reason) flush(reason,next);
   }
   flush('terminal',null);
@@ -1725,7 +1738,33 @@ function finalizeCandidate(meta,transcript,candidate={}){
   };
 }
 
-function selectDiverseCandidates(input=[], target=8, duration=0) {
+function adaptiveClipQualityFloor(input=[], duration=0){
+  const scores=(input||[]).map(c=>Number(c?.score||0)).filter(Number.isFinite).sort((a,b)=>b-a);
+  if(!scores.length) return 100;
+  const top=scores[0];
+  let absolute=Number(duration||0)>=45*60?76:Number(duration||0)>=15*60?75:74;
+  if(top>=90) absolute=Math.max(absolute,80);
+  else if(top>=85) absolute=Math.max(absolute,77);
+  return Math.max(absolute,top-10);
+}
+
+function isStrongClipCandidate(c, floor=74){
+  const q=c?.quality||{};
+  const boundary=q.boundary||{};
+  const score=Number(c?.score||0);
+  if(score<floor) return false;
+  // Visual/signal fallback when speech transcription is unavailable: require an unusually high score.
+  if(!c?.quality) return score>=Math.max(82,floor);
+  if(Number(q.completeness||0)<60) return false;
+  if(Number(boundary.start??q.completeness??0)<54) return false;
+  if(Number(boundary.end??q.completeness??0)<54) return false;
+  if(Number(q.retention||0)<56) return false;
+  if(Number(q.hook||0)<53 && Number(q.emotion||0)<70) return false;
+  if(Number(q.payoff||0)<54 && Number(q.story||0)<65) return false;
+  return true;
+}
+
+function selectDiverseCandidates(input=[], target=8, duration=0, preference='auto') {
   const cleaned=[...input].filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start+2)
     .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
   const unique=[];
@@ -1734,14 +1773,22 @@ function selectDiverseCandidates(input=[], target=8, duration=0) {
     const duplicate=unique.some(x=>{
       const xText=x.selectionText||x.hook||x.title||'';
       const sim=textSimilarity(xText,cText);
-      if(overlapRatio(x,c)>.28)return true;
-      if(sim>.64)return true;
-      if(Math.abs(x.start-c.start)<48&&sim>.43)return true;
+      if(overlapRatio(x,c)>.25)return true;
+      if(sim>.60)return true;
+      if(Math.abs(x.start-c.start)<55&&sim>.40)return true;
       return false;
     });
     if(duplicate)continue;
     unique.push(c);
   }
+
+  // Auto means quality-only, never "fill N slots". Zero clips is valid when nothing is strong enough.
+  if(String(preference||'auto').toLowerCase()==='auto'){
+    const floor=adaptiveClipQualityFloor(unique,duration);
+    const strong=unique.filter(c=>isStrongClipCandidate(c,floor));
+    return strong.slice(0,Math.max(1,target)).sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+  }
+
   if(unique.length<=target) return unique;
   const bins=Math.min(target, Math.max(1, Math.ceil(Number(duration||0)/420)));
   const selected=[];
@@ -1758,7 +1805,7 @@ function heuristicTranscriptCandidates(meta, transcript, fallbackCandidates = []
   const duration = Number(meta.details?.duration || 0);
   const target = resolveClipTarget(duration, preference);
   const units=speechPhraseUnits(transcript);
-  if(!units.length)return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)),target,duration);
+  if(!units.length)return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)),target,duration,preference);
   const seeds=[];
   const payoffPattern=/\b(donc|finalement|au final|résultat|voilà|bref|c'est pourquoi|la réponse|so|finally|in the end|result|that's why|the answer|turns out)\b/i;
 
@@ -1818,15 +1865,15 @@ function heuristicTranscriptCandidates(meta, transcript, fallbackCandidates = []
   const sampled=[...strongest,...spread].slice(0,seedCap);
   const out=sampled.map(c=>finalizeCandidate(meta,transcript,c));
   const fallback=fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c));
-  const diversified=selectDiverseCandidates(out,target,duration);
-  return diversified.length>=Math.min(3,target)?diversified:selectDiverseCandidates([...out,...fallback],target,duration);
+  const diversified=selectDiverseCandidates(out,target,duration,preference);
+  return diversified.length>=Math.min(3,target)?diversified:selectDiverseCandidates([...out,...fallback],target,duration,preference);
 }
 
 async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates = [], preference = 'auto') {
   const blocks = transcriptBlocks(transcript.words || []);
   const duration = Number(meta.details?.duration || 0);
   const target = resolveClipTarget(duration, preference);
-  if (!blocks.length) return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)), target, duration);
+  if (!blocks.length) return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)), target, duration, preference);
 
   const sectionCount = duration > 20*60 ? Math.min(7, Math.max(2, Math.ceil(target/4))) : 1;
   const clips=[];
@@ -1871,7 +1918,7 @@ ${inputText}`;
   }
   const fallback=fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c));
   const heuristic=heuristicTranscriptCandidates(meta,transcript,[...clips,...fallback],preference);
-  return selectDiverseCandidates([...clips,...heuristic,...fallback],target,duration);
+  return selectDiverseCandidates([...clips,...heuristic,...fallback],target,duration,preference);
 }
 
 function captionsForRange(transcript, start, end) {
@@ -2161,7 +2208,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
   return {
     options,
     profile: {
-      engine:'Auto Director v1',
+      engine:'Auto Director v2',
       contentType,
       labels,
       reason: reasonParts.length ? `Detected ${reasonParts.join(', ')}.` : 'Balanced automatically from the clip content.',
@@ -2180,7 +2227,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:face-safe-v2`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -2226,19 +2273,27 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
   if(tracking?.keyframes?.length){
-    const minGap=options.cameraMovement==='high'?0.62:options.cameraMovement==='low'?1.8:1.05;
-    let lastTime=-99,lastX=.5,lastY=.45,lastId=null;
+    const minGap=options.cameraMovement==='high'?0.72:options.cameraMovement==='low'?2.0:1.20;
+    let lastTime=-99,lastX=.5,lastY=.45,lastId=null,lastSafe=null;
     for(const f of tracking.keyframes){
-      const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null;
-      const moved=Math.hypot(x-lastX,y-lastY)>0.035;
+      const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null, safe=Boolean(f.safeFrame);
+      const moved=Math.hypot(x-lastX,y-lastY)>0.045;
       const speakerChanged=id&&lastId&&id!==lastId;
-      if(t-lastTime>=minGap || moved || speakerChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;}
+      const safeChanged=lastSafe!==null&&safe!==lastSafe;
+      if(t-lastTime>=minGap || moved || speakerChanged || safeChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;}
     }
   }
   const pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
     const mid=(Number(part.start)+Number(part.end))/2;
     const frame=nearestTrackingFrame(tracking,mid);
-    return {...part,focusX:frame?Number(frame.x||.5):.5,focusY:frame?Number(frame.y||.44):.44,trackingConfidence:frame?Number(frame.confidence||0):0,activeFaceId:frame?.activeFaceId??null,faceCount:frame?.faceCount||0};
+    return {...part,
+      focusX:frame?Number(frame.x||.5):.5,
+      focusY:frame?Number(frame.y||.44):.44,
+      trackingConfidence:frame?Number(frame.confidence||0):0,
+      activeFaceId:frame?.activeFaceId??null,
+      faceCount:frame?.faceCount||0,
+      safeFrame:Boolean(frame?.safeFrame || (frame && Number(frame.confidence||0)<.34))
+    };
   });
   return {...timeline,pieces};
 }
@@ -2439,23 +2494,38 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     const part = timeline.pieces[i];
     const srcA = safeStart + part.start;
     const srcB = safeStart + part.end;
-    let vf;
-    if(options.autoReframe){
-      const focusX=Math.max(0.02,Math.min(.98,Number(part.focusX??.5)));
-      const focusY=Math.max(0.08,Math.min(.92,Number(part.focusY??.44)));
-      const cropX=Math.max(0,Math.min(Math.max(0,scaledW-width),Math.round(focusX*scaledW-width/2)));
-      const cropY=Math.max(0,Math.min(Math.max(0,scaledH-height),Math.round(focusY*scaledH-height/2)));
-      vf=`scale=${scaledW}:${scaledH},crop=${width}:${height}:${cropX}:${cropY}`;
+    const zoom=Number(part.zoom||1);
+    if(options.autoReframe && part.safeFrame){
+      // When face detection is uncertain or multiple faces are spread out, never gamble on a tight crop.
+      // Keep the entire source visible over a blurred 9:16 background.
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[sbg${i}][sfg${i}]`);
+      filter.push(`[sbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=18[bg${i}]`);
+      filter.push(`[sfg${i}]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg${i}]`);
+      const safeLabel=`safe${i}`;
+      filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[${safeLabel}]`);
+      if(zoom>1.001){
+        const zw=Math.max(width,Math.round(width*zoom)), zh=Math.max(height,Math.round(height*zoom));
+        filter.push(`[${safeLabel}]scale=${zw}:${zh},crop=${width}:${height},setsar=1[v${i}]`);
+      }else filter.push(`[${safeLabel}]null[v${i}]`);
     }else{
-      vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+      let vf;
+      if(options.autoReframe){
+        const focusX=Math.max(0.02,Math.min(.98,Number(part.focusX??.5)));
+        const focusY=Math.max(0.08,Math.min(.92,Number(part.focusY??.44)));
+        const cropX=Math.max(0,Math.min(Math.max(0,scaledW-width),Math.round(focusX*scaledW-width/2)));
+        const cropY=Math.max(0,Math.min(Math.max(0,scaledH-height),Math.round(focusY*scaledH-height/2)));
+        vf=`scale=${scaledW}:${scaledH},crop=${width}:${height}:${cropX}:${cropY}`;
+      }else{
+        vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+      }
+      if (zoom > 1.001) {
+        const zw = Math.max(width, Math.round(width * zoom));
+        const zh = Math.max(height, Math.round(height * zoom));
+        vf += `,scale=${zw}:${zh},crop=${width}:${height}`;
+      }
+      vf += ',setsar=1';
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf}[v${i}]`);
     }
-    if (Number(part.zoom || 1) > 1.001) {
-      const zw = Math.max(width, Math.round(width * part.zoom));
-      const zh = Math.max(height, Math.round(height * part.zoom));
-      vf += `,scale=${zw}:${zh},crop=${width}:${height}`;
-    }
-    vf += ',setsar=1';
-    filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf}[v${i}]`);
     if (hasAudio) filter.push(`[0:a]atrim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
   }
 
@@ -2520,7 +2590,7 @@ async function analyzeProject(projectId, options = {}) {
     await writeMeta(meta);
     const input = meta.sourcePath;
     const duration = meta.details.duration || 0;
-    const clipCountPreference = options.clipCount ?? meta.clipCountPreference ?? 'auto';
+    const clipCountPreference = options.clipCount ?? 'auto';
     meta.clipCountPreference = clipCountPreference;
 
     const [silenceResult, sceneResult] = await Promise.all([
@@ -2559,7 +2629,7 @@ async function analyzeProject(projectId, options = {}) {
         aiError = err?.message || 'Local AI analysis failed';
         candidates = transcript?.words?.length
           ? heuristicTranscriptCandidates(meta, transcript, signalCandidates, clipCountPreference)
-          : selectDiverseCandidates(signalCandidates, resolveClipTarget(duration, clipCountPreference), duration);
+          : selectDiverseCandidates(signalCandidates.filter(c=>Number(c.score||0)>=78), resolveClipTarget(duration, clipCountPreference), duration, clipCountPreference);
       }
     }
 
@@ -2590,7 +2660,9 @@ async function analyzeProject(projectId, options = {}) {
       aiConfigured: true,
       aiError,
       clipCountPreference,
-      clipTarget: resolveClipTarget(duration, clipCountPreference),
+      clipTarget: clipCountPreference==='auto' ? 'quality-only' : resolveClipTarget(duration, clipCountPreference),
+      clipSearchBudget: resolveClipTarget(duration, clipCountPreference),
+      clipSelectionPolicy: clipCountPreference==='auto' ? 'strong-clips-only' : 'requested-count',
       clipsGenerated: candidates.length,
       timeline: {
         scenes: scenes.slice(0, 1000),
