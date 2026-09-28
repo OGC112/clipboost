@@ -350,3 +350,11 @@ Double-click `Update ClipBoost Dev.bat` to run `git pull --rebase origin main` f
 - Dedicated batch live-status refresh for followed Twitch creators.
 - Automatic refresh every 60 seconds while Library → Twitch → Live is open.
 - Watch Live opens Twitch externally for reliable Electron desktop playback.
+
+## v21.2.2 — Seamless Update Fix
+- Deduplicates updater events so the **Update ready** modal appears once per version.
+- Coalesces overlapping update checks.
+- `Restart & install` now launches the NSIS updater silently and relaunches ClipBoost automatically.
+- Replaces the assisted NSIS installer with a current-user one-click installer, removing the **Just me / all users** and **Next** steps.
+- Adds an in-app **Installing silently…** state before ClipBoost closes for the update.
+

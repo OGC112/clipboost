@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.2.1",
-  "description": "AI video clipping with Quality Engine, Twitch Live Library refresh, cleaned word-synced captions, natural auto-zooms, smart speaker tracking and dynamic 9:16 reframing",
+  "version": "21.2.2",
+  "description": "AI video clipping with Quality Engine, stable one-click silent updates, Twitch Live refresh, cleaned captions, natural auto-zooms and smart speaker tracking",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -56,11 +56,18 @@
       "icon": "desktop/assets/clipboost.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "ClipBoost"
+      "shortcutName": "ClipBoost",
+      "perMachine": false,
+      "allowElevation": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "desktop/assets/clipboost.ico",
+      "uninstallerIcon": "desktop/assets/clipboost.ico",
+      "installerHeaderIcon": "desktop/assets/clipboost.ico"
     }
   },
   "author": "ClipBoost"

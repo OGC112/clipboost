@@ -215,3 +215,6 @@
 .quality-mini span{font-style:normal;font-size:8px;line-height:1;padding:5px 6px;border-radius:6px;border:1px solid #26364b;background:#0d1623;color:#9bb0c9}
 .quality-mini span:first-child{border-color:rgba(139,92,246,.35);color:#c8b6ff}
 .controls select#captionColorSelect{min-width:92px}
+
+.cb-modal-installing{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:23px;color:#c6b8ff;font-size:12px;font-weight:800;letter-spacing:.01em}.cb-modal-spinner{width:17px;height:17px;border:2px solid rgba(173,137,255,.28);border-top-color:#9c5cff;border-radius:50%;animation:cbSpin .75s linear infinite}.cb-modal-progress .cb-modal-icon{animation:cbUpdatePulse 1.15s ease-in-out infinite}.cb-modal-progress .cb-modal-detail{border-color:rgba(133,85,255,.35);background:rgba(69,36,126,.12)}
+@keyframes cbSpin{to{transform:rotate(360deg)}}@keyframes cbUpdatePulse{0%,100%{box-shadow:0 14px 34px rgba(117,53,255,.24);transform:scale(1)}50%{box-shadow:0 18px 46px rgba(117,53,255,.42);transform:scale(1.035)}}

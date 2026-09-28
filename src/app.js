@@ -9,6 +9,8 @@
   const state={page:pageFromHash(), video:null, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, libraryLoadMoreBusy:false, youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, clipCountPreference:editorPrefs.clipCountPreference||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionPosition:editorPrefs.captionPosition||'bottom', captionSize:editorPrefs.captionSize||'medium', captionColor:editorPrefs.captionColor||'white', cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, uiModal:null};
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({clipCountPreference:state.clipCountPreference,editPreset:state.editPreset,editIntensity:state.editIntensity,trackingMode:state.trackingMode,cameraMovement:state.cameraMovement,captionStyle:state.captionStyle,captionPosition:state.captionPosition,captionSize:state.captionSize,captionColor:state.captionColor,cleanupMode:state.cleanupMode,zoomStyle:state.zoomStyle,editOptions:state.editOptions}))}catch{}}
   let uiModalResolve=null;
+  const updateReadyPromptedVersions=new Set();
+  let updateInstallStarting=false;
   function modalIcon(kind='info'){
     return {success:'✓',danger:'!',warning:'!',update:'↻',info:'i'}[kind]||'i';
   }
@@ -16,7 +18,8 @@
     const m=state.uiModal;if(!m)return '';
     const kind=m.kind||'info';
     const mode=m.mode||'notice';
-    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div><div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div></section></div>`;
+    const actions=mode==='progress'?`<div class="cb-modal-installing"><span class="cb-modal-spinner" aria-hidden="true"></span><span>${escapeHtml(m.progressLabel||'Installing…')}</span></div>`:`<div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div>`;
+    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
   }
   function openModal(options={}){
     if(uiModalResolve){try{uiModalResolve(false)}catch{}uiModalResolve=null}
@@ -25,6 +28,27 @@
   function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(resolve)resolve(result)}
   function showNotice(options={}){return openModal({mode:'notice',...options})}
   function confirmAction(options={}){return openModal({mode:'confirm',cancelLabel:'Cancel',confirmLabel:'Confirm',...options})}
+  async function promptReadyUpdate(version,{force=false}={}){
+    const key=String(version||'unknown');
+    if(updateInstallStarting)return;
+    if(state.uiModal?.purpose==='update-ready'&&state.uiModal?.updateVersion===key)return;
+    if(!force&&updateReadyPromptedVersions.has(key))return;
+    updateReadyPromptedVersions.add(key);
+    const ok=await confirmAction({purpose:'update-ready',updateVersion:key,kind:'update',eyebrow:'Update ready',title:`ClipBoost ${key==='unknown'?'':key} is ready`,message:'The update has finished downloading.',detail:'One-click update: ClipBoost will close, install silently and reopen automatically. No Windows installer steps are required.',confirmLabel:'Restart & install',cancelLabel:'Later'});
+    if(!ok)return;
+    updateInstallStarting=true;
+    uiModalResolve=null;
+    state.uiModal={mode:'progress',kind:'update',eyebrow:'Installing update',title:'Updating ClipBoost…',message:'ClipBoost is applying the new version now.',detail:'No action is required. ClipBoost will restart automatically when the installation is complete.',progressLabel:'Installing silently…'};
+    render();
+    await new Promise(resolve=>setTimeout(resolve,120));
+    try{
+      const result=await window.clipboostDesktop?.installUpdate?.();
+      if(result?.ok===false)throw new Error(result.error||'The update could not be installed.');
+    }catch(error){
+      updateInstallStarting=false;
+      showNotice({kind:'danger',eyebrow:'Updates',title:'Installation could not start',message:error?.message||'ClipBoost could not start the update installer.'});
+    }
+  }
   function navigate(page,{replace=false}={}){
     if(!validPages.has(page)) page='home';
     state.page=page;
@@ -507,7 +531,7 @@
 
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
-    const updateCenter=document.getElementById('updateCenterBtn');if(updateCenter)updateCenter.onclick=async()=>{const u=state.desktopUpdate||{};if(u.status==='ready'){const ok=await confirmAction({kind:'update',eyebrow:'Update ready',title:`ClipBoost ${u.version||''} is ready`,message:'The update has finished downloading.',detail:'Restart ClipBoost now to install it. Your projects and settings will be kept.',confirmLabel:'Restart & install',cancelLabel:'Later'});if(ok)window.clipboostDesktop?.installUpdate?.();}else if(u.status==='error'){showNotice({kind:'danger',eyebrow:'Updates',title:'Update issue',message:u.message||'ClipBoost could not finish the update.'});}else{showNotice({kind:'update',eyebrow:'Updates',title:u.status==='checking'?'Checking for updates':`Downloading ClipBoost ${u.version||''}`,message:u.status==='downloading'?`${Math.round(u.percent||0)}% downloaded`:'ClipBoost is checking the release channel.'});}};
+    const updateCenter=document.getElementById('updateCenterBtn');if(updateCenter)updateCenter.onclick=async()=>{const u=state.desktopUpdate||{};if(u.status==='ready'){await promptReadyUpdate(u.version,{force:true});}else if(u.status==='error'){showNotice({kind:'danger',eyebrow:'Updates',title:'Update issue',message:u.message||'ClipBoost could not finish the update.'});}else{showNotice({kind:'update',eyebrow:'Updates',title:u.status==='checking'?'Checking for updates':`Downloading ClipBoost ${u.version||''}`,message:u.status==='downloading'?`${Math.round(u.percent||0)}% downloaded`:'ClipBoost is checking the release channel.'});}};
     const file=document.getElementById('videoFile'),drop=document.getElementById('dropZone');
     if(file)file.onchange=()=>{const chosen=file.files&&file.files[0];if(chosen)uploadVideo(chosen)};
     if(drop){drop.ondragover=e=>{e.preventDefault();drop.classList.add('dragging')};drop.ondragleave=()=>drop.classList.remove('dragging');drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragging');uploadVideo(e.dataTransfer.files[0])}}
@@ -631,8 +655,7 @@
     if(status==='dev') return showNotice({kind:'info',eyebrow:'Updates',title:'Development build',message:'Automatic updates are only available in the installed ClipBoost build.'});
     if(status==='error') return showNotice({kind:'danger',eyebrow:'Updates',title:'Update check failed',message:evt.message||'ClipBoost could not check for updates.'});
     if(status==='ready'){
-      const ok=await confirmAction({kind:'update',eyebrow:'Update ready',title:`ClipBoost ${evt.version||''} is ready`,message:'The update has finished downloading.',detail:'Restart ClipBoost now to install it. Your projects and settings will be kept.',confirmLabel:'Restart & install',cancelLabel:'Later'});
-      if(ok)window.clipboostDesktop?.installUpdate?.();
+      await promptReadyUpdate(evt.version||evt.updateState?.version);
       return;
     }
     if(status==='available') return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
