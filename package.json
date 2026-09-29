@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.3.8",
-  "description": "AI video clipping with Fast Local AI transcription, Context Engine v3 narrative selection, safe reframing, social captions and seamless silent updates",
+  "version": "21.4.0",
+  "description": "Paid campaign clipping workspace with campaign-aware selection, Fast Local AI, Context Engine v3, safe reframing, social captions and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

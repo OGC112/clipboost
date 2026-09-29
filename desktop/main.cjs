@@ -165,8 +165,8 @@ async function checkForUpdates(manual = false) {
     return result;
   }
   const cfg = readDesktopEnv();
-  const owner = String(cfg.CLIPBOOST_UPDATE_OWNER || '').trim();
-  const repo = String(cfg.CLIPBOOST_UPDATE_REPO || '').trim();
+  const owner = String(cfg.CLIPBOOST_UPDATE_OWNER || 'OGC112').trim();
+  const repo = String(cfg.CLIPBOOST_UPDATE_REPO || 'clipboost').trim();
   if (!owner || !repo) {
     const result = { ok:false, status:'unconfigured', currentVersion:app.getVersion(), updateState };
     if (manual) emitUpdateEvent(result);

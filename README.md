@@ -1,3 +1,28 @@
+# ClipBoost 21.4.0 — Campaign Workspace
+
+V21.4.0 turns ClipBoost into a paid-campaign clipping workflow: bring the campaign brief and authorized sources, then use AI Studio to produce compliant clips optimized for retention and views.
+
+## Campaign workflow
+
+- **Campaigns workspace** for name, provider, campaign URL, brief, platforms, duration rules, deadline, view threshold, payout model, hashtags, mentions, CTA and forbidden terms.
+- **Public campaign URL import** tries to extract public page title/description plus YouTube/Twitch source links. Manual entry always remains available for login-only/blocked sites.
+- **Authorized source list** with one-click **Edit with AI Studio** and a safe **Queue all sources** batch action.
+- **Campaign-aware Context Engine** keeps context completeness as the hard requirement while adding brief relevance, campaign duration fit, used-range avoidance and campaign rules to ranking.
+- **View Potential** score based on hook, retention, emotion, completeness, payoff and clean speech. This is an editing signal, not a guarantee of views.
+- **Campaign Fit** score for brief relevance, duration fit, performance history and compliance constraints.
+- **Hook variants**: Tight hook, Balanced and More context versions for the selected moment.
+- **Pre-export campaign check** for duration, forbidden terms, brief relevance, vertical output and captions.
+- **Used moments** are tracked after export so the same campaign/project range can be deprioritized on later analysis.
+- **Performance tracking** stores published URLs, views, clip duration and editing minutes. The workspace shows payout progress, remaining views, average/best views, learned best-performing duration and estimated revenue/hour.
+- **Submission pack** exports campaign rules, tracked posts, totals and used moments as JSON.
+- **Seamless updater remains enabled**: one prompt per downloaded version, silent install and automatic relaunch. Fresh installs default to the `OGC112/clipboost` GitHub release channel; `.env` can still override it.
+
+## Important
+
+Campaign Mode assumes you are using sources and promotional material you are authorized to reuse under the campaign rules. Site import only reads public pages; it does not bypass logins or platform protections.
+
+---
+
 # ClipBoost 21.3.8 — Fast Local AI Pipeline
 
 V21.3.8 accelerates the long-video **Library → Edit with AI Studio → Analyzing with Local AI** phase without changing the Whisper model, beam size, word timestamps, Context Engine scoring, or final render quality.
