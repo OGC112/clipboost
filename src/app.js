@@ -529,6 +529,8 @@
     <div class="settings-grid">
       <section class="card settings-card"><div class="section-head"><div><div class="eyebrow">Integrations</div><h3>YouTube & Twitch</h3></div></div>
         <label class="field"><span>YouTube API key</span><input id="setYoutubeKey" value="${escapeHtml(s.YOUTUBE_API_KEY||'')}" placeholder="API key"></label>
+        <label class="field"><span>YouTube download authentication</span><select id="setYoutubeAuthBrowser">${option('firefox','Firefox (recommended)',s.YOUTUBE_AUTH_BROWSER||'firefox')}${option('auto','Auto detect',s.YOUTUBE_AUTH_BROWSER)}${option('edge','Edge',s.YOUTUBE_AUTH_BROWSER)}${option('chrome','Chrome',s.YOUTUBE_AUTH_BROWSER)}${option('brave','Brave',s.YOUTUBE_AUTH_BROWSER)}${option('none','No browser cookies',s.YOUTUBE_AUTH_BROWSER)}</select></label>
+        <small class="settings-note">Used only when YouTube blocks automatic ingest. Cookies stay on this PC. Firefox is recommended and can remain open.</small>
         <label class="field"><span>Twitch Client ID</span><input id="setTwitchId" value="${escapeHtml(s.TWITCH_CLIENT_ID||'')}" placeholder="Client ID"></label>
         <label class="field"><span>Twitch Client Secret</span><input id="setTwitchSecret" type="password" value="${escapeHtml(s.TWITCH_CLIENT_SECRET||'')}" placeholder="Client Secret"></label>
         <small class="settings-note">Secret values are masked. Leave a masked value unchanged to keep the existing secret.</small>
@@ -561,7 +563,7 @@
         <div class="settings-two"><label class="field"><span>GitHub owner</span><input id="setUpdateOwner" value="${escapeHtml(s.CLIPBOOST_UPDATE_OWNER||'')}"></label><label class="field"><span>Repository</span><input id="setUpdateRepo" value="${escapeHtml(s.CLIPBOOST_UPDATE_REPO||'')}"></label></div>
       </section>
       <section class="card settings-card settings-health"><div class="section-head"><div><div class="eyebrow">Diagnostics</div><h3>System health</h3></div><button class="btn secondary compact-btn" id="runHealthCheckBtn" ${state.systemHealthLoading?'disabled':''}>${state.systemHealthLoading?'Checking…':'Run check'}</button></div>
-        ${state.systemHealth?`<div class="health-grid">${healthItem('FFmpeg',state.systemHealth.ffmpeg)}${healthItem('FFprobe',state.systemHealth.ffprobe)}${healthItem('Python',state.systemHealth.python)}${healthItem('Face tracking',state.systemHealth.tracking)}${healthItem('Ollama',state.systemHealth.ollama)}${healthItem('YouTube API',state.systemHealth.youtube)}${healthItem('Twitch API',state.systemHealth.twitch)}</div>${state.systemHealth.paths?`<div class="health-paths"><span>Data</span><code>${escapeHtml(state.systemHealth.paths.data||'')}</code><span>Exports</span><code>${escapeHtml(state.systemHealth.paths.exports||'')}</code></div>`:''}`:`<div class="health-empty">Run a quick diagnostic to verify the tools ClipBoost needs for local processing.</div>`}
+        ${state.systemHealth?`<div class="health-grid">${healthItem('FFmpeg',state.systemHealth.ffmpeg)}${healthItem('FFprobe',state.systemHealth.ffprobe)}${healthItem('Node / EJS',state.systemHealth.node)}${healthItem('yt-dlp',state.systemHealth.ytDlp)}${healthItem('Python',state.systemHealth.python)}${healthItem('Face tracking',state.systemHealth.tracking)}${healthItem('Ollama',state.systemHealth.ollama)}${healthItem('YouTube API',state.systemHealth.youtube)}${healthItem('Twitch API',state.systemHealth.twitch)}</div>${state.systemHealth.paths?`<div class="health-paths"><span>Data</span><code>${escapeHtml(state.systemHealth.paths.data||'')}</code><span>Exports</span><code>${escapeHtml(state.systemHealth.paths.exports||'')}</code></div>`:''}`:`<div class="health-empty">Run a quick diagnostic to verify the tools ClipBoost needs for local processing.</div>`}
       </section>
     </div></div>`;
   }
@@ -569,6 +571,7 @@
     if(state.settingsSaving)return;
     const payload={
       YOUTUBE_API_KEY:document.getElementById('setYoutubeKey')?.value||state.settings?.YOUTUBE_API_KEY||'',
+      YOUTUBE_AUTH_BROWSER:document.getElementById('setYoutubeAuthBrowser')?.value||'firefox',
       TWITCH_CLIENT_ID:document.getElementById('setTwitchId')?.value||state.settings?.TWITCH_CLIENT_ID||'',
       TWITCH_CLIENT_SECRET:document.getElementById('setTwitchSecret')?.value||state.settings?.TWITCH_CLIENT_SECRET||'',
       PYTHON_BIN:document.getElementById('setPythonBin')?.value||'python',LOCAL_WHISPER_MODEL:document.getElementById('setWhisperModel')?.value||'small',

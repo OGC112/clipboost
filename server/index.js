@@ -30,7 +30,8 @@ const SETTINGS_KEYS = [
   'YOUTUBE_API_KEY','TWITCH_CLIENT_ID','TWITCH_CLIENT_SECRET',
   'PYTHON_BIN','LOCAL_WHISPER_MODEL','LOCAL_WHISPER_DEVICE','LOCAL_WHISPER_COMPUTE_TYPE',
   'LOCAL_WHISPER_CHUNK_SECONDS','LOCAL_WHISPER_WORKERS','LOCAL_WHISPER_CPU_THREADS','LOCAL_WHISPER_SKIP_SILENCE',
-  'OLLAMA_URL','OLLAMA_MODEL','CLIPBOOST_EXPORT_DIR','CLIPBOOST_UPDATE_OWNER','CLIPBOOST_UPDATE_REPO'
+  'OLLAMA_URL','OLLAMA_MODEL','CLIPBOOST_EXPORT_DIR','CLIPBOOST_UPDATE_OWNER','CLIPBOOST_UPDATE_REPO',
+  'YOUTUBE_AUTH_BROWSER','NODE_BIN','FFMPEG_BIN'
 ];
 function parseEnvText(text='') {
   const out = {};
@@ -67,6 +68,61 @@ function maskSecret(value='') {
   if (!v) return '';
   if (v.length <= 8) return '••••••••';
   return `${v.slice(0,4)}••••••••${v.slice(-4)}`;
+}
+
+function resolveWindowsTool(name, envKey, common = []) {
+  const raw = String(process.env[envKey] || '').trim();
+  const candidates = [];
+  if (raw) {
+    try {
+      if (fsSync.existsSync(raw) && fsSync.statSync(raw).isDirectory()) candidates.push(path.join(raw, `${name}.exe`));
+      else if (fsSync.existsSync(raw)) {
+        if (path.basename(raw).toLowerCase() === `${name}.exe`) candidates.push(raw);
+        else candidates.push(path.join(path.dirname(raw), `${name}.exe`));
+      }
+    } catch {}
+  }
+  candidates.push(...common);
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try { if (fsSync.existsSync(candidate) && fsSync.statSync(candidate).isFile()) return candidate; } catch {}
+  }
+  return null;
+}
+
+const windowsTools = process.platform === 'win32' ? {
+  node: resolveWindowsTool('node','NODE_BIN',[
+    'D:\\Apps\\NodeJS\\node.exe',
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe')
+  ]),
+  ffmpeg: resolveWindowsTool('ffmpeg','FFMPEG_BIN',[
+    'D:\\Apps\\FFmpeg\\bin\\ffmpeg.exe'
+  ]),
+  ffprobe: resolveWindowsTool('ffprobe','FFMPEG_BIN',[
+    'D:\\Apps\\FFmpeg\\bin\\ffprobe.exe'
+  ])
+} : { node:null, ffmpeg:null, ffprobe:null };
+
+if (process.platform === 'win32') {
+  const extraDirs = [windowsTools.node, windowsTools.ffmpeg, windowsTools.ffprobe, path.join(root,'.venv','Scripts')]
+    .filter(Boolean).map(x => fsSync.existsSync(x) && fsSync.statSync(x).isDirectory() ? x : path.dirname(x));
+  const key = Object.prototype.hasOwnProperty.call(process.env,'Path') ? 'Path' : 'PATH';
+  const current = String(process.env[key] || '');
+  const unique = [...new Set(extraDirs.filter(Boolean))];
+  if (unique.length) {
+    process.env[key] = `${unique.join(path.delimiter)}${current ? path.delimiter + current : ''}`;
+    process.env.PATH = process.env[key];
+    process.env.Path = process.env[key];
+  }
+}
+
+function runtimeCommand(command) {
+  if (process.platform !== 'win32') return command;
+  const base = String(path.basename(command || '')).toLowerCase().replace(/\.exe$/,'');
+  if (base === 'ffmpeg' && windowsTools.ffmpeg) return windowsTools.ffmpeg;
+  if (base === 'ffprobe' && windowsTools.ffprobe) return windowsTools.ffprobe;
+  if (base === 'node' && windowsTools.node) return windowsTools.node;
+  return command;
 }
 
 
@@ -547,7 +603,8 @@ const upload = multer({
 
 function run(command, args, { timeout = 15 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, { windowsHide: true });
+    const executable = runtimeCommand(command);
+    const proc = spawn(executable, args, { windowsHide: true, env: process.env });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
@@ -567,10 +624,96 @@ function run(command, args, { timeout = 15 * 60 * 1000 } = {}) {
 
 
 function externalIngestionConfig() {
+  const browser = String(process.env.YOUTUBE_AUTH_BROWSER || 'firefox').trim().toLowerCase();
+  const node = windowsTools.node || String(process.env.NODE_BIN || '').trim() || null;
+  const ffmpeg = windowsTools.ffmpeg || String(process.env.FFMPEG_BIN || '').trim() || null;
   return {
     python: String(process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3')).trim(),
-    maxHeight: Math.max(360, Math.min(2160, Number(process.env.INGEST_MAX_HEIGHT || 720)))
+    maxHeight: Math.max(360, Math.min(2160, Number(process.env.INGEST_MAX_HEIGHT || 720))),
+    youtubeAuthBrowser: ['auto','firefox','edge','chrome','brave','none'].includes(browser) ? browser : 'firefox',
+    node,
+    ffmpeg
   };
+}
+
+function youtubeBrowserAttempts(configured='firefox') {
+  if (configured === 'none') return [];
+  if (configured === 'auto') return ['firefox','edge','chrome','brave'];
+  return [configured];
+}
+
+function isYoutubeRetryableAuthError(message='') {
+  const text=String(message||'').toLowerCase();
+  return /confirm you.?re not a bot|sign in to confirm|page needs to be reloaded|login required|cookies?/.test(text);
+}
+function isYoutubeUnavailableError(message='') {
+  return /this video is unavailable|video unavailable|private video|members-only|not available in your country|geo.?restricted/i.test(String(message||''));
+}
+function friendlyIngestError(err, browser='firefox') {
+  const raw=String(err?.message||err||'Automatic source ingestion failed.');
+  if (isYoutubeUnavailableError(raw)) return new Error('Video unavailable. The source may be private, deleted, members-only, region-restricted, or no longer accessible.');
+  if (/could not copy .*cookie database/i.test(raw)) return new Error(`ClipBoost could not read the ${browser} YouTube session. Keep Firefox as the recommended auth browser, make sure you are signed in to YouTube there, then retry.`);
+  if (/confirm you.?re not a bot|sign in to confirm/i.test(raw)) return new Error(`YouTube authentication is required. Sign in to YouTube in ${browser === 'firefox' ? 'Firefox' : browser}, then retry automatic ingest.`);
+  if (/signature solving failed|n challenge solving failed|page needs to be reloaded/i.test(raw)) return new Error('YouTube challenge solving failed. ClipBoost could not load the current JavaScript solver. Check your internet connection and retry.');
+  return new Error(raw);
+}
+
+function ytDlpBaseArgs(meta, cfg, browser=null) {
+  const source=meta.externalSource||{};
+  const outputTemplate = path.join(uploadsDir, `${meta.id}.%(ext)s`);
+  const format = `bv*[height<=${cfg.maxHeight}]+ba/b[height<=${cfg.maxHeight}]/b`;
+  const args = [
+    '-m','yt_dlp',
+    '--no-playlist',
+    '--newline',
+    '--progress',
+    '--no-warnings',
+    '-f', format,
+    '--merge-output-format','mp4',
+    '-o', outputTemplate
+  ];
+  if (cfg.ffmpeg) args.push('--ffmpeg-location', path.dirname(cfg.ffmpeg));
+  if (source.platform === 'youtube' && cfg.node) {
+    args.push('--js-runtimes', `node:${cfg.node}`);
+    args.push('--remote-components', 'ejs:github');
+  }
+  if (source.platform === 'youtube' && browser) args.push('--cookies-from-browser', browser);
+  args.push(source.url);
+  return args;
+}
+
+async function runYtDlpDownload(projectId, meta, cfg, browser=null) {
+  const args=ytDlpBaseArgs(meta,cfg,browser);
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cfg.python, args, { cwd: root, windowsHide: true, env: process.env });
+    let stderr = '';
+    let stdout = '';
+    let lastWrite = 0;
+    let lastProgress = 3;
+    const consume = chunk => {
+      const text = chunk.toString();
+      stdout += text;
+      const match = text.match(/\[download\]\s+([0-9.]+)%/);
+      if (match) {
+        const raw = Number(match[1]);
+        if (Number.isFinite(raw)) lastProgress = Math.max(4, Math.min(88, Math.round(4 + raw * 0.84)));
+      }
+      const now = Date.now();
+      if (now - lastWrite > 900) {
+        lastWrite = now;
+        readMeta(projectId).then(current => {
+          current.status = 'ingesting';
+          current.ingestion = { ...(current.ingestion || {}), stage: browser ? `downloading-auth-${browser}` : 'downloading', progress: lastProgress, engine: 'yt-dlp', error: null };
+          current.updatedAt = new Date().toISOString();
+          return writeMeta(current);
+        }).catch(() => {});
+      }
+    };
+    proc.stdout?.on('data', consume);
+    proc.stderr?.on('data', d => { stderr += d.toString(); consume(d); });
+    proc.on('error', reject);
+    proc.on('close', code => code === 0 ? resolve({stdout,stderr}) : reject(new Error(stderr.trim() || stdout.trim() || `yt-dlp exited with code ${code}`)));
+  });
 }
 
 async function findDownloadedProjectFile(projectId) {
@@ -607,50 +750,33 @@ async function downloadExternalSource(projectId) {
   meta.ingestion = { stage: 'starting', progress: 3, engine: 'yt-dlp', startedAt: new Date().toISOString(), error: null };
   await writeMeta(meta);
 
-  const outputTemplate = path.join(uploadsDir, `${meta.id}.%(ext)s`);
-  const format = `bv*[height<=${cfg.maxHeight}]+ba/b[height<=${cfg.maxHeight}]/b`;
-  const args = [
-    '-m','yt_dlp',
-    '--no-playlist',
-    '--newline',
-    '--progress',
-    '--no-warnings',
-    '-f', format,
-    '--merge-output-format','mp4',
-    '-o', outputTemplate,
-    source.url
-  ];
-
-  await new Promise((resolve, reject) => {
-    const proc = spawn(cfg.python, args, { cwd: root, windowsHide: true });
-    let stderr = '';
-    let stdout = '';
-    let lastWrite = 0;
-    let lastProgress = 3;
-    const consume = chunk => {
-      const text = chunk.toString();
-      stdout += text;
-      const match = text.match(/\[download\]\s+([0-9.]+)%/);
-      if (match) {
-        const raw = Number(match[1]);
-        if (Number.isFinite(raw)) lastProgress = Math.max(4, Math.min(88, Math.round(4 + raw * 0.84)));
+  let lastError=null;
+  if (source.platform === 'youtube') {
+    try {
+      await runYtDlpDownload(projectId, meta, cfg, null);
+    } catch (err) {
+      lastError=err;
+      if (!isYoutubeUnavailableError(err?.message) && isYoutubeRetryableAuthError(err?.message)) {
+        for (const browser of youtubeBrowserAttempts(cfg.youtubeAuthBrowser)) {
+          try {
+            const current=await readMeta(projectId);
+            current.ingestion={...(current.ingestion||{}),stage:`auth-retry-${browser}`,progress:Math.max(3,Number(current.ingestion?.progress||3)),engine:'yt-dlp',error:null};
+            await writeMeta(current);
+            await runYtDlpDownload(projectId, meta, cfg, browser);
+            lastError=null;
+            break;
+          } catch (authErr) {
+            lastError=authErr;
+            if (isYoutubeUnavailableError(authErr?.message)) break;
+          }
+        }
       }
-      const now = Date.now();
-      if (now - lastWrite > 900) {
-        lastWrite = now;
-        readMeta(projectId).then(current => {
-          current.status = 'ingesting';
-          current.ingestion = { ...(current.ingestion || {}), stage: 'downloading', progress: lastProgress, engine: 'yt-dlp', error: null };
-          current.updatedAt = new Date().toISOString();
-          return writeMeta(current);
-        }).catch(() => {});
-      }
-    };
-    proc.stdout?.on('data', consume);
-    proc.stderr?.on('data', d => { stderr += d.toString(); consume(d); });
-    proc.on('error', reject);
-    proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr.trim() || stdout.trim() || `yt-dlp exited with code ${code}`)));
-  });
+    }
+    if (lastError) throw friendlyIngestError(lastError,cfg.youtubeAuthBrowser);
+  } else {
+    try { await runYtDlpDownload(projectId, meta, cfg, null); }
+    catch(err){ throw friendlyIngestError(err,cfg.youtubeAuthBrowser); }
+  }
 
   const downloaded = await findDownloadedProjectFile(projectId);
   if (!downloaded) throw new Error('The source downloader finished but no video file was produced.');
@@ -833,7 +959,8 @@ app.get('/api/settings', async (req,res,next) => {
         OLLAMA_MODEL: env.OLLAMA_MODEL || 'qwen2.5:3b',
         CLIPBOOST_EXPORT_DIR: env.CLIPBOOST_EXPORT_DIR || exportsDir,
         CLIPBOOST_UPDATE_OWNER: env.CLIPBOOST_UPDATE_OWNER || 'OGC112',
-        CLIPBOOST_UPDATE_REPO: env.CLIPBOOST_UPDATE_REPO || 'clipboost'
+        CLIPBOOST_UPDATE_REPO: env.CLIPBOOST_UPDATE_REPO || 'clipboost',
+        YOUTUBE_AUTH_BROWSER: env.YOUTUBE_AUTH_BROWSER || 'firefox'
       },
       configured: {
         youtube: Boolean(env.YOUTUBE_API_KEY), twitch: Boolean(env.TWITCH_CLIENT_ID && env.TWITCH_CLIENT_SECRET)
@@ -870,6 +997,8 @@ app.get('/api/system/health', async (req,res) => {
     checkedAt: new Date().toISOString(),
     ffmpeg: { ok:false, detail:'Not found' },
     ffprobe: { ok:false, detail:'Not found' },
+    node: { ok:false, detail:'Not found' },
+    ytDlp: { ok:false, detail:'Not found' },
     python: { ok:false, detail:python },
     tracking: { ok:false, detail:'OpenCV face tracking' },
     ollama: { ok:false, detail:String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') },
@@ -880,6 +1009,8 @@ app.get('/api/system/health', async (req,res) => {
   await Promise.all([
     run('ffmpeg',['-version'],{timeout:8000}).then(x=>{result.ffmpeg={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
     run('ffprobe',['-version'],{timeout:8000}).then(x=>{result.ffprobe={ok:true,detail:(x.stdout||x.stderr).split(/\r?\n/)[0]||'Available'}}).catch(()=>{}),
+    run(windowsTools.node || 'node',['--version'],{timeout:8000}).then(x=>{result.node={ok:true,detail:`Node ${(x.stdout||x.stderr).trim()} · EJS runtime`}}).catch(()=>{}),
+    run(python,['-m','yt_dlp','--version'],{timeout:8000}).then(x=>{result.ytDlp={ok:true,detail:`yt-dlp ${(x.stdout||x.stderr).trim()} · auth ${String(process.env.YOUTUBE_AUTH_BROWSER||'firefox')}`}}).catch(()=>{}),
     run(python,['--version'],{timeout:8000}).then(x=>{result.python={ok:true,detail:(x.stdout||x.stderr).trim()||python}}).catch(()=>{}),
     run(python,['-c','import cv2; print(cv2.__version__)'],{timeout:8000}).then(x=>{result.tracking={ok:true,detail:`OpenCV ${String(x.stdout||x.stderr).trim()} ready`}}).catch(()=>{}),
     fetch(`${ollamaUrl}/api/tags`,{signal:AbortSignal.timeout(3500)}).then(r=>r.ok?r.json():Promise.reject(new Error('offline'))).then(data=>{

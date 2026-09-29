@@ -1,5 +1,10 @@
 # ClipBoost 21.4.0 — Campaign Workspace
 
+## 21.4.1 — Smart YouTube Authentication
+
+ClipBoost now handles current YouTube ingest challenges automatically. Library → Edit with AI Studio first tries a normal download, then retries with the configured browser session when YouTube requests authentication. Firefox is recommended and can stay open. Node/EJS and FFmpeg are auto-detected from the D: tool layout, and the existing silent GitHub auto-update flow remains enabled.
+
+
 V21.4.0 turns ClipBoost into a paid-campaign clipping workflow: bring the campaign brief and authorized sources, then use AI Studio to produce compliant clips optimized for retention and views.
 
 ## Campaign workflow

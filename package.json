@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.4.0",
-  "description": "Paid campaign clipping workspace with campaign-aware selection, Fast Local AI, Context Engine v3, safe reframing, social captions and seamless silent updates",
+  "version": "21.4.1",
+  "description": "Paid campaign clipping workspace with resilient YouTube ingestion, Firefox authentication, EJS challenge solving, Fast Local AI and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
