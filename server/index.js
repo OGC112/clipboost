@@ -904,6 +904,22 @@ app.post('/api/campaigns/:id/posts', async (req,res,next) => {
     c.updatedAt=new Date().toISOString(); await writeCampaigns(data); res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
+app.put('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
+  try {
+    const data=await readCampaigns();const ci=data.campaigns.findIndex(c=>c.id===req.params.id);if(ci<0)return res.status(404).json({error:'Campaign not found.'});
+    const c=data.campaigns[ci];c.posts=Array.isArray(c.posts)?c.posts:[];const pi=c.posts.findIndex(p=>p.id===req.params.postId);if(pi<0)return res.status(404).json({error:'Tracked post not found.'});
+    const current=c.posts[pi],body=req.body||{};
+    c.posts[pi]={...current,url:body.url!==undefined?String(body.url||'').trim():current.url,platform:body.platform!==undefined?String(body.platform||'').trim():current.platform,views:body.views!==undefined?Math.max(0,Number(body.views||0)||0):current.views,clipDuration:body.clipDuration!==undefined?Math.max(0,Number(body.clipDuration||0)||0):current.clipDuration,editingMinutes:body.editingMinutes!==undefined?Math.max(0,Number(body.editingMinutes||0)||0):current.editingMinutes,paid:body.paid!==undefined?Boolean(body.paid):current.paid,updatedAt:new Date().toISOString()};
+    c.updatedAt=new Date().toISOString();await writeCampaigns(data);res.json({...c,totals:campaignTotals(c)});
+  } catch(e){next(e)}
+});
+app.delete('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
+  try {
+    const data=await readCampaigns();const ci=data.campaigns.findIndex(c=>c.id===req.params.id);if(ci<0)return res.status(404).json({error:'Campaign not found.'});
+    const c=data.campaigns[ci];const before=(c.posts||[]).length;c.posts=(c.posts||[]).filter(p=>p.id!==req.params.postId);if(c.posts.length===before)return res.status(404).json({error:'Tracked post not found.'});
+    c.updatedAt=new Date().toISOString();await writeCampaigns(data);res.json({...c,totals:campaignTotals(c)});
+  } catch(e){next(e)}
+});
 app.post('/api/campaigns/:id/source-project', async (req,res,next) => {
   try {
     const data=await readCampaigns(); const campaign=data.campaigns.find(c=>c.id===req.params.id); if(!campaign)return res.status(404).json({error:'Campaign not found.'});

@@ -439,3 +439,19 @@ Double-click `Update ClipBoost Dev.bat` to run `git pull --rebase origin main` f
 - AI Studio now exposes only clip count and caption preference; technical edit controls are automatic per clip.
 - Auto Director adapts framing, face/duo tracking, speech cleanup, scene cuts, camera motion, caption design and zoom behavior from the source.
 - YouTube and Twitch Refresh buttons now use dedicated refresh-all backend endpoints with visible progress/result feedback.
+
+
+## 21.4.2 — Campaign Workflow Polish
+
+Campaigns is now designed as an operational workspace rather than a long configuration form:
+- focused campaign dashboard with views, payout target, deadline and performance summary;
+- setup-readiness checks for brief, authorized sources, duration rules, publishing rules and payout;
+- one-click **Start creating clips** from the campaign dashboard;
+- campaign context follows sources into AI Studio automatically;
+- source management with add/remove and direct **Edit with AI Studio** actions;
+- compact campaign form with advanced rules collapsed into a dedicated section;
+- editable published-view tracking so campaign feedback can stay current;
+- publishing-checklist copy action for hashtags, mentions, CTA and platform rules;
+- AI Studio can jump directly back to the active campaign;
+- existing View Potential, Campaign Fit, hook variants, compliance checks, Used Moments and submission packs remain active;
+- Smart YouTube Authentication from 21.4.1 and the validated seamless updater are preserved.
