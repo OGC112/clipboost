@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
+import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -592,7 +593,7 @@ app.get('/api/settings', async (req,res,next) => {
         LOCAL_WHISPER_DEVICE: env.LOCAL_WHISPER_DEVICE || 'cpu',
         LOCAL_WHISPER_COMPUTE_TYPE: env.LOCAL_WHISPER_COMPUTE_TYPE || 'int8',
         LOCAL_WHISPER_CHUNK_SECONDS: env.LOCAL_WHISPER_CHUNK_SECONDS || '120',
-        LOCAL_WHISPER_WORKERS: env.LOCAL_WHISPER_WORKERS || '2',
+        LOCAL_WHISPER_WORKERS: env.LOCAL_WHISPER_WORKERS || 'auto',
         LOCAL_WHISPER_CPU_THREADS: env.LOCAL_WHISPER_CPU_THREADS || '0',
         LOCAL_WHISPER_SKIP_SILENCE: (env.LOCAL_WHISPER_SKIP_SILENCE || 'true') !== 'false',
         OLLAMA_URL: env.OLLAMA_URL || 'http://127.0.0.1:11434',
@@ -983,6 +984,7 @@ app.delete('/api/projects/:id', async (req, res, next) => {
     };
     if (insideStorage(meta.sourcePath)) await fs.rm(path.resolve(meta.sourcePath), { force:true }).catch(() => {});
     await fs.rm(path.join(storageRoot, 'transcript-cache', meta.id), { recursive:true, force:true }).catch(() => {});
+    await fs.rm(path.join(uploadsDir, '.clipboost-cache', 'transcripts', meta.id), { recursive:true, force:true }).catch(() => {});
     const previews = await fs.readdir(previewsDir).catch(() => []);
     await Promise.all(previews.filter(name => name.startsWith(`${meta.id}-`)).map(name => fs.rm(path.join(previewsDir,name), { force:true }).catch(() => {})));
     const tracks = await fs.readdir(trackingDir).catch(() => []);
@@ -1096,6 +1098,35 @@ function localAiConfig() {
     ollamaUrl: String(process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, ''),
     ollamaModel: String(process.env.OLLAMA_MODEL || 'qwen2.5:3b').trim()
   };
+}
+
+function resolveWhisperWorkers(rawValue) {
+  const raw = String(rawValue ?? 'auto').trim().toLowerCase();
+  const explicit = Number(raw);
+  if (raw !== 'auto' && Number.isFinite(explicit) && explicit > 0) {
+    return { workers: Math.max(1, Math.min(4, Math.round(explicit))), automatic: false };
+  }
+  const logicalCpus = Math.max(1, os.cpus()?.length || 1);
+  const memoryGb = Math.max(1, os.totalmem() / (1024 ** 3));
+  const byCpu = logicalCpus >= 16 ? 4 : logicalCpus >= 12 ? 3 : logicalCpus >= 6 ? 2 : 1;
+  const byMemory = memoryGb >= 20 ? 4 : memoryGb >= 14 ? 3 : memoryGb >= 8 ? 2 : 1;
+  return { workers: Math.max(1, Math.min(4, byCpu, byMemory)), automatic: true };
+}
+
+async function transcriptionCachePaths(meta, cfg) {
+  const stat = await fs.stat(meta.sourcePath);
+  const sourceSignature = crypto.createHash('sha1')
+    .update(`${path.resolve(meta.sourcePath)}:${stat.size}:${Math.round(stat.mtimeMs)}`)
+    .digest('hex').slice(0, 14);
+  // Keep the heavy prepared PCM and chunk cache under uploads. In the desktop app
+  // this follows the user's uploads location/junction instead of growing AppData on C:.
+  const rootDir = path.join(uploadsDir, '.clipboost-cache', 'transcripts', meta.id, sourceSignature);
+  await fs.mkdir(rootDir, { recursive: true });
+  const audioPath = path.join(rootDir, 'source-16k-mono.wav');
+  const profile = crypto.createHash('sha1')
+    .update(`${cfg.whisperModel}|${cfg.whisperDevice}|${cfg.whisperComputeType}`)
+    .digest('hex').slice(0, 10);
+  return { rootDir, audioPath, sourceSignature, profile };
 }
 
 function normalizeWord(word, offset = 0) {
@@ -1349,22 +1380,34 @@ async function transcribeLocally(meta) {
   if (meta.transcript?.words?.length) return upgradeTranscriptQuality(meta.transcript);
   const script = path.join(root, 'scripts', 'transcribe_local.py');
   const preferredChunk = Math.max(45, Math.min(600, Number(process.env.LOCAL_WHISPER_CHUNK_SECONDS || 120)));
-  const whisperWorkers = Math.max(1, Math.min(4, Number(process.env.LOCAL_WHISPER_WORKERS || 2)));
+  const workerPlan = resolveWhisperWorkers(process.env.LOCAL_WHISPER_WORKERS || 'auto');
+  const whisperWorkers = workerPlan.workers;
   const whisperCpuThreads = Math.max(0, Number(process.env.LOCAL_WHISPER_CPU_THREADS || 0));
   const skipSilence = String(process.env.LOCAL_WHISPER_SKIP_SILENCE || 'true');
   const attempts = [...new Set([preferredChunk, Math.max(60, Math.floor(preferredChunk / 2))])];
-  const cacheBase = path.join(storageRoot, 'transcript-cache', meta.id);
-  fsSync.mkdirSync(cacheBase, { recursive: true });
+  const cache = await transcriptionCachePaths(meta, cfg);
   let lastError = null;
 
   for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
     const chunkSeconds = attempts[attemptIndex];
+    const cacheProfile = crypto.createHash('sha1')
+      .update(`${cache.profile}|${chunkSeconds}|${skipSilence}`)
+      .digest('hex').slice(0, 12);
+    const chunkCacheDir = path.join(cache.rootDir, 'chunks', cacheProfile);
     try {
       if (attemptIndex > 0) {
         const current = await readMeta(meta.id);
         current.analysis = { ...(current.analysis || {}), stage: 'transcription-retry', progress: 43, retryChunkSeconds: chunkSeconds, warning: `Retrying transcription with ${chunkSeconds}s chunks.` };
         await writeMeta(current);
       }
+      let analysisWriteQueue = Promise.resolve();
+      const queueAnalysisUpdate = patch => {
+        analysisWriteQueue = analysisWriteQueue.catch(() => {}).then(async () => {
+          const current = await readMeta(meta.id);
+          current.analysis = { ...(current.analysis || {}), ...patch };
+          await writeMeta(current);
+        });
+      };
       const result = await runJsonProcess(cfg.python, [
         script,
         '--input', meta.sourcePath,
@@ -1372,7 +1415,8 @@ async function transcribeLocally(meta) {
         '--device', cfg.whisperDevice,
         '--compute-type', cfg.whisperComputeType,
         '--chunk-seconds', String(chunkSeconds),
-        '--cache-dir', path.join(cacheBase, String(chunkSeconds)),
+        '--cache-dir', chunkCacheDir,
+        '--audio-cache', cache.audioPath,
         '--workers', String(whisperWorkers),
         '--cpu-threads', String(whisperCpuThreads),
         '--skip-silence', skipSilence
@@ -1380,30 +1424,43 @@ async function transcribeLocally(meta) {
         timeout: 90 * 60_000,
         idleTimeout: Math.max(4 * 60_000, Number(process.env.LOCAL_WHISPER_CHUNK_TIMEOUT_MS || 10 * 60_000)),
         onStderrLine: line => {
+          if (line.startsWith('@@STATUS ')) {
+            try {
+              const status = JSON.parse(line.slice('@@STATUS '.length));
+              queueAnalysisUpdate({
+                stage: 'transcription',
+                progress: 42,
+                transcriptionPhase: String(status.stage || ''),
+                transcriptionWorkers: whisperWorkers,
+                transcriptionWorkerMode: workerPlan.automatic ? 'auto' : 'fixed'
+              });
+            } catch {}
+            return;
+          }
           if (!line.startsWith('@@PROGRESS ')) return;
           try {
             const p = JSON.parse(line.slice('@@PROGRESS '.length));
             const pct = Math.max(0, Math.min(100, Number(p.percent || 0)));
             const mapped = Math.round(42 + pct * 0.28);
-            readMeta(meta.id).then(current => {
-              current.analysis = {
-                ...(current.analysis || {}),
-                stage: 'transcription',
-                progress: mapped,
-                transcriptionProgress: pct,
-                transcriptionChunk: Number(p.done || 0),
-                transcriptionChunks: Number(p.total || 0),
-                transcriptionChunkSeconds: chunkSeconds,
-                transcriptionWorkers: Number(p.workers || whisperWorkers),
-                transcriptionSpeechSeconds: Number(p.speech_seconds || 0),
-                transcriptionSkippedSeconds: Number(p.skipped_seconds || 0),
-                retryAttempt: attemptIndex
-              };
-              return writeMeta(current);
-            }).catch(() => {});
+            queueAnalysisUpdate({
+              stage: 'transcription',
+              progress: mapped,
+              transcriptionPhase: 'transcription',
+              transcriptionProgress: pct,
+              transcriptionChunk: Number(p.done || 0),
+              transcriptionChunks: Number(p.total || 0),
+              transcriptionChunkSeconds: chunkSeconds,
+              transcriptionWorkers: Number(p.workers || whisperWorkers),
+              transcriptionWorkerMode: workerPlan.automatic ? 'auto' : 'fixed',
+              transcriptionCacheHits: Number(p.cache_hits || 0),
+              transcriptionSpeechSeconds: Number(p.speech_seconds || 0),
+              transcriptionSkippedSeconds: Number(p.skipped_seconds || 0),
+              retryAttempt: attemptIndex
+            });
           } catch {}
         }
       });
+      await analysisWriteQueue.catch(() => {});
       const rawWords = (result.words || []).map(w => normalizeWord(w));
       const baseTranscript = {
         text: String(result.text || '').trim(),
@@ -1415,6 +1472,9 @@ async function transcribeLocally(meta) {
         chunks: Number(result.chunks || 0),
         chunkSeconds,
         workers: Number(result.workers || whisperWorkers),
+        workerMode: workerPlan.automatic ? 'auto' : 'fixed',
+        cacheHits: Number(result.cache_hits || 0),
+        pipeline: String(result.pipeline || 'fast-audio-v1'),
         skippedSilenceSeconds: Number(result.skipped_silence_seconds || 0),
         speechSeconds: Number(result.speech_seconds || 0)
       };
@@ -2861,6 +2921,10 @@ async function analyzeProject(projectId, options = {}) {
       silencesDetected: silences.length,
       engine: transcript ? 'FFmpeg + faster-whisper + Context Engine v3' : 'FFmpeg signal analysis',
       transcription: transcript?.model || 'not-configured',
+      transcriptionPipeline: transcript?.pipeline || null,
+      transcriptionWorkers: transcript?.workers || null,
+      transcriptionWorkerMode: transcript?.workerMode || null,
+      transcriptionCacheHits: transcript?.cacheHits || 0,
       wordCount: transcript?.words?.length || 0,
       captionCount: transcript?.captions?.length || 0,
       transcriptCleanup: transcript?.cleanup ? {

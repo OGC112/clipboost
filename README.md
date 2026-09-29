@@ -1,3 +1,24 @@
+# ClipBoost 21.3.8 — Fast Local AI Pipeline
+
+V21.3.8 accelerates the long-video **Library → Edit with AI Studio → Analyzing with Local AI** phase without changing the Whisper model, beam size, word timestamps, Context Engine scoring, or final render quality.
+
+## Major changes
+
+- **Decode audio once**: ClipBoost creates one 16 kHz mono PCM analysis master and reuses it instead of asking FFmpeg to decode the full video again for every transcription chunk.
+- **Fast PCM chunk slicing**: Whisper chunks are cut directly from the prepared audio master, avoiding dozens of extra FFmpeg/video-decoder launches on hour-long sources.
+- **One shared Whisper model**: parallel chunk transcription uses one `WhisperModel` with CTranslate2 workers and Python threads instead of loading a complete model in every process.
+- **Resumable cache v2**: chunk cache keys now include the source signature and Whisper profile so cached results stay safe when media/model settings change.
+- **Heavy transcription cache follows uploads**: prepared PCM and chunk cache are stored below `uploads/.clipboost-cache`, so a moved/junctioned uploads folder keeps these large temporary analysis files on the same drive.
+- **Auto workers option**: Settings now offers `Auto (recommended)` and selects 1–4 workers from available CPU/RAM. Existing explicit worker choices remain respected.
+- **Clearer progress**: AI Studio distinguishes transcript percentage from overall analysis percentage and shows audio preparation/model loading/cache reuse phases.
+- **Quality unchanged**: `faster-whisper` model choice, `beam_size=5`, word timestamps, VAD settings, transcript cleanup, clip selection and final render settings are unchanged.
+
+## Recommended first test
+
+Choose a 45–90 minute YouTube/Twitch video from Library and click **Edit with AI Studio**. Watch the transcription line in AI Studio. Compare total transcription time with 21.3.7 on a similar source. For maximum throughput, set **Settings → Local AI → Workers → Auto (recommended)**.
+
+---
+
 # ClipBoost 21.3.0 — Clip Intelligence v2
 
 V21.3.0 improves the editorial decision layer in AI Studio. It focuses on choosing clips that make sense without missing context and that end on a real payoff instead of simply scoring energetic transcript windows.
