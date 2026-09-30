@@ -8,7 +8,7 @@ import {
 
 const navItems = [
   ['home','Home',Home],['studio','AI Studio',WandSparkles],['analytics','Analytics',BarChart3],
-  ['library','Library',Library],['trends','Trends',TrendingUp],['projects','Projects',FolderKanban]
+  ['library','Library',Library],['projects','Projects',FolderKanban]
 ];
 const fmt = s => { if (!Number.isFinite(Number(s))) return '0:00'; const n=Math.max(0,Math.floor(Number(s))); return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`; };
 
@@ -24,7 +24,6 @@ function App(){
       {page==='studio' && <StudioPage video={video} setVideo={setVideo} selected={selected} setSelected={setSelected}/>} 
       {page==='analytics' && <AnalyticsPage/>}
       {page==='library' && <LibraryPage/>}
-      {page==='trends' && <TrendsPage/>}
       {page==='projects' && <ProjectsPage video={video} setPage={setPage}/>} 
     </main>
   </div>

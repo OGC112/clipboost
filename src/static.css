@@ -400,3 +400,80 @@
   }
   .project-row-actions .status{justify-self:start}
 }
+
+/* ClipBoost 21.4.7 — centered progressive campaign setup + simplified navigation */
+.campaign-form-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  overflow:hidden;
+  background:#02050bc4;
+  backdrop-filter:blur(5px);
+}
+.campaign-form-drawer{
+  width:min(900px,calc(100vw - 48px));
+  max-height:min(860px,calc(100vh - 48px));
+  height:auto;
+  overflow:auto;
+  background:#09101a;
+  border:1px solid #3a2d60;
+  border-radius:16px;
+  box-shadow:0 28px 90px #000b,0 0 0 1px #8a5cff12;
+}
+.campaign-form-drawer .campaign-form-card{
+  margin:0;
+  min-height:0;
+  border:0;
+  border-radius:16px;
+  padding:22px 24px 0;
+  background:linear-gradient(180deg,#101827,#0a111b 52%,#09101a);
+}
+.campaign-form-head{position:sticky;top:-22px;z-index:4;margin:-22px -24px 0;padding:22px 24px 14px;background:linear-gradient(180deg,#101827 76%,#101827f2);border-bottom:1px solid #1d293a}
+.campaign-form-progressive .campaign-form-intro{max-width:660px;line-height:1.45}
+.campaign-form-block{margin-top:14px;padding:14px;border:1px solid #202d40;background:#0a111b;border-radius:12px}
+.campaign-form-block .campaign-form-section-title{margin-bottom:9px}
+.campaign-form-progressive .campaign-form-grid{gap:10px;margin-top:0}
+.campaign-essential-grid.compact{grid-template-columns:1fr 1fr}
+.campaign-quick-payment-grid{grid-template-columns:1.15fr 1fr .62fr}
+.campaign-meta-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:12px!important;padding:0 2px}
+.campaign-payment-advanced{margin-top:12px}
+.campaign-payment-advanced .campaign-advanced-body{padding:13px}
+.campaign-payment-advanced .campaign-form-grid{padding:0}
+.campaign-advanced-money-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.campaign-payment-advanced .campaign-platform-rates{margin-top:14px;padding-top:13px;border-top:1px solid #1d293a}
+.campaign-payment-advanced .campaign-form-section-title{margin-bottom:9px}
+.campaign-advanced-rules-grid{padding:13px!important;margin-top:0!important}
+.campaign-form-progressive .field textarea{min-height:78px;max-height:140px}
+.campaign-form-progressive [data-payment-only]{transition:opacity .12s ease}
+.campaign-form-drawer .campaign-form-actions{
+  position:sticky;
+  bottom:0;
+  z-index:5;
+  gap:8px;
+  margin:16px -24px 0;
+  padding:14px 24px 16px;
+  border-top:1px solid #1d293a;
+  background:#09101af2;
+  backdrop-filter:blur(12px);
+  box-shadow:0 -14px 30px #05081080;
+}
+@media(max-width:900px){
+  .campaign-form-backdrop{padding:12px}
+  .campaign-form-drawer{width:calc(100vw - 24px);max-height:calc(100vh - 24px);border-radius:13px}
+  .campaign-quick-payment-grid,.campaign-advanced-money-grid{grid-template-columns:1fr 1fr}
+  .campaign-quick-payment-grid>.field:last-child:nth-child(odd){grid-column:auto}
+}
+@media(max-width:620px){
+  .campaign-form-backdrop{padding:0;place-items:stretch}
+  .campaign-form-drawer{width:100vw;max-height:100vh;border:0;border-radius:0}
+  .campaign-form-drawer .campaign-form-card{border-radius:0;padding-left:16px;padding-right:16px}
+  .campaign-form-head{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .campaign-essential-grid.compact,.campaign-quick-payment-grid,.campaign-meta-grid,.campaign-advanced-money-grid{grid-template-columns:1fr}
+  .campaign-essential-grid.compact .span2{grid-column:auto}
+  .campaign-form-drawer .campaign-form-actions{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+}
+.campaign-form-backdrop{justify-content:center;align-content:center}
+@media(max-width:620px){.campaign-form-backdrop{justify-content:stretch;align-content:stretch}}

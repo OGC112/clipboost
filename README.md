@@ -1,4 +1,4 @@
-# ClipBoost 21.4.6 — Compact Campaign Workspace
+# ClipBoost 21.4.7 — Progressive Campaign Setup
 
 V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
 
@@ -491,3 +491,7 @@ Campaigns is now designed as an operational workspace rather than a long configu
 - AI Studio can jump directly back to the active campaign;
 - existing View Potential, Campaign Fit, hook variants, compliance checks, Used Moments and submission packs remain active;
 - Smart YouTube Authentication from 21.4.1 and the validated seamless updater are preserved.
+
+## 21.4.7
+
+Campaign setup is now centered and progressive: only essential fields are shown first, advanced payout/rule fields stay collapsed, and payment inputs adapt to the selected payment model. The unused Trends page has also been removed from navigation and routing.
