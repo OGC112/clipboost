@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.8.0",
-  "description": "Mint reference-driven UI redesign",
+  "version": "21.8.1",
+  "description": "Mint typography scale and readability refinement",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

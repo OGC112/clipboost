@@ -1,0 +1,373 @@
+/* Mint 21.8.1 — typography scale/readability fix only.
+   Keeps 21.8.0 layout unchanged. */
+
+html.mint28 body{
+  font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif!important;
+  font-size:14px!important;
+  line-height:1.45!important;
+  font-weight:400!important;
+  -webkit-font-smoothing:antialiased!important;
+  text-rendering:optimizeLegibility!important;
+}
+
+/* Global hierarchy */
+html.mint28 h1,
+html.mint28 h2,
+html.mint28 h3,
+html.mint28 h4{
+  font-family:"Segoe UI Variable Display","Segoe UI",Arial,sans-serif!important;
+  color:#141728!important;
+  letter-spacing:-.025em!important;
+}
+
+html.mint28 .page-title h1{
+  font-size:28px!important;
+  line-height:1.08!important;
+  font-weight:700!important;
+  letter-spacing:-.035em!important;
+}
+
+html.mint28 .page-title h2{
+  font-size:22px!important;
+  line-height:1.12!important;
+  font-weight:700!important;
+}
+
+html.mint28 .page-title p{
+  font-size:13px!important;
+  line-height:1.55!important;
+  color:#6c7285!important;
+}
+
+html.mint28 h3{
+  font-size:16px!important;
+  line-height:1.2!important;
+  font-weight:680!important;
+}
+
+html.mint28 h4{
+  font-size:14px!important;
+  line-height:1.2!important;
+  font-weight:650!important;
+}
+
+html.mint28 strong,
+html.mint28 b{
+  font-weight:650!important;
+}
+
+html.mint28 p,
+html.mint28 span,
+html.mint28 label,
+html.mint28 input,
+html.mint28 textarea,
+html.mint28 select{
+  font-size:12px!important;
+}
+
+html.mint28 small,
+html.mint28 .muted{
+  font-size:11px!important;
+  line-height:1.4!important;
+  color:#81879a!important;
+}
+
+html.mint28 .eyebrow{
+  font-size:9px!important;
+  line-height:1!important;
+  font-weight:750!important;
+  letter-spacing:.13em!important;
+}
+
+/* Header/navigation */
+html.mint28 .mint-brand strong{
+  font-size:16px!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint-nav button{
+  font-size:10.5px!important;
+  font-weight:600!important;
+  letter-spacing:0!important;
+}
+
+html.mint28 .mint-create{
+  font-size:10.5px!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint-top-actions .search,
+html.mint28 .mint-top-actions .search input{
+  font-size:11.5px!important;
+}
+
+html.mint28 .mint-avatar{
+  font-size:10px!important;
+  font-weight:700!important;
+}
+
+/* Buttons */
+html.mint28 .btn,
+html.mint28 button{
+  font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif!important;
+}
+
+html.mint28 .btn{
+  font-size:10.5px!important;
+  font-weight:650!important;
+  line-height:1!important;
+}
+
+html.mint28 .icon-btn{
+  font-size:12px!important;
+}
+
+/* Home */
+html.mint28 .simple-home-head h1{
+  font-size:39px!important;
+  line-height:1.02!important;
+  font-weight:700!important;
+  letter-spacing:-.04em!important;
+  max-width:500px!important;
+}
+
+html.mint28 .simple-home-head p{
+  font-size:13px!important;
+  line-height:1.55!important;
+}
+
+html.mint28 .mint-home-kpis small{
+  font-size:10px!important;
+}
+
+html.mint28 .mint-home-kpis b{
+  font-size:20px!important;
+  line-height:1.05!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint-home-kpis em{
+  font-size:9.5px!important;
+  line-height:1.25!important;
+}
+
+html.mint28 .simple-home-card h3{
+  font-size:15px!important;
+}
+
+html.mint28 .simple-home-card p{
+  font-size:11px!important;
+  line-height:1.45!important;
+}
+
+html.mint28 .simple-recent-list b{
+  font-size:11.5px!important;
+}
+
+html.mint28 .simple-recent-list small{
+  font-size:9.5px!important;
+}
+
+/* AI Studio */
+html.mint28 .mint28-studio-tools b{
+  font-size:10.5px!important;
+  font-weight:650!important;
+}
+
+html.mint28 .mint28-studio-tools small{
+  font-size:9px!important;
+  line-height:1.35!important;
+}
+
+html.mint28 .mint-studio .controls h3{
+  font-size:14px!important;
+}
+
+html.mint28 .mint-studio .controls,
+html.mint28 .mint-studio .controls label,
+html.mint28 .mint-studio .controls select{
+  font-size:11px!important;
+}
+
+html.mint28 .mint-studio .auto-director-status strong{
+  font-size:12px!important;
+}
+
+html.mint28 .mint-studio .auto-director-status small{
+  font-size:10px!important;
+  line-height:1.45!important;
+}
+
+html.mint28 .mint-studio .auto-director-tags span{
+  font-size:8.5px!important;
+  line-height:1!important;
+}
+
+html.mint28 .mint-studio .caption-color-chip span{
+  font-size:9px!important;
+}
+
+html.mint28 .mint-studio .timeline .section-head strong{
+  font-size:11.5px!important;
+}
+
+html.mint28 .mint-studio .clip-info strong{
+  font-size:11px!important;
+}
+
+html.mint28 .mint-studio .clip-info small,
+html.mint28 .mint-studio .clip-info p{
+  font-size:9.5px!important;
+}
+
+/* Campaign Studio */
+html.mint28 .mint-campaigns .campaign-detail-head h2{
+  font-size:24px!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint28-campaign-steps b{
+  font-size:9.5px!important;
+}
+
+html.mint28 .mint28-campaign-steps small{
+  font-size:8.5px!important;
+  line-height:1.25!important;
+}
+
+html.mint28 .mint-campaigns .real-campaign-card strong{
+  font-size:11px!important;
+}
+
+html.mint28 .mint-campaigns .campaign-tabs-v2 button{
+  font-size:9.5px!important;
+  font-weight:650!important;
+}
+
+html.mint28 .mint-campaigns .campaign-primary-kpis small,
+html.mint28 .mint-campaigns .campaign-results-kpis small{
+  font-size:9px!important;
+}
+
+html.mint28 .mint-campaigns .campaign-primary-kpis b,
+html.mint28 .mint-campaigns .campaign-results-kpis b{
+  font-size:13px!important;
+}
+
+html.mint28 .mint-campaigns .campaign-source-row,
+html.mint28 .mint-campaigns .campaign-resource-row{
+  font-size:10px!important;
+}
+
+/* Library */
+html.mint28 .mint-library .page-title h1{
+  font-size:27px!important;
+}
+
+html.mint28 .mint-library h3{
+  font-size:14px!important;
+}
+
+html.mint28 .mint-library .creator-card strong{
+  font-size:10.5px!important;
+}
+
+html.mint28 .mint28-library-card strong,
+html.mint28 .mint28-library-card b{
+  font-size:10.5px!important;
+  line-height:1.25!important;
+}
+
+html.mint28 .mint28-library-card small,
+html.mint28 .mint28-library-card .muted{
+  font-size:9px!important;
+}
+
+html.mint28 .mint28-library-card button{
+  font-size:9px!important;
+}
+
+/* Projects */
+html.mint28 .mint-projects .page-title h1{
+  font-size:28px!important;
+}
+
+html.mint28 .mint-projects .project-row>div:nth-child(2)>strong{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+}
+
+html.mint28 .mint-project-badge{
+  font-size:7.5px!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint-projects .project-progress span,
+html.mint28 .mint-projects .project-row .muted{
+  font-size:9.5px!important;
+}
+
+/* Results */
+html.mint28 .mint-results-kpis small{
+  font-size:10px!important;
+}
+
+html.mint28 .mint-results-kpis b{
+  font-size:19px!important;
+  font-weight:700!important;
+}
+
+html.mint28 .mint-results-context b{
+  font-size:11.5px!important;
+  font-weight:650!important;
+}
+
+html.mint28 .mint-results-context small{
+  font-size:10px!important;
+}
+
+html.mint28 .mint-result-row{
+  font-size:10.5px!important;
+}
+
+html.mint28 .mint-result-row small{
+  font-size:9px!important;
+}
+
+html.mint28 .mint-result-row b{
+  font-size:10.5px!important;
+}
+
+/* Inputs/forms */
+html.mint28 input,
+html.mint28 select,
+html.mint28 textarea{
+  font-size:11.5px!important;
+  line-height:1.35!important;
+}
+
+html.mint28 .field>span{
+  font-size:9.5px!important;
+  font-weight:600!important;
+}
+
+html.mint28 .field em{
+  font-size:8.5px!important;
+}
+
+/* Avoid absurdly tiny legacy text */
+html.mint28 [style*="font-size:8px"],
+html.mint28 [style*="font-size: 8px"]{
+  font-size:9.5px!important;
+}
+
+/* Reduce only oversized legacy headings */
+html.mint28 .campaign-page-title h1,
+html.mint28 .settings-page h1{
+  font-size:28px!important;
+}
+
+@media(max-width:1100px){
+  html.mint28 .simple-home-head h1{font-size:35px!important}
+  html.mint28 .page-title h1{font-size:26px!important}
+}

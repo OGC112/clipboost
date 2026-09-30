@@ -1,15 +1,15 @@
-Mint 21.8.0 — reference-driven redesign
+Mint 21.8.1 — Typography Fix
 
-This version is based directly on the approved six-screen reference.
+Typography-only patch on top of 21.8.0.
 
 Changes:
-- New typography scale and tighter UI density.
-- Home proportions, KPI cards and media hero redesigned.
-- AI Studio gets reference-style feature cards and cleaner editor/preview/tools hierarchy.
-- Campaign Studio gets the four-step flow and horizontal campaign cards.
-- Library reorganizes compatible media rows into a four-column discovery grid.
-- Projects uses compact media-first cards.
-- Results duplication bug fixed; empty state is shown once and real-data chart area stays factual.
-- Settings access remains in the top navigation.
+- More consistent font sizes across all pages.
+- Large headings reduced.
+- Secondary text made more readable.
+- Buttons, navigation and form labels normalized.
+- KPI typography balanced.
+- AI Studio inspector text enlarged where it was too small.
+- Campaign Studio, Library, Projects and Results now share one type scale.
 
-No backend endpoints, campaign logic, AI engine, updater logic, .env or secrets are changed.
+No layout, backend, AI, campaign, updater or Auto Publisher logic changed.
+No .env or secrets included.
