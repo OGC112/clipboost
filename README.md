@@ -517,7 +517,7 @@ Campaign setup is now centered and progressive: only essential fields are shown 
 - Closing to tray remains available; Eco mode still activates while the window is hidden.
 
 
-## 21.5.0 — Campaign Smart Import
+## 21.5.1 — Campaign Smart Import
 
 - Campaign URL import can now use an authenticated Electron browser session instead of relying only on public HTTP pages.
 - Sign in to campaign sites inside the dedicated import window; ClipBoost keeps that browser session persistent without asking for API access.
@@ -529,3 +529,7 @@ Campaign setup is now centered and progressive: only essential fields are shown 
 - Campaign Rules shows imported requirements, violations/disqualifiers, audience and the original requirements link.
 - Imported requirements are included in campaign context, checklists and submission packs.
 - Existing public URL import remains available as a browser/dev fallback.
+
+
+## 21.5.1 Smart Import cross-check
+Authenticated campaign import now cross-checks the campaign listing for qualification thresholds, classifies linked asset packs, keeps start-date metadata visible, and stores provider-wide terms once as shared platform rules.

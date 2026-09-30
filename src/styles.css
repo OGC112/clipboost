@@ -43,3 +43,12 @@
 .auto-director-tags span{font-size:8px;font-weight:800;color:#cdbaff;background:#7040de20;border:1px solid #7040de55;border-radius:999px;padding:5px 7px}
 .auto-director-card p{margin:10px 0 0;font-size:9px;line-height:1.45;color:#8994a9}
 .library-banner.success{border-color:#235844;background:#10251d;color:#9be5c1}
+
+
+/* 21.5.1 — Smart Import cross-check + shared platform rules */
+.campaign-resource-kind{display:inline-flex;align-items:center;width:max-content;padding:3px 7px;border:1px solid rgba(132,92,246,.28);border-radius:999px;color:#bba8ff;font-size:10px;font-style:normal;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.campaign-platform-rules{margin-top:14px;border:1px solid rgba(132,92,246,.22);border-radius:14px;background:rgba(11,18,31,.58);overflow:hidden}
+.campaign-platform-rules>summary{display:flex;justify-content:space-between;gap:16px;align-items:center;cursor:pointer;padding:14px 16px;list-style:none}
+.campaign-platform-rules>summary::-webkit-details-marker{display:none}.campaign-platform-rules>summary span:first-child{display:grid;gap:3px}.campaign-platform-rules>summary small{color:var(--muted)}
+.campaign-platform-rules-body{padding:0 16px 16px;display:grid;gap:12px}.campaign-platform-rule-fact{display:flex;justify-content:space-between;gap:14px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)}
+.campaign-platform-rule-fact span{color:var(--muted)}.campaign-platform-rule-fact em{font-size:10px;font-weight:600;color:var(--muted);font-style:normal;margin-left:5px}.campaign-platform-rule-section{padding-top:2px}.campaign-platform-rule-section h4{margin:0 0 7px}.campaign-platform-rule-section ul{margin:0;padding-left:20px;color:var(--muted);display:grid;gap:5px}

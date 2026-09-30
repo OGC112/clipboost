@@ -119,6 +119,7 @@ async function recoverInterruptedProject(meta) {
 
 const libraryFile = path.join(storageRoot, 'library.json');
 const campaignsFile = path.join(storageRoot, 'campaigns.json');
+const platformProfilesFile = path.join(storageRoot, 'campaign-platform-profiles.json');
 const dataDir = storageRoot;
 
 const settingsEnvPath = process.env.DOTENV_CONFIG_PATH ? path.resolve(process.env.DOTENV_CONFIG_PATH) : path.join(root, '.env');
@@ -239,6 +240,14 @@ async function readCampaigns() {
 async function writeCampaigns(data) {
   await fs.writeFile(campaignsFile, JSON.stringify({ campaigns: Array.isArray(data?.campaigns) ? data.campaigns : [] }, null, 2));
 }
+async function readPlatformProfiles() {
+  try { const parsed=JSON.parse(await fs.readFile(platformProfilesFile,'utf8')); return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{}; }
+  catch { return {}; }
+}
+async function writePlatformProfiles(data) {
+  await fs.writeFile(platformProfilesFile, JSON.stringify(data&&typeof data==='object'?data:{}, null, 2));
+}
+function platformProfileKey(provider='') { return String(provider||'').trim().toLowerCase().replace(/^www\./,'').slice(0,120); }
 function campaignArray(value) {
   if (Array.isArray(value)) return value.map(x=>String(x||'').trim()).filter(Boolean);
   return String(value||'').split(/[\n,]/).map(x=>x.trim()).filter(Boolean);
@@ -314,7 +323,11 @@ function normalizeCampaign(input={}, existing={}) {
     requirementsTitle: String(input.requirementsTitle ?? existing.requirementsTitle ?? '').trim().slice(0,300),
     requirements: campaignArray(input.requirements ?? existing.requirements ?? []).slice(0,120),
     violations: campaignArray(input.violations ?? existing.violations ?? []).slice(0,120),
-    resourceUrls: (Array.isArray(input.resourceUrls ?? existing.resourceUrls) ? (input.resourceUrls ?? existing.resourceUrls) : []).map((item,index)=>({url:String(item?.url||item||'').trim().slice(0,2000),label:String(item?.label||`Resource ${index+1}`).trim().slice(0,160)})).filter(x=>/^https?:\/\//i.test(x.url)).slice(0,80),
+    resourceUrls: (Array.isArray(input.resourceUrls ?? existing.resourceUrls) ? (input.resourceUrls ?? existing.resourceUrls) : []).map((item,index)=>({
+      url:String(item?.url||item||'').trim().slice(0,2000),label:String(item?.label||`Resource ${index+1}`).trim().slice(0,160),
+      kind:String(item?.kind||'external').trim().slice(0,40),videoCount:Math.max(0,Number(item?.videoCount||0)||0),imageCount:Math.max(0,Number(item?.imageCount||0)||0),mediaCount:Math.max(0,Number(item?.mediaCount||0)||0),inspectStatus:String(item?.inspectStatus||'').trim().slice(0,40)
+    })).filter(x=>/^https?:\/\//i.test(x.url)).slice(0,80),
+    platformProfileKey: String(input.platformProfileKey ?? existing.platformProfileKey ?? '').trim().toLowerCase().slice(0,120),
     campaignStats: (input.campaignStats && typeof input.campaignStats==='object' ? input.campaignStats : existing.campaignStats && typeof existing.campaignStats==='object' ? existing.campaignStats : {}),
     importSource: String(input.importSource ?? existing.importSource ?? '').trim().slice(0,80),
     importedAt: String(input.importedAt ?? existing.importedAt ?? '').trim().slice(0,80),
@@ -525,7 +538,26 @@ function snapshotCleanRuleLines(values=[]) {
   const noise=/^(banned on all campaigns|anything below gets your clip disqualified|the full rules every campaign runs under)$/i;
   return [...new Set(values.map(x=>String(x||'').replace(/^[-•·]\s*/,'').trim()).filter(x=>x&&x.length<=1200&&!skip.test(x)&&!noise.test(x)&&!/^https?:\/\//i.test(x)))].slice(0,120);
 }
-function extractAuthenticatedCampaignSnapshots(campaignSnapshot={}, requirementsSnapshot={}, requestedUrl='') {
+function snapshotCampaignListingBlock(snapshot={},campaignName='') {
+  const name=String(campaignName||snapshot?.focusName||'').trim().toLowerCase();
+  const blocks=Array.isArray(snapshot?.blocks)?snapshot.blocks:[];
+  const candidates=blocks.filter(x=>!name||String(x).toLowerCase().includes(name)).sort((a,b)=>String(a).length-String(b).length);
+  return String(candidates.find(x=>/views?\s+to\s+qualify|up\s+to\s+per|bounty\s+pot|platforms?/i.test(String(x)))||candidates[0]||'');
+}
+function extractPlatformTermsProfile(snapshot={},provider='') {
+  const key=platformProfileKey(provider);if(!key||!snapshot||!String(snapshot.text||'').trim())return null;
+  const grouped=new Map();for(const item of (Array.isArray(snapshot.listItems)?snapshot.listItems:[])){
+    const title=String(item?.section||'General').trim().slice(0,160)||'General', text=String(item?.text||'').replace(/^[-•·]\s*/,'').trim().slice(0,1200);if(!text)continue;
+    if(!grouped.has(title))grouped.set(title,[]);const arr=grouped.get(title);if(!arr.includes(text)&&arr.length<40)arr.push(text);
+  }
+  const sections=[...grouped.entries()].filter(([,items])=>items.length).slice(0,30).map(([title,items])=>({title,items}));
+  const text=String(snapshot.text||'');
+  const postMin=text.match(/each post must reach at least\s+([0-9][0-9,._]*\s*[kKmM]?)\s+views?/i);
+  const typical=text.match(/campaign minimum\s*\(typically\s+([0-9][0-9,._]*\s*[kKmM]?)\s+views?/i);
+  const interval=text.match(/currently every\s+([0-9]+)\s+hours?/i);
+  return {key,provider:key,sourceUrl:String(snapshot.url||'').slice(0,2000),updatedAt:new Date().toISOString(),sections,postMinimumViews:postMin?snapshotCompactNumber(postMin[1]):0,typicalCampaignMinimumViews:typical?snapshotCompactNumber(typical[1]):0,trackingIntervalHours:interval?Number(interval[1])||0:0,payoutCycleBased:/all payments are cycle-based/i.test(text)};
+}
+function extractAuthenticatedCampaignSnapshots(campaignSnapshot={}, requirementsSnapshot={}, requestedUrl='', listingSnapshot={}, resourceInspections=[]) {
   const campaignLines=snapshotTextLines(campaignSnapshot), reqLines=snapshotTextLines(requirementsSnapshot||{});
   const campaignText=campaignLines.join(' '), reqText=reqLines.join(' '), combined=`${campaignText} ${reqText}`;
   const headings=Array.isArray(campaignSnapshot?.headings)?campaignSnapshot.headings:[];
@@ -539,6 +571,10 @@ function extractAuthenticatedCampaignSnapshots(campaignSnapshot={}, requirements
     brief:'', platforms:[], sourceUrls:[], resourceUrls:[], requirements:[], violations:[], status:/\bactive\b/i.test(campaignText)?'active':'active', accessMode:'open',
     importSource:'authenticated-browser', importedAt:new Date().toISOString(), requirementsTitle
   };
+  const listingBlock=snapshotCampaignListingBlock(listingSnapshot,name||requirementsTitle.split(/\s+[–—-]\s+/)[0]);
+  const qualificationMatch=listingBlock.match(/\bmin(?:imum)?\s+([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)\s+views?\s+to\s+qualify/i);
+  if(qualificationMatch){draft.qualificationViews=snapshotCompactNumber(qualificationMatch[1]);draft.viewThreshold=draft.qualificationViews;draft.qualificationScope='campaign-total';}
+  const daysLeft=listingBlock.match(/\b([0-9]+)\s+days?\s+left\b/i);if(daysLeft&&Number(daysLeft[1])>0){const d=new Date();d.setDate(d.getDate()+Number(daysLeft[1]));draft.deadline=d.toISOString().slice(0,10);}
   const rate1=campaignText.match(/(?:bounty\s+rate|rate)\s+per\s+([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)\s*([$€£])\s*([0-9]+(?:[.,][0-9]+)?)/i);
   const rate2=campaignText.match(/([$€£])\s*([0-9]+(?:[.,][0-9]+)?)\s*\/\s*([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)/i);
   if(rate1){draft.paymentModel='per-views';draft.rateBasisViews=snapshotCompactNumber(rate1[1])||100000;draft.fixedReward=Math.max(0,Number(rate1[3].replace(',','.'))||0);draft.payout=draft.fixedReward;draft.currency=rate1[2]==='€'?'EUR':rate1[2]==='£'?'GBP':'USD'}
@@ -550,12 +586,14 @@ function extractAuthenticatedCampaignSnapshots(campaignSnapshot={}, requirements
   const audience=snapshotLastLineAfter(reqLines,/^audience$/i);if(audience&&!/^(content|clip requirements|violations)$/i.test(audience))draft.audience=audience.slice(0,500);
   const allLinks=[...(Array.isArray(campaignSnapshot?.links)?campaignSnapshot.links:[]),...(Array.isArray(requirementsSnapshot?.links)?requirementsSnapshot.links:[])];
   const reqLink=allLinks.find(x=>/\/campaigns\/doc\//i.test(String(x?.href||'')));if(reqLink)draft.requirementsUrl=String(reqLink.href).slice(0,2000);
-  const seenSource=new Set(),seenResource=new Set();
+  const seenSource=new Set(),seenResource=new Set();const inspectionByUrl=new Map((Array.isArray(resourceInspections)?resourceInspections:[]).map(x=>[String(x?.url||''),x]));
   for(const item of (Array.isArray(requirementsSnapshot?.links)?requirementsSnapshot.links:[])){
-    const href=String(item?.href||'').trim(),label=String(item?.text||'').trim()||'Campaign resource';if(!/^https?:\/\//i.test(href))continue;
+    const href=String(item?.href||'').trim(),label=String(item?.text||'').trim()||'Campaign resource',section=String(item?.section||'').trim();if(!/^https?:\/\//i.test(href))continue;
     let host='';try{host=new URL(href).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+    const contentLink=/^(content|sources?|assets?|media)$/i.test(section)||/^(trailer|assets?(?:\s*#?\d+)?|media|downloads?)$/i.test(label)||/asset|media/i.test(label);
+    if(!contentLink)continue;
     if(/(?:youtube\.com|youtu\.be|twitch\.tv)$/.test(host)||host.endsWith('.youtube.com')||host.endsWith('.twitch.tv')){if(!seenSource.has(href)){seenSource.add(href);draft.sourceUrls.push({url:href,label:label.slice(0,160)})}}
-    else if(host&&host!==provider&&!/clipping\.net$/i.test(host)){if(!seenResource.has(href)){seenResource.add(href);draft.resourceUrls.push({url:href,label:label.slice(0,160)})}}
+    else if(host&&host!==provider&&!/clipping\.net$/i.test(host)){if(!seenResource.has(href)){seenResource.add(href);const info=inspectionByUrl.get(href)||{};draft.resourceUrls.push({url:href,label:label.slice(0,160),kind:String(info.kind||'asset-pack'),videoCount:Number(info.videoCount||0),imageCount:Number(info.imageCount||0),mediaCount:Number(info.mediaCount||0),inspectStatus:String(info.inspectStatus||'')})}}
   }
   const reqList=(Array.isArray(requirementsSnapshot?.listItems)?requirementsSnapshot.listItems:[]).filter(x=>/clip requirements/i.test(String(x?.section||''))).map(x=>x.text);
   const vioList=(Array.isArray(requirementsSnapshot?.listItems)?requirementsSnapshot.listItems:[]).filter(x=>/violations/i.test(String(x?.section||''))).map(x=>x.text);
@@ -1156,8 +1194,8 @@ async function writeMeta(meta) {
 
 app.get('/api/campaigns', async (req,res,next) => {
   try {
-    const data=await readCampaigns();
-    res.json({ campaigns:data.campaigns.map(c=>({ ...c, totals:campaignTotals(c) })) });
+    const data=await readCampaigns();const profiles=await readPlatformProfiles();
+    res.json({ campaigns:data.campaigns.map(c=>({ ...c, platformProfile:c.platformProfileKey?profiles[c.platformProfileKey]||null:null, totals:campaignTotals(c) })) });
   } catch(e){ next(e); }
 });
 app.post('/api/campaigns', async (req,res,next) => {
@@ -1174,9 +1212,13 @@ app.post('/api/campaigns/import-snapshot', async (req,res,next) => {
     if(!/^https?:\/\//i.test(url))return res.status(400).json({error:'Enter a valid campaign URL.'});
     const campaign=req.body?.campaign&&typeof req.body.campaign==='object'?req.body.campaign:{};
     const requirements=req.body?.requirements&&typeof req.body.requirements==='object'?req.body.requirements:{};
-    const draft=extractAuthenticatedCampaignSnapshots(campaign,requirements,url);
+    const listing=req.body?.listing&&typeof req.body.listing==='object'?req.body.listing:{};
+    const terms=req.body?.terms&&typeof req.body.terms==='object'?req.body.terms:{};
+    const resourceInspections=Array.isArray(req.body?.resourceInspections)?req.body.resourceInspections:[];
+    const draft=extractAuthenticatedCampaignSnapshots(campaign,requirements,url,listing,resourceInspections);
     if(!draft.name||draft.name==='Imported campaign')return res.status(422).json({error:'ClipBoost could not identify a campaign on this page. Keep the campaign page open after signing in and try again.'});
-    res.json({draft,summary:{name:draft.name,sources:draft.sourceUrls.length,resources:draft.resourceUrls.length,requirements:draft.requirements.length,violations:draft.violations.length,audience:draft.audience||'',paymentModel:draft.paymentModel||'custom'}});
+    const profile=extractPlatformTermsProfile(terms,draft.provider);if(profile&&profile.sections.length){const profiles=await readPlatformProfiles();profiles[profile.key]=profile;await writePlatformProfiles(profiles);draft.platformProfileKey=profile.key;}
+    res.json({draft,summary:{name:draft.name,sources:draft.sourceUrls.length,resources:draft.resourceUrls.length,requirements:draft.requirements.length,violations:draft.violations.length,audience:draft.audience||'',paymentModel:draft.paymentModel||'custom',qualificationViews:Number(draft.qualificationViews||0),platformRules:Boolean(profile&&profile.sections.length)}});
   } catch(e){next(e)}
 });
 app.post('/api/campaigns/import', async (req,res,next) => {

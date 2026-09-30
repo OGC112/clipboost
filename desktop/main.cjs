@@ -323,9 +323,19 @@ async function campaignBrowserSnapshot(win) {
       title: document.title || '',
       text: String(document.body?.innerText || '').slice(0, 180000),
       headings: headingEls.map(h => ({ level:h.tagName.toLowerCase(), text:clean(h.innerText || h.textContent) })).filter(x => x.text).slice(0,160),
-      links: [...document.querySelectorAll('a[href]')].map(a => ({ text:clean(a.innerText || a.textContent), href:a.href })).filter(x => /^https?:/i.test(x.href)).slice(0,500),
+      links: [...document.querySelectorAll('a[href]')].map(a => ({ text:clean(a.innerText || a.textContent), href:a.href, section:headingFor(a) })).filter(x => /^https?:/i.test(x.href)).slice(0,500),
       listItems: [...document.querySelectorAll('li')].map(li => ({ text:clean(li.innerText || li.textContent), section:headingFor(li) })).filter(x => x.text).slice(0,500),
-      images: [...document.querySelectorAll('img[src]')].map(img => ({ alt:clean(img.alt), src:img.currentSrc || img.src })).filter(x => /^https?:/i.test(x.src)).slice(0,120)
+      images: [...document.querySelectorAll('img[src]')].map(img => ({ alt:clean(img.alt), src:img.currentSrc || img.src })).filter(x => /^https?:/i.test(x.src)).slice(0,160),
+      videos: [...document.querySelectorAll('video')].map(v => ({
+        src:v.currentSrc || v.src || '', poster:v.poster || '',
+        duration:Number.isFinite(v.duration) ? Number(v.duration) : null,
+        sources:[...v.querySelectorAll('source[src]')].map(x => x.src).filter(Boolean)
+      })).slice(0,80),
+      mediaHints: [...document.querySelectorAll('[aria-label],[data-type],[data-kind],[class]')].map(el => {
+        const hint=clean([el.getAttribute('aria-label'),el.getAttribute('data-type'),el.getAttribute('data-kind'),el.className].filter(Boolean).join(' '));
+        return /video|movie|media|asset/i.test(hint) ? hint.slice(0,240) : '';
+      }).filter(Boolean).slice(0,160),
+      blocks: [...new Set([...document.querySelectorAll('article,[role="article"],[class*="card"],[class*="campaign"]')].map(el => clean(el.innerText || el.textContent)).filter(t => t.length >= 20 && t.length <= 2500))].slice(0,320)
     };
   })()`);
 }
@@ -350,6 +360,61 @@ function campaignRequirementsUrl(snapshot={}) {
   const labeled = links.find(x => /requirements?/i.test(String(x.text || '')) && /^https?:/i.test(String(x.href || '')));
   return labeled?.href || null;
 }
+function campaignTermsUrl(snapshot={}) {
+  const links = Array.isArray(snapshot.links) ? snapshot.links : [];
+  const exact = links.find(x => /clipper terms and conditions/i.test(String(x.text || '')) && /^https?:/i.test(String(x.href || '')));
+  if (exact) return exact.href;
+  return links.find(x => /terms and conditions/i.test(String(x.text || '')) && !/campaigns\/doc/i.test(String(x.href || '')) && /^https?:/i.test(String(x.href || '')))?.href || null;
+}
+function campaignNameFromSnapshot(snapshot={}) {
+  const generic=/^(campaigns?|dashboard|campaign info|campaign details|program structure|bounties|payouts?|your clips)$/i;
+  const headings=Array.isArray(snapshot.headings)?snapshot.headings:[];
+  return String(headings.find(h=>h.level==='h1'&&h.text&&!generic.test(h.text))?.text || headings.find(h=>h.text&&!generic.test(h.text))?.text || '').trim();
+}
+function campaignListingUrl(rawUrl='') {
+  try {
+    const u=new URL(rawUrl);
+    if (/clipping\.net$/i.test(u.hostname)) return `${u.origin}/dashboard/campaigns`;
+  } catch {}
+  return null;
+}
+function resourceLinksFromRequirements(snapshot={}, providerHost='') {
+  const links=Array.isArray(snapshot.links)?snapshot.links:[];
+  const out=[];const seen=new Set();
+  for(const item of links){
+    const href=String(item?.href||'').trim(), label=String(item?.text||'').trim(), section=String(item?.section||'').trim();
+    if(!/^https?:\/\//i.test(href))continue;
+    let host='';try{host=new URL(href).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+    if(!host||host===providerHost||/clipping\.net$/i.test(host)||/(?:youtube\.com|youtu\.be|twitch\.tv)$/i.test(host)||host.endsWith('.youtube.com')||host.endsWith('.twitch.tv'))continue;
+    const relevant=/^(content|sources?|assets?|media)$/i.test(section)||/^(assets?(?:\s*#?\d+)?|media|downloads?)$/i.test(label)||/asset|media/i.test(label);
+    if(!relevant||seen.has(href))continue;seen.add(href);out.push({url:href,label:label||'Campaign asset'});
+  }
+  return out.slice(0,8);
+}
+function resourceSnapshotKind(snapshot={}) {
+  const videoEls=Array.isArray(snapshot.videos)?snapshot.videos:[];
+  const mediaHints=Array.isArray(snapshot.mediaHints)?snapshot.mediaHints:[];
+  const videoLinks=(Array.isArray(snapshot.links)?snapshot.links:[]).filter(x=>/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)/i.test(String(x?.href||'')));
+  const videoCount=Math.max(videoEls.length,videoLinks.length,mediaHints.filter(x=>/video|movie/i.test(String(x))).length?1:0);
+  const imageCount=(Array.isArray(snapshot.images)?snapshot.images:[]).filter(x=>!/(?:logo|icon|avatar)/i.test(String(x?.alt||''))).length;
+  let kind='asset-pack';if(videoCount&&imageCount)kind='mixed-pack';else if(videoCount)kind='video-pack';else if(imageCount)kind='image-pack';
+  const mediaUrls=[...new Set([...videoEls.flatMap(v=>[v.src,...(v.sources||[])]),...videoLinks.map(x=>x.href)].filter(x=>/^https?:/i.test(String(x))))].slice(0,20);
+  return {kind,videoCount,imageCount,mediaCount:Math.max(videoCount+imageCount,videoCount,imageCount),mediaUrls};
+}
+async function inspectCampaignResource(item={}) {
+  const url=safeHttpUrl(item.url);if(!url)return {...item,kind:'external',inspectStatus:'invalid'};
+  try{
+    const top=await loadCampaignWorkerSnapshot(url);let info=resourceSnapshotKind(top||{});
+    if(info.videoCount===0){
+      let host='';try{host=new URL(url).hostname}catch{}
+      const childLinks=(Array.isArray(top?.links)?top.links:[]).map(x=>String(x?.href||'')).filter(h=>{try{const u=new URL(h);return u.hostname===host&&h!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(h)}catch{return false}});
+      for(const childUrl of [...new Set(childLinks)].slice(0,4)){
+        try{const child=await loadCampaignWorkerSnapshot(childUrl);const childInfo=resourceSnapshotKind(child||{});if(childInfo.videoCount){info={kind:childInfo.imageCount?'mixed-pack':'video-pack',videoCount:info.videoCount+childInfo.videoCount,imageCount:Math.max(info.imageCount,childInfo.imageCount),mediaCount:Math.max(1,info.mediaCount)+Math.max(1,childInfo.mediaCount),mediaUrls:[...new Set([...(info.mediaUrls||[]),...(childInfo.mediaUrls||[])])].slice(0,20)};break}}catch{}
+      }
+    }
+    return {...item,...info,inspectStatus:'ok'};
+  }catch(err){return {...item,kind:'asset-pack',videoCount:0,imageCount:0,mediaCount:0,inspectStatus:'unavailable'};}
+}
 async function loadCampaignWorkerSnapshot(url) {
   const target = safeHttpUrl(url);
   if (!target) return null;
@@ -370,12 +435,12 @@ async function loadCampaignWorkerSnapshot(url) {
     if (campaignImportWorker === worker) campaignImportWorker = null;
   }
 }
-async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot) {
+async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot=null, termsSnapshot=null, resourceInspections=[]) {
   const endpoint = backendRuntimeUrl('/api/campaigns/import-snapshot');
   if (!endpoint) throw new Error('ClipBoost backend is not available.');
   const response = await fetch(endpoint, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ url:targetUrl, campaign:campaignSnapshot, requirements:requirementsSnapshot })
+    body:JSON.stringify({ url:targetUrl, campaign:campaignSnapshot, requirements:requirementsSnapshot, listing:listingSnapshot, terms:termsSnapshot, resourceInspections })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || `Campaign parsing failed (${response.status}).`);
@@ -428,7 +493,16 @@ async function runAuthenticatedCampaignImport(rawUrl) {
         if (reqUrl && reqUrl !== currentUrl) {
           try { requirementsSnapshot = await loadCampaignWorkerSnapshot(reqUrl); } catch (err) { console.warn('[Campaign import] Requirements page could not be read:', err?.message || err); }
         } else if (/\/campaigns\/doc\//i.test(currentUrl)) requirementsSnapshot = snapshot;
-        const parsed = await parseCampaignBrowserSnapshots(targetUrl, snapshot, requirementsSnapshot);
+        const campaignName=campaignNameFromSnapshot(snapshot);
+        let listingSnapshot=null;const listingUrl=campaignListingUrl(targetUrl);
+        if(listingUrl){try{listingSnapshot=await loadCampaignWorkerSnapshot(listingUrl)}catch(err){console.warn('[Campaign import] Campaign listing could not be read:',err?.message||err)}}
+        let termsSnapshot=null;const termsUrl=campaignTermsUrl(requirementsSnapshot||{});
+        if(termsUrl){try{termsSnapshot=await loadCampaignWorkerSnapshot(termsUrl)}catch(err){console.warn('[Campaign import] Platform terms could not be read:',err?.message||err)}}
+        let providerHost='';try{providerHost=new URL(targetUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+        const resourceLinks=resourceLinksFromRequirements(requirementsSnapshot||{},providerHost);
+        const resourceInspections=[];for(const item of resourceLinks){resourceInspections.push(await inspectCampaignResource(item))}
+        if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
+        const parsed = await parseCampaignBrowserSnapshots(targetUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;
         if (!win.isDestroyed()) win.close();
         return { ok:true, authenticated:true, ...parsed };
