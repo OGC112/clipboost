@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.11.0",
-  "description": "Mint premium reference redesign using real media thumbnails",
+  "version": "21.11.1",
+  "description": "Mint premium polish: typography, campaign light surfaces, editor details, project cards",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

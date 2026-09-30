@@ -1,15 +1,16 @@
-Mint 21.11.0 — Premium Reference Pass
+Mint 21.11.1 — Premium Polish
 
-Visual changes:
-- Removes the cheap avatar-style hero illustrations.
-- Home and AI Studio now use real Library media thumbnails when available.
-- More polished typography scale, buttons, shadows, radii and spacing.
-- Reference-style Home, AI Studio, Campaign Studio, Library, Projects and Results.
-- Navigation still uses the original internal app handlers, with native analytics fallback.
+Based directly on the screenshots from 21.11.0.
 
-Data integrity:
-- KPI values come from real local APIs only.
-- No fabricated views, payouts, clips or campaign metrics.
+Fixes:
+- Softer premium typography and less neon buttons.
+- Home hero composition tightened.
+- AI Studio inspector spacing and Auto Director tags fixed.
+- Campaign Studio legacy dark blocks converted to light premium surfaces.
+- Projects changed to compact multi-column cards.
+- Projects borrow real Library thumbnails when their own project media is only a placeholder.
+- Smaller shadows, cleaner borders, more consistent radii.
 
-No backend, AI engine, Smart Import, Canto, updater or Auto Publisher logic changed.
+No backend or API changes.
+No AI engine, Smart Import, Canto, updater, or Auto Publisher changes.
 No .env or secrets included.
