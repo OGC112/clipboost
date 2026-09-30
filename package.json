@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.11.1",
-  "description": "Mint premium polish: typography, campaign light surfaces, editor details, project cards",
+  "version": "21.12.0",
+  "description": "Mint hierarchy redesign: structural page layouts based on approved reference",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
