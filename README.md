@@ -1,4 +1,4 @@
-# ClipBoost 21.4.8 — Stuck Project Recovery
+# ClipBoost 21.4.9 — Stuck Project Recovery
 
 V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
 
@@ -493,7 +493,7 @@ Campaigns is now designed as an operational workspace rather than a long configu
 - Smart YouTube Authentication from 21.4.1 and the validated seamless updater are preserved.
 
 
-## 21.4.8
+## 21.4.9
 
 - Projects no longer become permanently undeletable when an ingest or Local AI analysis is interrupted.
 - ClipBoost tracks active yt-dlp, FFmpeg and local Python processes per project.
@@ -507,3 +507,11 @@ Campaigns is now designed as an operational workspace rather than a long configu
 ## 21.4.7
 
 Campaign setup is now centered and progressive: only essential fields are shown first, advanced payout/rule fields stay collapsed, and payment inputs adapt to the selected payment model. The unused Trends page has also been removed from navigation and routing.
+
+
+## 21.4.9 — Eco AI mode
+
+- Optional Eco AI mode releases unused local AI after 2–20 minutes of ClipBoost inactivity.
+- Idle cleanup never interrupts an active analysis/export job.
+- Fully quitting ClipBoost now stops ClipBoost-owned FFmpeg/Python/yt-dlp workers and unloads the configured Ollama model.
+- Closing to tray remains available; Eco mode still activates while the window is hidden.

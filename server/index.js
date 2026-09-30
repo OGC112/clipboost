@@ -28,18 +28,24 @@ for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir, trackingDir]) f
 const projectTaskContext = new AsyncLocalStorage();
 const activeProjectTasks = new Set();
 const activeProjectProcesses = new Map();
+const activeRuntimeProcesses = new Set();
 const deletedProjectIds = new Set();
 
 function processingStatus(value='') {
   return ['ingesting','analyzing'].includes(String(value || ''));
 }
 function registerProjectProcess(child) {
+  if (!child) return;
+  activeRuntimeProcesses.add(child);
   const projectId = projectTaskContext.getStore()?.projectId;
-  if (!projectId || !child) return;
-  let set = activeProjectProcesses.get(projectId);
-  if (!set) { set = new Set(); activeProjectProcesses.set(projectId, set); }
-  set.add(child);
+  if (projectId) {
+    let set = activeProjectProcesses.get(projectId);
+    if (!set) { set = new Set(); activeProjectProcesses.set(projectId, set); }
+    set.add(child);
+  }
   const cleanup = () => {
+    activeRuntimeProcesses.delete(child);
+    if (!projectId) return;
     const current = activeProjectProcesses.get(projectId);
     current?.delete(child);
     if (current && !current.size) activeProjectProcesses.delete(projectId);
@@ -64,6 +70,14 @@ function stopProjectProcesses(projectId) {
   const children = [...set];
   for (const child of children) stopChildProcess(child);
   return children.length;
+}
+function stopAllRuntimeProcesses() {
+  const children = [...activeRuntimeProcesses];
+  for (const child of children) stopChildProcess(child);
+  return children.length;
+}
+function runtimeBusy() {
+  return activeProjectTasks.size > 0 || activeRuntimeProcesses.size > 0;
 }
 async function withProjectTask(projectId, fn) {
   const id = String(projectId || '');
@@ -871,6 +885,7 @@ async function runYtDlpDownload(projectId, meta, cfg, browser=null) {
   const args=ytDlpBaseArgs(meta,cfg,browser);
   return new Promise((resolve, reject) => {
     const proc = spawn(cfg.python, args, { cwd: root, windowsHide: true, env: process.env });
+    registerProjectProcess(proc);
     let stderr = '';
     let stdout = '';
     let lastWrite = 0;
@@ -1150,6 +1165,20 @@ app.get('/api/campaigns/:id/submission-pack', async (req,res,next) => {
   } catch(e){next(e)}
 });
 
+
+app.get('/api/runtime/status', (req,res) => {
+  res.json({ ok:true, busy:runtimeBusy(), activeTasks:activeProjectTasks.size, activeProcesses:activeRuntimeProcesses.size });
+});
+app.post('/api/runtime/idle', async (req,res) => {
+  if (runtimeBusy()) return res.json({ ok:true, busy:true, activeTasks:activeProjectTasks.size, activeProcesses:activeRuntimeProcesses.size, action:'kept-running' });
+  const ollama = await unloadOllamaModelIfLoaded();
+  res.json({ ok:true, busy:false, ollama, action:'eco-idle' });
+});
+app.post('/api/runtime/shutdown', async (req,res) => {
+  const stopped = stopAllRuntimeProcesses();
+  const ollama = await unloadOllamaModelIfLoaded();
+  res.json({ ok:true, stoppedProcesses:stopped, ollama, action:'shutdown' });
+});
 
 app.get('/api/settings', async (req,res,next) => {
   try {
@@ -1686,6 +1715,28 @@ function localAiConfig() {
     ollamaModel: String(process.env.OLLAMA_MODEL || 'qwen2.5:3b').trim()
   };
 }
+
+async function unloadOllamaModelIfLoaded() {
+  const cfg = localAiConfig();
+  if (!cfg.ollamaUrl || !cfg.ollamaModel) return { ok:true, status:'not-configured' };
+  try {
+    const ps = await fetch(`${cfg.ollamaUrl}/api/ps`, { signal:AbortSignal.timeout(900) });
+    if (!ps.ok) return { ok:true, status:'offline' };
+    const body = await ps.json().catch(() => ({}));
+    const loaded = (Array.isArray(body?.models) ? body.models : []).map(x => String(x?.name || x?.model || ''));
+    const wanted = String(cfg.ollamaModel || '');
+    if (!loaded.some(name => name === wanted || name.startsWith(`${wanted}:`))) return { ok:true, status:'already-unloaded' };
+    const response = await fetch(`${cfg.ollamaUrl}/api/generate`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ model:wanted, prompt:'', stream:false, keep_alive:0 }),
+      signal:AbortSignal.timeout(1600)
+    });
+    return { ok:response.ok, status:response.ok?'unloaded':'unload-failed' };
+  } catch (err) {
+    return { ok:true, status:'offline', detail:err?.message || String(err) };
+  }
+}
+
 
 function resolveWhisperWorkers(rawValue) {
   const raw = String(rawValue ?? 'auto').trim().toLowerCase();

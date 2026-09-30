@@ -672,7 +672,10 @@
       </section>
       <section class="card settings-card"><div class="section-head"><div><div class="eyebrow">Desktop</div><h3>Windows behavior</h3></div></div>
         <label class="switch-row"><span><strong>Start ClipBoost with Windows</strong><small>Launch automatically after sign-in.</small></span><input id="setStartWindows" type="checkbox" ${checked(d.startWithWindows)} ${window.clipboostDesktop?'':'disabled'}></label>
-        <label class="switch-row"><span><strong>Close to system tray</strong><small>Keep background processing alive when closing the window.</small></span><input id="setCloseTray" type="checkbox" ${checked(d.closeToTray!==false)} ${window.clipboostDesktop?'':'disabled'}></label>
+        <label class="switch-row"><span><strong>Close to system tray</strong><small>Keep ClipBoost available in the tray. Eco AI mode can still release unused local AI while hidden.</small></span><input id="setCloseTray" type="checkbox" ${checked(d.closeToTray!==false)} ${window.clipboostDesktop?'':'disabled'}></label>
+        <label class="switch-row"><span><strong>Eco AI mode</strong><small>When ClipBoost is inactive, unload unused local AI from memory and keep workers asleep until needed again.</small></span><input id="setEcoMode" type="checkbox" ${checked(d.ecoMode!==false)} ${window.clipboostDesktop?'':'disabled'}></label>
+        <label class="field"><span>Eco mode idle timeout</span><select id="setIdleTimeout" ${window.clipboostDesktop?'':'disabled'}>${option(2,'2 minutes',d.idleTimeoutMinutes||5)}${option(5,'5 minutes',d.idleTimeoutMinutes||5)}${option(10,'10 minutes',d.idleTimeoutMinutes||5)}${option(20,'20 minutes',d.idleTimeoutMinutes||5)}</select></label>
+        <small class="settings-note">Active analysis/export jobs are allowed to finish. A full Quit stops ClipBoost-owned FFmpeg, Python and download workers and unloads the Ollama model immediately.</small>
       </section>
       <section class="card settings-card"><div class="section-head"><div><div class="eyebrow">Updates</div><h3>ClipBoost updates</h3></div><span class="muted">v${escapeHtml(d.version||'web')}</span></div>
         <label class="switch-row"><span><strong>Check on startup</strong><small>Look for new releases when ClipBoost opens.</small></span><input id="setCheckUpdates" type="checkbox" ${checked(d.checkUpdatesOnStartup!==false)} ${window.clipboostDesktop?'':'disabled'}></label>
@@ -696,7 +699,7 @@
       LOCAL_WHISPER_DEVICE:'cpu',LOCAL_WHISPER_COMPUTE_TYPE:document.getElementById('setComputeType')?.value||'int8',LOCAL_WHISPER_CHUNK_SECONDS:document.getElementById('setChunkSeconds')?.value||'120',LOCAL_WHISPER_WORKERS:document.getElementById('setWorkers')?.value||'auto',
       LOCAL_WHISPER_SKIP_SILENCE:Boolean(document.getElementById('setSkipSilence')?.checked),OLLAMA_URL:document.getElementById('setOllamaUrl')?.value||'http://127.0.0.1:11434',OLLAMA_MODEL:document.getElementById('setOllamaModel')?.value||'qwen2.5:3b',CLIPBOOST_EXPORT_DIR:document.getElementById('setExportDir')?.value||'',CLIPBOOST_UPDATE_OWNER:document.getElementById('setUpdateOwner')?.value||'',CLIPBOOST_UPDATE_REPO:document.getElementById('setUpdateRepo')?.value||''
     };
-    const desktopPayload={startWithWindows:Boolean(document.getElementById('setStartWindows')?.checked),closeToTray:Boolean(document.getElementById('setCloseTray')?.checked),checkUpdatesOnStartup:Boolean(document.getElementById('setCheckUpdates')?.checked),autoDownloadUpdates:Boolean(document.getElementById('setAutoDownload')?.checked)};
+    const desktopPayload={startWithWindows:Boolean(document.getElementById('setStartWindows')?.checked),closeToTray:Boolean(document.getElementById('setCloseTray')?.checked),ecoMode:Boolean(document.getElementById('setEcoMode')?.checked),idleTimeoutMinutes:Number(document.getElementById('setIdleTimeout')?.value||5),checkUpdatesOnStartup:Boolean(document.getElementById('setCheckUpdates')?.checked),autoDownloadUpdates:Boolean(document.getElementById('setAutoDownload')?.checked)};
     state.settingsSaving=true;state.settingsMessage='Saving settings…';render();
     try{
       const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await readJsonResponse(r,'Could not save settings');
@@ -905,6 +908,15 @@
   }
   if(window.clipboostDesktop?.onUpdateEvent&&!window.__clipboostUpdateEventsBound){window.__clipboostUpdateEventsBound=true;window.clipboostDesktop.onUpdateEvent(handleDesktopUpdateEvent)}
   if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',e=>{const tag=String(e.target?.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;if(state.page!=='studio')return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'){e.preventDefault();if(e.shiftKey)exportAll();else exportCurrent();return}if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const list=state.video?.candidates||[];if(!list.length)return;e.preventDefault();const dir=e.key==='ArrowRight'?1:-1;const next=(Math.min(state.selectedCandidate||0,list.length-1)+dir+list.length)%list.length;selectCandidatePreview(next,{autoplay:false})}})}
+  if(window.clipboostDesktop?.reportActivity&&!window.__clipboostActivityBound){
+    window.__clipboostActivityBound=true;
+    let lastActivityReport=0;
+    const reportActivity=()=>{const now=Date.now();if(now-lastActivityReport<10000)return;lastActivityReport=now;try{window.clipboostDesktop.reportActivity()}catch{}};
+    ['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(name=>window.addEventListener(name,reportActivity,{passive:true}));
+    window.addEventListener('focus',reportActivity);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)reportActivity()});
+    reportActivity();
+  }
   if(!location.hash) history.replaceState(null,'','#/home');
   const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0)}};
   window.addEventListener('hashchange',syncRouteFromLocation);

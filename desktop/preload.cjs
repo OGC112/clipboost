@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('clipboostDesktop', {
   openDataFolder: () => ipcRenderer.invoke('desktop:open-data-folder'),
   openConfig: () => ipcRenderer.invoke('desktop:open-config'),
   openExportsFolder: () => ipcRenderer.invoke('desktop:open-exports-folder'),
-  restartApp: () => ipcRenderer.invoke('desktop:restart-app')
+  restartApp: () => ipcRenderer.invoke('desktop:restart-app'),
+  reportActivity: () => ipcRenderer.send('desktop:activity')
 });

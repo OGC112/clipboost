@@ -17,6 +17,12 @@ let lastReadyEventVersion = null;
 let installUpdateInProgress = false;
 let updateCheckInFlight = null;
 let lastProgressEventPercent = -1;
+let lastRendererActivity = Date.now();
+let ecoMonitorTimer = null;
+let runtimeEcoPaused = false;
+let backendCleanupInFlight = null;
+let backendCleanupComplete = false;
+let allowImmediateQuit = false;
 
 function appRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
@@ -42,7 +48,7 @@ function readDesktopEnv() {
 }
 function desktopSettingsPath() { return path.join(userRoot(), 'desktop-settings.json'); }
 function readDesktopSettings() {
-  const defaults = { startWithWindows:false, closeToTray:true, checkUpdatesOnStartup:true, autoDownloadUpdates:true };
+  const defaults = { startWithWindows:false, closeToTray:true, ecoMode:true, idleTimeoutMinutes:5, checkUpdatesOnStartup:true, autoDownloadUpdates:true };
   try { return { ...defaults, ...JSON.parse(fs.readFileSync(desktopSettingsPath(),'utf8')) }; } catch { return defaults; }
 }
 function writeDesktopSettings(next) {
@@ -89,13 +95,75 @@ async function startBackend() {
   serverProcess.stdout.on('data', d => process.stdout.write(`[ClipBoost] ${d}`));
   serverProcess.stderr.on('data', d => process.stderr.write(`[ClipBoost] ${d}`));
   serverProcess.on('exit', code => {
-    if (code && mainWindow && !mainWindow.isDestroyed()) {
+    if (code && !isQuitting && mainWindow && !mainWindow.isDestroyed()) {
       dialog.showErrorBox('ClipBoost backend stopped', `The local backend exited with code ${code}.`);
     }
   });
   const baseUrl = `http://127.0.0.1:${serverPort}`;
   await waitForServer(baseUrl);
   return baseUrl;
+}
+
+function backendRuntimeUrl(pathname='') {
+  if (!serverPort) return null;
+  return `http://127.0.0.1:${serverPort}${pathname}`;
+}
+function markRendererActivity() {
+  lastRendererActivity = Date.now();
+  runtimeEcoPaused = false;
+}
+function idleTimeoutMs() {
+  const raw = Number(readDesktopSettings().idleTimeoutMinutes || 5);
+  const minutes = Math.max(1, Math.min(60, Number.isFinite(raw) ? raw : 5));
+  return minutes * 60_000;
+}
+async function requestRuntimeAction(action='idle') {
+  const url = backendRuntimeUrl(`/api/runtime/${action}`);
+  if (!url || !serverProcess || serverProcess.killed) return { ok:false, unavailable:true };
+  try {
+    const response = await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ source:'desktop' }),
+      signal:AbortSignal.timeout(action === 'shutdown' ? 1800 : 1200)
+    });
+    return await response.json().catch(() => ({ ok:response.ok }));
+  } catch (err) {
+    return { ok:false, error:err?.message || String(err) };
+  }
+}
+async function enterEcoModeIfIdle() {
+  const settings = readDesktopSettings();
+  if (!settings.ecoMode || runtimeEcoPaused || isQuitting) return;
+  if (Date.now() - lastRendererActivity < idleTimeoutMs()) return;
+  const result = await requestRuntimeAction('idle');
+  if (result?.ok && !result?.busy) runtimeEcoPaused = true;
+}
+function startEcoMonitor() {
+  if (ecoMonitorTimer) clearInterval(ecoMonitorTimer);
+  ecoMonitorTimer = setInterval(() => { enterEcoModeIfIdle().catch(() => {}); }, 15_000);
+  ecoMonitorTimer.unref?.();
+}
+function stopBackendTree() {
+  const proc = serverProcess;
+  serverProcess = null;
+  if (!proc || proc.killed) return;
+  try {
+    if (process.platform === 'win32' && proc.pid) {
+      const killer = spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide:true, stdio:'ignore' });
+      killer.on('error', () => { try { proc.kill('SIGKILL'); } catch {} });
+    } else proc.kill('SIGTERM');
+  } catch { try { proc.kill('SIGKILL'); } catch {} }
+}
+async function shutdownBackendGracefully() {
+  if (backendCleanupComplete) return;
+  if (backendCleanupInFlight) return backendCleanupInFlight;
+  backendCleanupInFlight = (async () => {
+    try { await requestRuntimeAction('shutdown'); } catch {}
+    stopBackendTree();
+    backendCleanupComplete = true;
+  })();
+  try { await backendCleanupInFlight; } finally { backendCleanupInFlight = null; }
 }
 
 function emitUpdateEvent(payload = {}) {
@@ -318,8 +386,13 @@ async function createWindow() {
       isQuitting = true;
     }
   });
-  mainWindow.on('minimize', () => { /* keep normal Windows minimize behavior */ });
+  mainWindow.on('focus', markRendererActivity);
+  mainWindow.on('show', markRendererActivity);
+  mainWindow.on('restore', markRendererActivity);
+  mainWindow.on('minimize', () => { /* Eco mode will release idle AI after the configured timeout. */ });
   mainWindow.show();
+  markRendererActivity();
+  startEcoMonitor();
 
   // Detect a renderer that technically loaded but failed before rendering the app.
   setTimeout(async () => {
@@ -337,13 +410,11 @@ async function createWindow() {
   // Startup auto-update check after the app is usable.
   if (readDesktopSettings().checkUpdatesOnStartup) setTimeout(() => checkForUpdates(false), 5000);
 }
-function stopBackend() {
-  if (serverProcess && !serverProcess.killed) { try { serverProcess.kill(); } catch {} }
-  serverProcess = null;
-}
+function stopBackend() { stopBackendTree(); }
 
+ipcMain.on('desktop:activity', () => markRendererActivity());
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
-ipcMain.handle('desktop:save-settings', (_event, settings) => ({ ok:true, settings:writeDesktopSettings(settings) }));
+ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
 ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
 ipcMain.handle('desktop:install-update', async () => {
   if (!updater || updateState.status !== 'ready') return { ok:false, error:'No downloaded update is ready.' };
@@ -354,6 +425,8 @@ ipcMain.handle('desktop:install-update', async () => {
   isQuitting = true;
 
   try {
+    await shutdownBackendGracefully();
+    allowImmediateQuit = true;
     // electron-updater 6.x:
     //   isSilent=true        -> NSIS /S (no installer window)
     //   isForceRunAfter=true -> NSIS --force-run (relaunch ClipBoost)
@@ -371,7 +444,7 @@ ipcMain.handle('desktop:install-update', async () => {
 ipcMain.handle('desktop:open-data-folder', () => shell.openPath(ensureUserFiles().dataDir));
 ipcMain.handle('desktop:open-config', () => shell.openPath(ensureUserFiles().envPath));
 ipcMain.handle('desktop:open-exports-folder', () => { const env=readDesktopEnv(); const target=env.CLIPBOOST_EXPORT_DIR || path.join(ensureUserFiles().dataDir,'exports'); fs.mkdirSync(target,{recursive:true}); return shell.openPath(target); });
-ipcMain.handle('desktop:restart-app', () => { isQuitting=true; app.relaunch(); app.exit(0); return {ok:true}; });
+ipcMain.handle('desktop:restart-app', async () => { isQuitting=true; await shutdownBackendGracefully(); allowImmediateQuit=true; app.relaunch(); app.exit(0); return {ok:true}; });
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); }
@@ -380,6 +453,15 @@ else {
 }
 
 app.whenReady().then(createWindow).catch(err => { dialog.showErrorBox('ClipBoost could not start', err?.stack || String(err)); app.quit(); });
-app.on('before-quit', () => { isQuitting = true; stopBackend(); });
-app.on('window-all-closed', () => { if (isQuitting) stopBackend(); });
+app.on('before-quit', (event) => {
+  isQuitting = true;
+  if (allowImmediateQuit || backendCleanupComplete) return;
+  event.preventDefault();
+  if (backendCleanupInFlight) return;
+  shutdownBackendGracefully().finally(() => {
+    allowImmediateQuit = true;
+    app.quit();
+  });
+});
+app.on('window-all-closed', () => { if (isQuitting) app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
