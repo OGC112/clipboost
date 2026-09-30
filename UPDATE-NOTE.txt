@@ -1,19 +1,7 @@
-Mint 21.10.0 — Stable Reference Build
+Mint 21.10.1 — Results Navigation Fix
 
-Key fix:
-- Navigation now calls the app's original data-page handlers instead of changing the hash directly.
-- Settings remains accessible.
-- Previous Mint CSS/JS layers are not loaded.
-
-Visual direction:
-- Built from the approved reference board.
-- Warm white background, compact top navigation, media-first cards.
-- Home: reference-style hero and compact work sections.
-- AI Studio: reference-style hero, five AI feature cards, existing editor preserved.
-- Campaign Studio: illustrated header and four-step workflow while preserving real campaign tools.
-- Library: media discovery grid.
-- Projects: two-column media cards.
-- Results: compact factual performance layout.
-
-Backend/APIs/AI processing/Smart Import/Canto/updater/Auto Publisher remain untouched.
-No .env or secrets included.
+Fix:
+- Results now opens the app's native #/analytics route.
+- This uses the existing hashchange handler in app.js.
+- No design changes.
+- No backend/API/updater changes.

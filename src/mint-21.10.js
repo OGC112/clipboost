@@ -14,6 +14,13 @@
       fallback.click();
       return;
     }
+    // Results/analytics is a valid app route but is not present in the
+    // legacy hidden sidebar. app.js listens to hashchange/popstate and will
+    // update its own state + render safely.
+    if(page==='analytics'){
+      location.hash='#/analytics';
+      return;
+    }
   }
 
   function brandLogo(){
