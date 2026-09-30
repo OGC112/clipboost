@@ -1,24 +1,20 @@
-ClipBoost 21.14.0 — Original Design Rollback
+Mint 21.14.1 — Home Redesign
 
-This rollback restores the exact frontend files from ClipBoost v21.6.0
-(commit 243cb278112bff6f5cb2a85896222ebc1082b3ba), which is the version
-immediately before the redesign work began.
+Scope:
+- Home page only
+- global navigation shell moved from the left sidebar to the top
+- removes the right-side user avatar/"A"
 
-Restored:
-- src/app.js
-- src/static.css
-- index.html
-
-Cleanup:
-- removes mint-*.css / mint-*.js redesign layers
-- removes redesign-*.css/js layers
-- removes prior apply-21.* UI patch scripts
-- removes its own postinstall hook after the rollback has run
+Home hierarchy:
+- workspace title and quick actions
+- dominant Continue Working media card
+- Active Campaign rail with real campaign metrics
+- Recent Projects as visual media cards
+- Recent Imports derived from real project source metadata
 
 Preserved:
-- Mint display branding in the restored UI
-- current repository/backend files not related to the frontend rollback
-- Auto Publisher / updater workflow
-- no .env or secrets are touched
+- AI Studio, Campaign Studio, Library, Projects, Results and Settings content markup remain on the original 21.14.0 base
+- existing app state, APIs and native data-page handlers
+- backend, AI engine, Smart Import, Canto, updater and Auto Publisher
 
-The rollback is applied during npm install, before Auto Publisher creates its commit.
+No .env or secrets included.

@@ -1,3 +1,4 @@
+/* MINT-HOME-21.14.1 */
 (function(){
   const validPages=new Set(['home','studio','campaigns','analytics','library','projects','settings']);
   function pageFromHash(){
@@ -84,8 +85,35 @@
   function mediaThumb(i=0,large=false){return `<div class="media-thumb t${i%5} ${large?'large':''}"><div class="ambient"></div>${avatar(colors[i%colors.length], large?'lg':'md')}<span class="cam-dot"></span></div>`}
   function clip(score,label,i=0){return `<div class="clip"><div class="clip-thumb">${mediaThumb(i)}<div class="score">${score}</div><span class="clip-tag">AI pick</span></div><div class="clip-info"><strong>${label}</strong><small>00:42 – 01:08</small></div></div>`}
   function phone(tall=''){return `<div class="phone ${tall}"><div class="phone-stage">${avatar('purple','xl')}<span class="phone-chip">9:16</span></div><div class="caption">THAT WAS<br><b>INSANE!</b></div><div class="phone-progress"><i></i></div></div>`}
-  function side(){return `<aside class="sidebar simplified-sidebar" id="sidebar"><div><div class="logo"><div class="logo-mark"></div><span>Mint</span></div><div class="nav">${nav.map(([id,ico,l])=>`<button data-page="${id}" class="${state.page===id?'active':''}"><span class="ico">${ico}</span><span>${l}</span></button>`).join('')}</div></div><div class="side-bottom"><div class="nav"><button data-page="settings" class="${state.page==='settings'?'active':''}"><span class="ico">⚙</span><span>Settings</span></button></div><div class="profile"><div class="avatar">A</div><div><strong>Alex</strong><small>Creator</small></div></div></div></aside>`}
-  function top(){const titles={home:'Home',studio:'AI Studio',campaigns:'Campaign Studio',analytics:'Results',library:'Library',projects:'Projects',settings:'Settings'};const u=state.desktopUpdate||{};const updatePill=['checking','downloading','ready','error'].includes(u.status)?`<button class="update-pill ${u.status}" id="updateCenterBtn" type="button"><span>${u.status==='ready'?'✓':u.status==='error'?'!':'↻'}</span>${u.status==='downloading'?`Update ${Math.round(u.percent||0)}%`:u.status==='checking'?'Checking update…':u.status==='ready'?`Update ${escapeHtml(u.version||'')} ready`:'Update issue'}</button>`:'';return `<header class="topbar simplified-topbar"><div class="top-left"><button class="btn secondary mobile" id="menu">☰</button><div><div class="eyebrow">MINT WORKSPACE</div><h2>${titles[state.page]}</h2></div></div><div class="top-actions">${updatePill}<div class="search">⌕ <input placeholder="Search projects, campaigns, media…"></div><button class="icon-btn">◉</button></div></header>`}
+  function side(){
+    return `<aside class="sidebar mint-home-hidden-sidebar" id="sidebar">
+      <button data-page="home">Home</button>
+      <button data-page="studio">AI Studio</button>
+      <button data-page="campaigns">Campaign Studio</button>
+      <button data-page="library">Library</button>
+      <button data-page="projects">Projects</button>
+      <button data-page="analytics">Results</button>
+      <button data-page="settings">Settings</button>
+    </aside>`
+  }
+  function top(){
+    const u=state.desktopUpdate||{};
+    const updatePill=['checking','downloading','ready','error'].includes(u.status)
+      ? `<button class="update-pill ${u.status}" id="updateCenterBtn" type="button"><span>${u.status==='ready'?'✓':u.status==='error'?'!':'↻'}</span>${u.status==='downloading'?`Update ${Math.round(u.percent||0)}%`:u.status==='checking'?'Checking update…':u.status==='ready'?`Update ${escapeHtml(u.version||'')} ready`:'Update issue'}</button>`
+      : '';
+    const links=[['home','Home'],['studio','AI Studio'],['campaigns','Campaign Studio'],['library','Library'],['projects','Projects'],['analytics','Results'],['settings','Settings']];
+    return `<header class="topbar mint-home-topbar">
+      <button class="mint-home-brand" data-page="home" type="button">
+        <span class="mint-home-logo"><i></i><b></b></span><strong>Mint</strong>
+      </button>
+      <nav class="mint-home-nav">${links.map(([id,label])=>`<button data-page="${id}" class="${state.page===id?'active':''}" type="button">${label}</button>`).join('')}</nav>
+      <div class="mint-home-top-actions">
+        ${updatePill}
+        <label class="mint-home-search"><span>⌕</span><input type="text" placeholder="Search projects, campaigns, media…"></label>
+        <button class="mint-home-icon-btn" type="button" aria-label="Notifications">♢</button>
+      </div>
+    </header>`
+  }
   function kpi(a,b,c,idx=0){return `<div class="card kpi"><div class="kpi-top"><small>${a}</small><span class="kpi-icon">${['◉','↗','✦','▤'][idx%4]}</span></div><strong>${b}</strong><div class="delta">${c}</div>${spark(['blue','purple','green','blue'][idx%4])}</div>`}
   function home(){
     const projects=Array.isArray(state.projects)?state.projects:[];
@@ -94,7 +122,84 @@
     const activeCampaign=campaignsList.find(c=>String(c.status||'active')==='active')||campaignsList[0]||null;
     const currentState=current?projectDisplayState(current):null;
     const recent=projects.slice(0,3);
-    return `<div class="content simple-home-v2"><div class="simple-home-head"><div><div class="eyebrow">WORKSPACE</div><h1>Your ClipBoost workspace</h1><p>General clipping stays in AI Studio. Paid campaign work stays in Campaign Studio.</p></div><div class="simple-home-actions"><button class="btn secondary" data-page="studio">Open AI Studio</button><button class="btn primary" data-page="campaigns">Open Campaign Studio</button></div></div><div class="simple-home-grid"><section class="card simple-home-card simple-continue"><div class="section-head"><div><div class="eyebrow">CONTINUE WORKING</div><h3>${current?escapeHtml(current.originalName||'Project'):'No active project'}</h3></div>${current?`<span class="status ${currentState?.done?'ready':''}">${escapeHtml(currentState?.badge||current.status||'Project')}</span>`:''}</div>${current?`<p>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</p><div class="campaign-progress big"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div><button class="btn primary" data-home-project="${escapeHtml(current.id)}">Continue project →</button>`:`<p>Import a long video, YouTube VOD or Twitch source when you are ready.</p><button class="btn primary" data-page="studio">Import a video →</button>`}</section><section class="card simple-home-card simple-campaign"><div class="section-head"><div><div class="eyebrow">ACTIVE CAMPAIGN</div><h3>${activeCampaign?escapeHtml(activeCampaign.name):'No campaign yet'}</h3></div>${activeCampaign?`<span class="campaign-state ${escapeHtml(activeCampaign.status||'active')}">${escapeHtml(activeCampaign.status||'active')}</span>`:''}</div>${activeCampaign?`<div class="simple-campaign-facts"><span><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></span><span><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></span><span><small>Tracked views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></span></div><button class="btn primary" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`:`<p>Smart Import can mirror a real campaign, its sources and requirements.</p><button class="btn primary" data-page="campaigns">Add campaign →</button>`}</section></div><section class="card simple-recent"><div class="section-head"><div><div class="eyebrow">RECENT WORK</div><h3>Projects</h3></div><button class="btn secondary compact-btn" data-page="projects">View all</button></div><div class="simple-recent-list">${recent.length?recent.map(p=>{const ps=projectDisplayState(p);return `<button data-home-project="${escapeHtml(p.id)}"><span class="simple-project-icon">${p.campaignName?'◎':'✦'}</span><span><b>${escapeHtml(p.originalName||'Project')}</b><small>${escapeHtml(p.campaignName?`Campaign · ${p.campaignName}`:'AI Studio')} · ${escapeHtml(ps.badge)}</small></span><strong>${Number(p.candidateCount||0)} clips</strong></button>`}).join(''):'<div class="campaign-mini-empty">Your recent projects will appear here.</div>'}</div></section></div>`
+    const imports=projects.filter(p=>p.externalSource).slice(0,3);
+
+    const recentCards=recent.length ? recent.map((p,i)=>{
+      const ps=projectDisplayState(p);
+      return `<button class="mint-home-project-card" data-home-project="${escapeHtml(p.id)}" type="button">
+        <div class="mint-home-project-thumb">
+          ${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}
+          <span>${Number(p.candidateCount||0)} clips</span>
+        </div>
+        <div class="mint-home-project-meta">
+          <strong>${escapeHtml(p.originalName||'Project')}</strong>
+          <small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small>
+        </div>
+      </button>`;
+    }).join('') : `<div class="mint-home-empty"><b>No projects yet</b><span>Import content or upload a source to get started.</span><button class="btn primary" data-page="library">Browse Library</button></div>`;
+
+    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-home-import-row" data-home-project="${escapeHtml(p.id)}" type="button">
+      <div class="mint-home-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
+      <div><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
+      <span>•••</span>
+    </button>`).join('') : `<div class="mint-home-small-empty">Recent imported media will appear here.</div>`;
+
+    return `<div class="content mint-home-page">
+      <section class="mint-home-heading">
+        <div>
+          <div class="eyebrow">MINT WORKSPACE</div>
+          <h1>Your Mint workspace</h1>
+          <p>Create, manage and grow your content with AI. General clipping stays in AI Studio. Paid campaign work stays in Campaign Studio.</p>
+        </div>
+        <div class="mint-home-heading-actions">
+          <button class="btn secondary" data-page="studio">✦ Open AI Studio</button>
+          <button class="btn primary" data-page="campaigns">◎ Open Campaign Studio</button>
+        </div>
+      </section>
+
+      <section class="mint-home-primary-grid">
+        <article class="mint-home-continue">
+          <header><div><span>ϟ</span><b>Continue working</b></div>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</header>
+          ${current?`
+            <div class="mint-home-continue-body">
+              <div class="mint-home-continue-media">${current.externalSource?.thumbnail?`<img src="${escapeHtml(current.externalSource.thumbnail)}" alt="">`:mediaThumb(0)}<i>▶</i></div>
+              <div class="mint-home-continue-copy">
+                <h2>${escapeHtml(current.originalName||'Project')}</h2>
+                <p>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</p>
+                <div class="mint-home-progress"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div>
+                <div class="mint-home-progress-label"><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
+                <div class="mint-home-continue-actions"><button class="btn primary" data-home-project="${escapeHtml(current.id)}">▶ Continue project →</button><button class="mint-home-more" type="button">•••</button></div>
+              </div>
+            </div>`
+          : `<div class="mint-home-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
+        </article>
+
+        <aside class="mint-home-campaign">
+          <header><div><span>◎</span><b>Active campaign</b></div>${activeCampaign?'<em>Active</em>':''}</header>
+          ${activeCampaign?`
+            <div class="mint-home-campaign-brand"><span>◎</span><div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')} · Creator campaign</p></div></div>
+            <div class="mint-home-campaign-stats">
+              <div><span>▣</span><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></div>
+              <div><span>▥</span><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></div>
+              <div><span>◉</span><small>Tracked views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></div>
+            </div>
+            <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`
+          : `<div class="mint-home-empty large"><b>No active campaign</b><span>Import or create a campaign to see it here.</span><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
+        </aside>
+      </section>
+
+      <section class="mint-home-lower-grid">
+        <article class="mint-home-recent">
+          <header><div><span>▣</span><div><b>Recent projects</b><small>Pick up where you left off or explore your latest creations.</small></div></div><button class="btn secondary compact-btn" data-page="projects">View all →</button></header>
+          <div class="mint-home-project-grid">${recentCards}</div>
+        </article>
+
+        <aside class="mint-home-imports">
+          <header><div><span>⇧</span><div><b>Recent imports</b><small>Your latest media imports.</small></div></div><button class="btn secondary compact-btn" data-page="library">View all →</button></header>
+          <div class="mint-home-import-list">${importRows}</div>
+        </aside>
+      </section>
+    </div>`
   }
   function externalEmbed(source){
     if(!source)return '';

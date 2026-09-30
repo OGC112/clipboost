@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.0",
-  "description": "Rollback to the original ClipBoost 21.6.0 visual frontend, preserving Mint display branding",
+  "version": "21.14.1",
+  "description": "Mint Home redesign on top of the original 21.14.0 UI",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
