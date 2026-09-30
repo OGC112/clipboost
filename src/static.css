@@ -335,3 +335,68 @@
 .campaign-form-backdrop{position:fixed;inset:0;background:#02050bb8;z-index:120;display:flex;justify-content:flex-end;backdrop-filter:blur(3px)}.campaign-form-drawer{width:min(760px,92vw);height:100%;overflow:auto;background:#09101a;border-left:1px solid #3a2d60;box-shadow:-24px 0 60px #0008}.campaign-form-drawer .campaign-form-card{margin:0;border:0;border-radius:0;min-height:100%;padding:22px}.campaign-form-drawer .campaign-form-actions{position:sticky;bottom:0;background:linear-gradient(180deg,transparent,#09101a 20%);padding-top:22px;padding-bottom:3px}
 @media(max-width:1100px){.campaign-primary-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-overview-lower{grid-template-columns:1fr}.campaign-rules-grid{grid-template-columns:1fr}.campaign-import-compact{flex-direction:column;align-items:stretch}.campaign-import-compact .campaign-import-box{min-width:0;width:100%}}
 @media(max-width:760px){.campaign-grid-list>.campaign-list-card{flex-basis:235px}.campaign-primary-kpis,.campaign-earnings-card{grid-template-columns:1fr 1fr}.campaign-earnings-card>div:nth-child(2){border-right:0}.campaign-earnings-card>div:nth-child(-n+2){border-bottom:1px solid #1d293a}.campaign-tab-head{flex-direction:column}.campaign-detail-actions.compact{justify-content:flex-start}.campaign-post-add-real{grid-template-columns:1fr}.campaign-rules-actions{justify-content:flex-start;flex-wrap:wrap}.campaign-form-drawer{width:100vw}.campaign-import-compact .campaign-import-box{grid-template-columns:1fr}.campaign-detail-compact .campaign-hero.compact{margin:-18px -18px 0;flex-direction:column}}
+
+
+/* ClipBoost 21.4.6 — Projects actions are one protected grid cell */
+.project-row{
+  grid-template-columns:130px minmax(0,1.05fr) minmax(240px,1.3fr) minmax(205px,max-content);
+}
+.project-row>div:nth-child(2){min-width:0}
+.project-row>div:nth-child(2)>strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-progress{min-width:0}
+.project-row-actions{
+  width:auto;
+  min-width:205px;
+  display:grid;
+  grid-template-columns:max-content minmax(58px,auto) 36px;
+  align-items:center;
+  justify-content:end;
+  gap:7px;
+  flex-shrink:0;
+}
+.project-row-actions .status{justify-self:end;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.project-row-actions .btn{min-width:58px;white-space:nowrap}
+.project-row-actions .project-delete-btn{width:36px;min-width:36px;padding:0}
+
+@media(max-width:1180px){
+  .project-row{
+    grid-template-columns:110px minmax(0,1fr) minmax(180px,.9fr) 150px;
+    grid-template-areas:"thumb info progress actions";
+    column-gap:12px;
+    row-gap:0;
+  }
+  .project-row>:nth-child(1){grid-area:thumb}
+  .project-row>:nth-child(2){grid-area:info}
+  .project-row>.project-progress{grid-area:progress}
+  .project-row>.project-row-actions{
+    grid-area:actions;
+    min-width:150px;
+    width:150px;
+    grid-template-columns:1fr 36px;
+    grid-template-areas:"status status" "open delete";
+    justify-content:end;
+    row-gap:6px;
+  }
+  .project-row-actions .status{grid-area:status;justify-self:end}
+  .project-row-actions .btn{grid-area:open;justify-self:end}
+  .project-row-actions .project-delete-btn{grid-area:delete}
+}
+
+@media(max-width:860px){
+  .project-row{
+    grid-template-columns:95px minmax(0,1fr);
+    grid-template-areas:"thumb info" "thumb progress" "thumb actions";
+    align-items:start;
+    row-gap:8px;
+  }
+  .project-row>.project-progress{grid-column:auto;width:100%}
+  .project-row>.project-row-actions{
+    grid-column:auto;
+    justify-self:start;
+    width:auto;
+    min-width:0;
+    grid-template-columns:max-content minmax(58px,auto) 36px;
+    grid-template-areas:"status open delete";
+  }
+  .project-row-actions .status{justify-self:start}
+}

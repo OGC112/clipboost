@@ -1,4 +1,4 @@
-# ClipBoost 21.4.5 — Compact Campaign Workspace
+# ClipBoost 21.4.6 — Compact Campaign Workspace
 
 V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
 

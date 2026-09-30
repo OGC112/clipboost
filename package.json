@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.4.5",
-  "description": "Compact Campaign Workspace with tabbed campaign details, login-wall-safe campaign import, Projects layout fix, Smart YouTube authentication, Fast Local AI and seamless silent updates",
+  "version": "21.4.6",
+  "description": "Projects protected action-cell fix, Compact Campaign Workspace, login-wall-safe campaign import, Smart YouTube authentication, Fast Local AI and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
