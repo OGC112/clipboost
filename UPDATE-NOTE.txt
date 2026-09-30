@@ -1,7 +1,15 @@
-Mint 21.7.2 — Settings navigation fix
+Mint 21.8.0 — reference-driven redesign
 
-- Restores Settings in the top navigation.
-- Clicking the top-right avatar now also opens Settings.
-- Existing Settings page and updater logic are unchanged.
-- No backend changes.
-- No .env or secrets included.
+This version is based directly on the approved six-screen reference.
+
+Changes:
+- New typography scale and tighter UI density.
+- Home proportions, KPI cards and media hero redesigned.
+- AI Studio gets reference-style feature cards and cleaner editor/preview/tools hierarchy.
+- Campaign Studio gets the four-step flow and horizontal campaign cards.
+- Library reorganizes compatible media rows into a four-column discovery grid.
+- Projects uses compact media-first cards.
+- Results duplication bug fixed; empty state is shown once and real-data chart area stays factual.
+- Settings access remains in the top navigation.
+
+No backend endpoints, campaign logic, AI engine, updater logic, .env or secrets are changed.

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.7.2",
-  "description": "Mint settings navigation fix",
+  "version": "21.8.0",
+  "description": "Mint reference-driven UI redesign",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
