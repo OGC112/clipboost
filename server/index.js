@@ -147,6 +147,38 @@ function campaignArray(value) {
   if (Array.isArray(value)) return value.map(x=>String(x||'').trim()).filter(Boolean);
   return String(value||'').split(/[\n,]/).map(x=>x.trim()).filter(Boolean);
 }
+function campaignPaymentModel(campaign={}) {
+  const explicit=String(campaign.paymentModel||'').trim();
+  if(['per-views','bounty-pool','fixed-reward','custom'].includes(explicit))return explicit;
+  const legacy=String(campaign.payoutMode||'');
+  if(legacy==='per-1000-views')return 'per-views';
+  if(legacy==='threshold')return 'fixed-reward';
+  return 'custom';
+}
+function campaignPlatformKey(value='') {
+  const x=String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  if(x.includes('tiktok'))return 'tiktok';
+  if(x.includes('instagram')||x.includes('reel'))return 'instagram';
+  if(x.includes('youtube')||x.includes('short'))return 'youtube';
+  if(x==='x'||x.includes('twitter'))return 'x';
+  return x||'default';
+}
+function normalizePlatformPayouts(value={}) {
+  let source=value;
+  if(typeof source==='string'){try{source=JSON.parse(source)}catch{source={}}}
+  if(!source||typeof source!=='object'||Array.isArray(source))return {};
+  const out={};
+  for(const [key,val] of Object.entries(source)){
+    const n=Math.max(0,Number(val||0)||0);const k=campaignPlatformKey(key);if(k&&n>0)out[k]=n;
+  }
+  return out;
+}
+function campaignPlatformRate(campaign={}, platform='') {
+  const rates=normalizePlatformPayouts(campaign.platformPayouts||{});const key=campaignPlatformKey(platform);
+  if(Number(rates[key]||0)>0)return Number(rates[key]);
+  if(Number(rates.default||0)>0)return Number(rates.default);
+  return Math.max(0,Number(campaign.payout||campaign.fixedReward||0)||0);
+}
 function normalizeCampaign(input={}, existing={}) {
   const now = new Date().toISOString();
   const minDuration = Math.max(0, Number(input.minDuration ?? existing.minDuration ?? 0) || 0);
@@ -158,13 +190,28 @@ function normalizeCampaign(input={}, existing={}) {
     const url=String(item?.url||'').trim();
     return { id:String(item?.id||crypto.createHash('sha1').update(url||String(index)).digest('hex').slice(0,12)), url, label:String(item?.label||`Source ${index+1}`), addedAt:item?.addedAt||now };
   }).filter(x=>/^https?:\/\//i.test(x.url));
+  const legacyMode=String(input.payoutMode ?? existing.payoutMode ?? '');
+  const paymentModelRaw=String(input.paymentModel ?? existing.paymentModel ?? (legacyMode==='per-1000-views'?'per-views':legacyMode==='threshold'?'fixed-reward':'custom'));
+  const paymentModel=['per-views','bounty-pool','fixed-reward','custom'].includes(paymentModelRaw)?paymentModelRaw:'custom';
+  const qualificationViews=Math.max(0,Number(input.qualificationViews ?? input.viewThreshold ?? existing.qualificationViews ?? existing.viewThreshold ?? 0)||0);
+  const scopeRaw=String(input.qualificationScope ?? existing.qualificationScope ?? (paymentModel==='per-views'?'per-post':'campaign-total'));
+  const qualificationScope=['per-post','campaign-total'].includes(scopeRaw)?scopeRaw:(paymentModel==='per-views'?'per-post':'campaign-total');
+  const legacyBasis=legacyMode==='per-1000-views'?1000:100000;
+  const rateBasisViews=Math.max(1,Number(input.rateBasisViews ?? existing.rateBasisViews ?? legacyBasis)||legacyBasis);
+  const fixedReward=Math.max(0,Number(input.fixedReward ?? input.payout ?? existing.fixedReward ?? existing.payout ?? 0)||0);
+  const platformPayouts=normalizePlatformPayouts(input.platformPayouts ?? existing.platformPayouts ?? {});
+  const accessRaw=String(input.accessMode ?? existing.accessMode ?? 'open');
+  const accessMode=['open','private','application'].includes(accessRaw)?accessRaw:'open';
+  const statusRaw=String(input.status ?? existing.status ?? 'active');
+  const status=['active','paused','completed','closed'].includes(statusRaw)?statusRaw:'active';
   return {
     id: String(existing.id || input.id || crypto.randomUUID()),
     name: String(input.name ?? existing.name ?? 'Untitled campaign').trim().slice(0,160) || 'Untitled campaign',
     provider: String(input.provider ?? existing.provider ?? '').trim().slice(0,120),
     campaignUrl: String(input.campaignUrl ?? existing.campaignUrl ?? '').trim().slice(0,2000),
     brief: String(input.brief ?? existing.brief ?? '').trim().slice(0,30000),
-    status: ['active','paused','completed'].includes(String(input.status ?? existing.status)) ? String(input.status ?? existing.status) : 'active',
+    status,
+    accessMode,
     platforms: campaignArray(input.platforms ?? existing.platforms ?? ['tiktok','instagram','youtube-shorts']).slice(0,10),
     minDuration,
     maxDuration,
@@ -173,10 +220,19 @@ function normalizeCampaign(input={}, existing={}) {
     requiredCTA: String(input.requiredCTA ?? existing.requiredCTA ?? '').trim().slice(0,1000),
     forbiddenTerms: campaignArray(input.forbiddenTerms ?? existing.forbiddenTerms ?? []).slice(0,80),
     deadline: String(input.deadline ?? existing.deadline ?? '').trim().slice(0,80),
-    viewThreshold: Math.max(0, Number(input.viewThreshold ?? existing.viewThreshold ?? 0) || 0),
-    payout: Math.max(0, Number(input.payout ?? existing.payout ?? 0) || 0),
-    currency: String(input.currency ?? existing.currency ?? 'EUR').trim().toUpperCase().slice(0,8) || 'EUR',
-    payoutMode: ['threshold','per-1000-views','manual'].includes(String(input.payoutMode ?? existing.payoutMode)) ? String(input.payoutMode ?? existing.payoutMode) : 'threshold',
+    paymentModel,
+    qualificationViews,
+    qualificationScope,
+    viewThreshold: qualificationViews,
+    rateBasisViews,
+    platformPayouts,
+    fixedReward,
+    payout: fixedReward,
+    bountyPool: Math.max(0,Number(input.bountyPool ?? existing.bountyPool ?? 0)||0),
+    maxPayout: Math.max(0,Number(input.maxPayout ?? existing.maxPayout ?? 0)||0),
+    confirmedPayout: Math.max(0,Number(input.confirmedPayout ?? existing.confirmedPayout ?? 0)||0),
+    currency: String(input.currency ?? existing.currency ?? 'USD').trim().toUpperCase().slice(0,8) || 'USD',
+    payoutMode: paymentModel==='per-views'?'per-1000-views':paymentModel==='fixed-reward'?'threshold':'manual',
     sourceUrls,
     posts: Array.isArray(input.posts ?? existing.posts) ? (input.posts ?? existing.posts).slice(0,500) : [],
     usedMoments: Array.isArray(input.usedMoments ?? existing.usedMoments) ? (input.usedMoments ?? existing.usedMoments).slice(-1000) : [],
@@ -187,19 +243,36 @@ function normalizeCampaign(input={}, existing={}) {
 function campaignTotals(campaign={}) {
   const posts = Array.isArray(campaign.posts) ? campaign.posts : [];
   const totalViews = posts.reduce((sum,p)=>sum+Math.max(0,Number(p?.views||0)),0);
-  const threshold = Math.max(0,Number(campaign.viewThreshold||0));
-  const payout = Math.max(0,Number(campaign.payout||0));
-  const payoutMode = campaign.payoutMode || 'threshold';
-  const estimatedRevenue = payoutMode === 'per-1000-views' ? (totalViews/1000)*payout : payoutMode === 'threshold' ? (threshold>0 && totalViews>=threshold ? payout : 0) : 0;
-  const remainingViews = threshold>0 ? Math.max(0,threshold-totalViews) : 0;
-  const progress = threshold>0 ? Math.min(100,Math.round(totalViews/threshold*100)) : 0;
+  const qualificationViews=Math.max(0,Number(campaign.qualificationViews ?? campaign.viewThreshold ?? 0)||0);
+  const paymentModel=campaignPaymentModel(campaign);
+  const rateBasisViews=Math.max(1,Number(campaign.rateBasisViews||100000)||100000);
+  const confirmedPostPayout=posts.reduce((sum,p)=>sum+Math.max(0,Number(p?.payoutConfirmed||0)),0);
+  const confirmedRevenue=Math.max(Math.max(0,Number(campaign.confirmedPayout||0)),confirmedPostPayout);
+  const qualificationScope=String(campaign.qualificationScope|| (paymentModel==='per-views'?'per-post':'campaign-total'));
+  const campaignQualified=qualificationViews<=0||totalViews>=qualificationViews;
+  const eligiblePosts=qualificationScope==='campaign-total'?(campaignQualified?posts:[]):posts.filter(p=>qualificationViews<=0||Number(p?.views||0)>=qualificationViews);
+  let estimatedRevenue=0;
+  if(paymentModel==='per-views'){
+    estimatedRevenue=eligiblePosts.reduce((sum,p)=>sum+(Math.max(0,Number(p?.views||0))/rateBasisViews)*campaignPlatformRate(campaign,p?.platform),0);
+    const cap=Math.max(0,Number(campaign.maxPayout||0));if(cap>0)estimatedRevenue=Math.min(estimatedRevenue,cap);
+  }else if(paymentModel==='fixed-reward'){
+    const reward=Math.max(0,Number(campaign.fixedReward ?? campaign.payout ?? 0)||0);
+    estimatedRevenue=qualificationViews>0&&totalViews>=qualificationViews?reward:0;
+  }else{
+    estimatedRevenue=confirmedRevenue;
+  }
+  const qualificationProgressViews=qualificationScope==='per-post'?posts.reduce((best,p)=>Math.max(best,Math.max(0,Number(p?.views||0))),0):totalViews;
+  const remainingViews = qualificationViews>0 ? Math.max(0,qualificationViews-qualificationProgressViews) : 0;
+  const progress = qualificationViews>0 ? Math.min(100,Math.round(qualificationProgressViews/qualificationViews*100)) : 0;
   const editingMinutes=posts.reduce((sum,p)=>sum+Math.max(0,Number(p?.editingMinutes||0)),0);
   const bestViews=posts.reduce((best,p)=>Math.max(best,Math.max(0,Number(p?.views||0))),0);
   const avgViews=posts.length?Math.round(totalViews/posts.length):0;
   const bestPost=posts.filter(p=>Number(p?.clipDuration||0)>0).sort((a,b)=>Number(b?.views||0)-Number(a?.views||0))[0]||null;
   const bestDuration=bestPost?Math.round(Number(bestPost.clipDuration||0)):0;
-  const revenuePerHour=editingMinutes>0?(estimatedRevenue/(editingMinutes/60)):0;
-  return { totalViews, estimatedRevenue:Number(estimatedRevenue.toFixed(2)), remainingViews, progress, postCount:posts.length, usedMomentCount:(campaign.usedMoments||[]).length, editingMinutes, bestViews, avgViews, bestDuration, revenuePerHour:Number(revenuePerHour.toFixed(2)) };
+  const revenueForEfficiency=Math.max(estimatedRevenue,confirmedRevenue);
+  const revenuePerHour=editingMinutes>0?(revenueForEfficiency/(editingMinutes/60)):0;
+  const payoutPotential=paymentModel==='bounty-pool'?Math.max(0,Number(campaign.bountyPool||0)):paymentModel==='fixed-reward'?Math.max(0,Number(campaign.fixedReward??campaign.payout??0)):Math.max(0,Number(campaign.maxPayout||0));
+  return { totalViews, estimatedRevenue:Number(estimatedRevenue.toFixed(2)), confirmedRevenue:Number(confirmedRevenue.toFixed(2)), remainingViews, progress, postCount:posts.length, usedMomentCount:(campaign.usedMoments||[]).length, editingMinutes, bestViews, avgViews, bestDuration, revenuePerHour:Number(revenuePerHour.toFixed(2)), qualificationViews, qualificationScope, qualificationProgressViews, paymentModel, rateBasisViews, payoutPotential, qualifiedPostCount:eligiblePosts.length, pendingPostCount:posts.filter(p=>String(p?.submissionStatus||'pending')==='pending').length, acceptedPostCount:posts.filter(p=>String(p?.submissionStatus||'')==='accepted').length };
 }
 function campaignSearchTerms(campaign={}) {
   const text=[campaign.name,campaign.brief,campaign.requiredCTA,...(campaign.requiredHashtags||[]),...(campaign.requiredMentions||[])].join(' ').toLowerCase();
@@ -271,10 +344,24 @@ function extractCampaignPage(html='', url='') {
   };
   const title=getMeta('og:title')||htmlEntityDecode((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||'').replace(/\s+/g,' ').trim();
   const description=getMeta('og:description')||getMeta('description');
-  const cleaned=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const cleaned=htmlEntityDecode(html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
   const sourceMatches=[...String(html).matchAll(/https?:\\?\/\\?\/(?:www\.)?(?:youtube\.com\/watch\?v=[A-Za-z0-9_-]+|youtu\.be\/[A-Za-z0-9_-]+|twitch\.tv\/videos\/[0-9]+|clips\.twitch\.tv\/[A-Za-z0-9_-]+)/gi)].map(m=>m[0].replace(/\\\//g,'/'));
   const sourceUrls=[...new Set(sourceMatches)].slice(0,30);
-  return { name:title||'Imported campaign', provider:(()=>{try{return new URL(url).hostname.replace(/^www\./,'')}catch{return ''}})(), campaignUrl:url, brief:[description,cleaned.slice(0,10000)].filter(Boolean).join('\n\n').slice(0,12000), sourceUrls };
+  const lower=cleaned.toLowerCase();
+  const platforms=[];if(/\btiktok\b/i.test(cleaned))platforms.push('tiktok');if(/\binstagram\b|\breels?\b/i.test(cleaned))platforms.push('instagram');if(/\byoutube\b|\bshorts?\b/i.test(cleaned))platforms.push('youtube-shorts');if(/\btwitter\b|(?:^|\s)x(?:\s|$)/i.test(cleaned))platforms.push('x');
+  const compactNumber=(raw='')=>{const m=String(raw).trim().match(/([0-9]+(?:[.,][0-9]+)?)\s*([kKmM])?/);if(!m)return 0;let n=Number(m[1].replace(',','.'))||0;if(String(m[2]||'').toLowerCase()==='k')n*=1000;if(String(m[2]||'').toLowerCase()==='m')n*=1000000;return Math.round(n)};
+  const minViewsMatch=cleaned.match(/(?:min(?:imum)?|at least|qualif(?:y|ication)[^0-9]{0,20})([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)[^a-z]{0,8}(?:views?)/i)||cleaned.match(/([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)\s+views?\s+to\s+qualify/i);
+  const qualificationViews=minViewsMatch?compactNumber(minViewsMatch[1]):0;
+  const bountyMatch=cleaned.match(/(?:bounty\s*(?:pot|pool)?)[^$€£0-9]{0,20}([$€£])?\s*([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)/i);
+  const perMatch=cleaned.match(/([$€£])?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:per|\/)[^0-9]{0,12}([0-9]+(?:[.,][0-9]+)?\s*[kKmM]?)\s*(?:views?)?/i);
+  const symbol=(bountyMatch?.[1]||perMatch?.[1]||'');const currency=symbol==='€'?'EUR':symbol==='£'?'GBP':'USD';
+  const accessMode=/apply\s+for\s+access|application\s+required/i.test(cleaned)?'application':/\bprivate\b/i.test(cleaned)?'private':'open';
+  const draft={ name:title||'Imported campaign', provider:(()=>{try{return new URL(url).hostname.replace(/^www\./,'')}catch{return ''}})(), campaignUrl:url, brief:[description,cleaned.slice(0,10000)].filter(Boolean).join('\n\n').slice(0,12000), sourceUrls, accessMode };
+  if(platforms.length)draft.platforms=platforms;
+  if(qualificationViews)draft.qualificationViews=qualificationViews;
+  if(bountyMatch){draft.paymentModel='bounty-pool';draft.bountyPool=compactNumber(bountyMatch[2]);draft.currency=currency}
+  else if(perMatch){draft.paymentModel='per-views';draft.fixedReward=Math.max(0,Number(perMatch[2].replace(',','.'))||0);draft.payout=draft.fixedReward;draft.rateBasisViews=compactNumber(perMatch[3])||100000;draft.currency=currency}
+  return draft;
 }
 function youtubeKey() {
   const key = String(process.env.YOUTUBE_API_KEY || '').trim();
@@ -900,7 +987,7 @@ app.post('/api/campaigns/:id/posts', async (req,res,next) => {
     const data=await readCampaigns(); const i=data.campaigns.findIndex(c=>c.id===req.params.id); if(i<0)return res.status(404).json({error:'Campaign not found.'});
     const c=data.campaigns[i]; const body=req.body||{};
     c.posts=Array.isArray(c.posts)?c.posts:[];
-    c.posts.unshift({id:crypto.randomUUID(),url:String(body.url||'').trim(),platform:String(body.platform||'').trim(),views:Math.max(0,Number(body.views||0)||0),publishedAt:String(body.publishedAt||new Date().toISOString()),notes:String(body.notes||'').slice(0,2000),editingMinutes:Math.max(0,Number(body.editingMinutes||0)||0),clipDuration:Math.max(0,Number(body.clipDuration||0)||0),paid:Boolean(body.paid),createdAt:new Date().toISOString()});
+    c.posts.unshift({id:crypto.randomUUID(),url:String(body.url||'').trim(),platform:String(body.platform||'').trim(),views:Math.max(0,Number(body.views||0)||0),publishedAt:String(body.publishedAt||new Date().toISOString()),notes:String(body.notes||'').slice(0,2000),editingMinutes:Math.max(0,Number(body.editingMinutes||0)||0),clipDuration:Math.max(0,Number(body.clipDuration||0)||0),payoutConfirmed:Math.max(0,Number(body.payoutConfirmed||0)||0),submissionStatus:['pending','accepted','rejected'].includes(String(body.submissionStatus||''))?String(body.submissionStatus):'pending',paid:Boolean(body.paid),createdAt:new Date().toISOString()});
     c.updatedAt=new Date().toISOString(); await writeCampaigns(data); res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
@@ -909,7 +996,7 @@ app.put('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
     const data=await readCampaigns();const ci=data.campaigns.findIndex(c=>c.id===req.params.id);if(ci<0)return res.status(404).json({error:'Campaign not found.'});
     const c=data.campaigns[ci];c.posts=Array.isArray(c.posts)?c.posts:[];const pi=c.posts.findIndex(p=>p.id===req.params.postId);if(pi<0)return res.status(404).json({error:'Tracked post not found.'});
     const current=c.posts[pi],body=req.body||{};
-    c.posts[pi]={...current,url:body.url!==undefined?String(body.url||'').trim():current.url,platform:body.platform!==undefined?String(body.platform||'').trim():current.platform,views:body.views!==undefined?Math.max(0,Number(body.views||0)||0):current.views,clipDuration:body.clipDuration!==undefined?Math.max(0,Number(body.clipDuration||0)||0):current.clipDuration,editingMinutes:body.editingMinutes!==undefined?Math.max(0,Number(body.editingMinutes||0)||0):current.editingMinutes,paid:body.paid!==undefined?Boolean(body.paid):current.paid,updatedAt:new Date().toISOString()};
+    c.posts[pi]={...current,url:body.url!==undefined?String(body.url||'').trim():current.url,platform:body.platform!==undefined?String(body.platform||'').trim():current.platform,views:body.views!==undefined?Math.max(0,Number(body.views||0)||0):current.views,clipDuration:body.clipDuration!==undefined?Math.max(0,Number(body.clipDuration||0)||0):current.clipDuration,editingMinutes:body.editingMinutes!==undefined?Math.max(0,Number(body.editingMinutes||0)||0):current.editingMinutes,payoutConfirmed:body.payoutConfirmed!==undefined?Math.max(0,Number(body.payoutConfirmed||0)||0):Math.max(0,Number(current.payoutConfirmed||0)||0),submissionStatus:body.submissionStatus!==undefined&&['pending','accepted','rejected'].includes(String(body.submissionStatus))?String(body.submissionStatus):String(current.submissionStatus||'pending'),paid:body.paid!==undefined?Boolean(body.paid):current.paid,updatedAt:new Date().toISOString()};
     c.updatedAt=new Date().toISOString();await writeCampaigns(data);res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
@@ -949,7 +1036,7 @@ app.post('/api/campaigns/:id/batch-projects', async (req,res,next) => {
 app.get('/api/campaigns/:id/submission-pack', async (req,res,next) => {
   try {
     const data=await readCampaigns(); const campaign=data.campaigns.find(c=>c.id===req.params.id); if(!campaign)return res.status(404).json({error:'Campaign not found.'});
-    const totals=campaignTotals(campaign); const pack={generatedAt:new Date().toISOString(),campaign:{id:campaign.id,name:campaign.name,provider:campaign.provider,campaignUrl:campaign.campaignUrl,deadline:campaign.deadline,viewThreshold:campaign.viewThreshold,payout:campaign.payout,currency:campaign.currency,payoutMode:campaign.payoutMode},totals,posts:campaign.posts||[],usedMoments:campaign.usedMoments||[],requirements:{platforms:campaign.platforms,minDuration:campaign.minDuration,maxDuration:campaign.maxDuration,requiredHashtags:campaign.requiredHashtags,requiredMentions:campaign.requiredMentions,requiredCTA:campaign.requiredCTA}};
+    const totals=campaignTotals(campaign); const pack={generatedAt:new Date().toISOString(),campaign:{id:campaign.id,name:campaign.name,provider:campaign.provider,campaignUrl:campaign.campaignUrl,status:campaign.status,accessMode:campaign.accessMode,deadline:campaign.deadline,paymentModel:campaignPaymentModel(campaign),qualificationViews:campaign.qualificationViews??campaign.viewThreshold??0,qualificationScope:campaign.qualificationScope||'per-post',rateBasisViews:campaign.rateBasisViews||100000,platformPayouts:campaign.platformPayouts||{},fixedReward:campaign.fixedReward??campaign.payout??0,bountyPool:campaign.bountyPool||0,maxPayout:campaign.maxPayout||0,confirmedPayout:campaign.confirmedPayout||0,currency:campaign.currency},totals,posts:campaign.posts||[],usedMoments:campaign.usedMoments||[],requirements:{platforms:campaign.platforms,minDuration:campaign.minDuration,maxDuration:campaign.maxDuration,requiredHashtags:campaign.requiredHashtags,requiredMentions:campaign.requiredMentions,requiredCTA:campaign.requiredCTA,forbiddenTerms:campaign.forbiddenTerms||[]}};
     res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Content-Disposition',`attachment; filename="clipboost-campaign-${campaign.id}.json"`);res.send(JSON.stringify(pack,null,2));
   } catch(e){next(e)}
 });

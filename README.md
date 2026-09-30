@@ -1,3 +1,24 @@
+# ClipBoost 21.4.3 — Real Campaign Model
+
+V21.4.3 makes Campaigns match real paid-clipping platforms more closely. Campaign cards now model per-view rates, bounty pools, qualification thresholds, access state, platform-specific payouts, submission status and confirmed payout. Existing Campaign → Sources → AI Studio → Export → Tracking remains intact, with the silent updater and Smart YouTube Authentication preserved.
+
+## What changed
+
+- Payment models: **Per views**, **Bounty pool**, **Fixed reward**, and **Custom / manual**.
+- Minimum views to qualify are tracked separately from payout amounts.
+- Per-platform payout rates for TikTok, Instagram, YouTube and X, with configurable rate basis (for example per 100K views).
+- Campaign access: Open, Application required, or Private.
+- Maximum payout, bounty pool, fixed/default rate, and confirmed payout are separate fields.
+- Campaign cards now expose the real commercial terms and allowed platforms at a glance.
+- Campaign detail separates **Estimated payout** from **Confirmed payout**.
+- Published posts can be Pending / Accepted / Rejected and store confirmed payout.
+- Submission pack includes the richer payment model and rule data.
+- Public campaign URL import opportunistically recognizes obvious bounty/per-view/minimum-view terms when present on a public page. Manual review remains required.
+- Campaign saving now snapshots the form before rendering the saving state, preventing typed values from being lost during save.
+- Existing sources, AI Studio campaign context, View Potential, Campaign Fit, compliance checks and Used Moments remain preserved.
+
+---
+
 # ClipBoost 21.4.0 — Campaign Workspace
 
 ## 21.4.1 — Smart YouTube Authentication
