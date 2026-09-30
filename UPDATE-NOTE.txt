@@ -1,7 +1,15 @@
-Mint 21.10.1 — Results Navigation Fix
+Mint 21.11.0 — Premium Reference Pass
 
-Fix:
-- Results now opens the app's native #/analytics route.
-- This uses the existing hashchange handler in app.js.
-- No design changes.
-- No backend/API/updater changes.
+Visual changes:
+- Removes the cheap avatar-style hero illustrations.
+- Home and AI Studio now use real Library media thumbnails when available.
+- More polished typography scale, buttons, shadows, radii and spacing.
+- Reference-style Home, AI Studio, Campaign Studio, Library, Projects and Results.
+- Navigation still uses the original internal app handlers, with native analytics fallback.
+
+Data integrity:
+- KPI values come from real local APIs only.
+- No fabricated views, payouts, clips or campaign metrics.
+
+No backend, AI engine, Smart Import, Canto, updater or Auto Publisher logic changed.
+No .env or secrets included.

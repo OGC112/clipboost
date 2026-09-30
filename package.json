@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.10.1",
-  "description": "Mint Results navigation fix",
+  "version": "21.11.0",
+  "description": "Mint premium reference redesign using real media thumbnails",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
