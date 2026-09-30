@@ -395,6 +395,11 @@ function resourceLinksFromRequirements(snapshot={}, providerHost='') {
   }
   return out.slice(0,8);
 }
+function cantoDeclaredItemCount(snapshot={}) {
+  const text=String(snapshot?.text||'').replace(/\u00a0/g,' ');
+  const matches=[...text.matchAll(/(?:^|\n|\s)(\d{1,3})\s+Items?\b/gi)].map(m=>Number(m[1])).filter(n=>Number.isFinite(n)&&n>0&&n<=200);
+  return matches.length?Math.min(...matches):0;
+}
 function resourceSnapshotKind(snapshot={}) {
   const videoEls=Array.isArray(snapshot.videos)?snapshot.videos:[];
   const mediaHints=Array.isArray(snapshot.mediaHints)?snapshot.mediaHints:[];
@@ -410,29 +415,43 @@ async function inspectCampaignResource(item={}) {
   try{
     const top=await loadCampaignWorkerSnapshot(url);const topInfo=resourceSnapshotKind(top||{});
     let host='';try{host=new URL(url).hostname}catch{}
+    const isCanto=/canto\.global$/i.test(host);
+    const declaredItemCount=isCanto?cantoDeclaredItemCount(top||{}):0;
     const rawChildren=(Array.isArray(top?.links)?top.links:[]).map(x=>({url:String(x?.href||''),label:String(x?.text||'').trim()})).filter(x=>{try{const u=new URL(x.url);return u.hostname===host&&x.url!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(x.url)&&!/^downloads?$/i.test(x.label)}catch{return false}});
     const unique=[];const seen=new Set();
     for(const x of rawChildren){if(seen.has(x.url))continue;seen.add(x.url);unique.push(x)}
     // Canto shared galleries expose individual media on /s/... or viewIndex pages. Prefer those links.
     const preferred=unique.filter(x=>/\/s\//i.test(x.url)||/[?&]viewIndex=\d+/i.test(x.url));
-    const candidates=(preferred.length?preferred:unique).slice(0,12);
-    const items=[];const mediaUrls=new Set(topInfo.mediaUrls||[]);let videoCount=topInfo.videoCount||0;let imageCount=0;
+    const rawCandidates=preferred.length?preferred:unique;
+    // Canto often renders duplicate/hidden viewer links. Its visible "N Items" label is the reliable upper bound.
+    const candidates=rawCandidates.slice(0,declaredItemCount||12);
+    const items=[];const mediaUrls=new Set(topInfo.mediaUrls||[]);
+    let videoCount=isCanto&&declaredItemCount?0:Number(topInfo.videoCount||0);
+    let imageCount=0;
     for(const childRef of candidates){
       try{
         const child=await loadCampaignWorkerSnapshot(childRef.url);const childInfo=resourceSnapshotKind(child||{});
         if(!childInfo.videoCount&&!childInfo.imageCount)continue;
         const childKind=childInfo.videoCount&&childInfo.imageCount?'mixed':childInfo.videoCount?'video':'image';
-        items.push({url:childRef.url,label:childRef.label||`Asset ${items.length+1}`,kind:childKind,videoCount:Number(childInfo.videoCount||0),imageCount:Number(childInfo.imageCount||0)});
-        videoCount+=Number(childInfo.videoCount||0);imageCount+=Number(childInfo.imageCount||0);
+        // One viewer page represents one gallery item. Never count hidden duplicate <video> tags as separate assets.
+        const childVideos=childInfo.videoCount?1:0,childImages=childInfo.imageCount&&!childInfo.videoCount?1:0;
+        items.push({url:childRef.url,label:childRef.label||`Asset ${items.length+1}`,kind:childKind,videoCount:childVideos,imageCount:childImages});
+        videoCount+=childVideos;imageCount+=childImages;
         for(const mediaUrl of childInfo.mediaUrls||[])mediaUrls.add(mediaUrl);
       }catch{}
     }
-    // Gallery thumbnails are previews. Once child media are found, do not count those thumbnails as real images.
-    if(!items.length)imageCount=Number(topInfo.imageCount||0);
+    // Gallery thumbnails are previews. If child inspection is incomplete, use the gallery's declared item count only as a cap, never as extra guessed media.
+    if(!items.length&&!declaredItemCount)imageCount=Number(topInfo.imageCount||0);
+    if(declaredItemCount){
+      if(videoCount>declaredItemCount)videoCount=declaredItemCount;
+      if(imageCount>declaredItemCount)imageCount=declaredItemCount;
+      // Some Canto galleries expose the playable media only in a hidden viewer. If video media is clearly present, the visible item count is the authoritative count.
+      if(!videoCount&&Number(topInfo.videoCount||0)>0&&!imageCount)videoCount=declaredItemCount;
+    }
     const hasVideo=videoCount>0,hasImage=imageCount>0;
     const kind=hasVideo&&hasImage?'mixed-pack':hasVideo?'video-pack':hasImage?'image-pack':'asset-pack';
-    const mediaCount=items.length||Math.max(videoCount+imageCount,Number(topInfo.mediaCount||0));
-    return {...item,kind,videoCount,imageCount,mediaCount,mediaUrls:[...mediaUrls].slice(0,30),items:items.slice(0,20),inspectStatus:'ok'};
+    const mediaCount=declaredItemCount||items.length||Math.max(videoCount+imageCount,Number(topInfo.mediaCount||0));
+    return {...item,kind,videoCount,imageCount,mediaCount,declaredItemCount,mediaUrls:[...mediaUrls].slice(0,30),items:items.slice(0,20),inspectStatus:'ok'};
   }catch(err){return {...item,kind:'asset-pack',videoCount:0,imageCount:0,mediaCount:0,items:[],inspectStatus:'unavailable'};}
 }
 async function loadCampaignWorkerSnapshot(url) {
