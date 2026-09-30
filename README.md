@@ -11,6 +11,6 @@ Smart Import reviews are now recoverable instead of disposable. Closing the Revi
 - Explicit **Discard saved import** action with confirmation.
 - Keeps all 21.5.2 Canto asset pack/reference artwork fixes.
 
-## 21.5.4
+## 21.5.5
 
 Smart Import draft placement polish and safer Canto asset counting. Canto's visible item count now caps detected media so hidden player nodes cannot inflate video counts.

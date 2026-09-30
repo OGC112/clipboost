@@ -335,6 +335,29 @@ async function campaignBrowserSnapshot(win) {
         const hint=clean([el.getAttribute('aria-label'),el.getAttribute('data-type'),el.getAttribute('data-kind'),el.className].filter(Boolean).join(' '));
         return /video|movie|media|asset/i.test(hint) ? hint.slice(0,240) : '';
       }).filter(Boolean).slice(0,160),
+      visibleMediaTiles: (() => {
+        const visible = el => {
+          try {
+            const r=el.getBoundingClientRect(), cs=getComputedStyle(el);
+            return r.width >= 28 && r.height >= 28 && r.bottom > 0 && r.right > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity || 1) > 0;
+          } catch { return false; }
+        };
+        const raw=[...document.querySelectorAll('a[href],button,[role="button"],[class*="thumb"],[class*="asset"],[class*="tile"],[class*="item"]')].map(el => {
+          if(!visible(el))return null;
+          const media=el.matches('img,video')?el:el.querySelector('img,video');
+          if(!media||!visible(media))return null;
+          const mr=media.getBoundingClientRect();if(mr.width<36||mr.height<36)return null;
+          const anchor=el.closest('a[href]')||el.querySelector('a[href]');
+          const href=anchor?.href||'';
+          const src=media.tagName==='IMG'?(media.currentSrc||media.src||''):(media.poster||media.currentSrc||media.src||'');
+          const text=clean(el.getAttribute('aria-label')||el.innerText||el.textContent||media.alt||'');
+          if(/logo|roadshow films|download|close|next|previous|filter|search/i.test(text))return null;
+          return {href,src,text,width:Math.round(mr.width),height:Math.round(mr.height)};
+        }).filter(Boolean);
+        const out=[],seen=new Set();
+        for(const x of raw){const key=x.href||x.src;if(!key||seen.has(key))continue;seen.add(key);out.push(x)}
+        return out.slice(0,80);
+      })(),
       blocks: [...new Set([...document.querySelectorAll('article,[role="article"],[class*="card"],[class*="campaign"]')].map(el => clean(el.innerText || el.textContent)).filter(t => t.length >= 20 && t.length <= 2500))].slice(0,320)
     };
   })()`);
@@ -400,6 +423,17 @@ function cantoDeclaredItemCount(snapshot={}) {
   const matches=[...text.matchAll(/(?:^|\n|\s)(\d{1,3})\s+Items?\b/gi)].map(m=>Number(m[1])).filter(n=>Number.isFinite(n)&&n>0&&n<=200);
   return matches.length?Math.min(...matches):0;
 }
+function cantoVisibleAssetCount(snapshot={}) {
+  const tiles=Array.isArray(snapshot?.visibleMediaTiles)?snapshot.visibleMediaTiles:[];
+  const useful=tiles.filter(x=>{
+    const text=String(x?.text||'').toLowerCase(), href=String(x?.href||''), src=String(x?.src||'');
+    if(/logo|roadshow films|download|close|next|previous|filter|search/.test(text))return false;
+    if(/(?:logo|icon|avatar|spinner|loader)/i.test(src))return false;
+    if(/[?&]viewIndex=\d+/i.test(href)||/\/s\//i.test(href))return true;
+    return Number(x?.width||0)>=52&&Number(x?.height||0)>=52;
+  });
+  return Math.min(200,useful.length);
+}
 function resourceSnapshotKind(snapshot={}) {
   const videoEls=Array.isArray(snapshot.videos)?snapshot.videos:[];
   const mediaHints=Array.isArray(snapshot.mediaHints)?snapshot.mediaHints:[];
@@ -417,6 +451,7 @@ async function inspectCampaignResource(item={}) {
     let host='';try{host=new URL(url).hostname}catch{}
     const isCanto=/canto\.global$/i.test(host);
     const declaredItemCount=isCanto?cantoDeclaredItemCount(top||{}):0;
+    const visibleAssetCount=isCanto?cantoVisibleAssetCount(top||{}):0;
     const rawChildren=(Array.isArray(top?.links)?top.links:[]).map(x=>({url:String(x?.href||''),label:String(x?.text||'').trim()})).filter(x=>{try{const u=new URL(x.url);return u.hostname===host&&x.url!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(x.url)&&!/^downloads?$/i.test(x.label)}catch{return false}});
     const unique=[];const seen=new Set();
     for(const x of rawChildren){if(seen.has(x.url))continue;seen.add(x.url);unique.push(x)}
@@ -450,8 +485,13 @@ async function inspectCampaignResource(item={}) {
     }
     const hasVideo=videoCount>0,hasImage=imageCount>0;
     const kind=hasVideo&&hasImage?'mixed-pack':hasVideo?'video-pack':hasImage?'image-pack':'asset-pack';
-    const mediaCount=declaredItemCount||items.length||Math.max(videoCount+imageCount,Number(topInfo.mediaCount||0));
-    return {...item,kind,videoCount,imageCount,mediaCount,declaredItemCount,mediaUrls:[...mediaUrls].slice(0,30),items:items.slice(0,20),inspectStatus:'ok'};
+    const observedItemCount=Math.max(declaredItemCount,visibleAssetCount,items.length);
+    const mediaCount=observedItemCount||Math.max(videoCount+imageCount,Number(topInfo.mediaCount||0));
+    // Exact video totals are only claimed when the gallery itself declares N items and every item is confirmed as video.
+    // If Canto exposes only one playable child while multiple visible tiles exist, keep the pack as video media but mark the total as non-exact.
+    const videoCountExact=Boolean(declaredItemCount>0&&videoCount===declaredItemCount&&imageCount===0);
+    const multipleVideoEvidence=Boolean(isCanto&&hasVideo&&!videoCountExact&&observedItemCount>videoCount);
+    return {...item,kind,videoCount,imageCount,mediaCount,declaredItemCount,visibleAssetCount,observedItemCount,videoCountExact,multipleVideoEvidence,mediaUrls:[...mediaUrls].slice(0,30),items:items.slice(0,20),inspectStatus:'ok'};
   }catch(err){return {...item,kind:'asset-pack',videoCount:0,imageCount:0,mediaCount:0,items:[],inspectStatus:'unavailable'};}
 }
 async function loadCampaignWorkerSnapshot(url) {
@@ -466,7 +506,12 @@ async function loadCampaignWorkerSnapshot(url) {
   configureCampaignBrowser(worker);
   try {
     await worker.loadURL(target);
-    await sleep(1800);
+    let host='';try{host=new URL(target).hostname}catch{}
+    await sleep(/canto\.global$/i.test(host)?3200:1800);
+    // Give lazy-loaded Canto gallery tiles a chance to mount before counting them.
+    if(/canto\.global$/i.test(host)){
+      try{await worker.webContents.executeJavaScript(`window.scrollTo(0, Math.min(document.body.scrollHeight, 900)); true`);await sleep(650)}catch{}
+    }
     const snapshot = await campaignBrowserSnapshot(worker);
     return snapshot;
   } finally {
