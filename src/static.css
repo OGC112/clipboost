@@ -489,3 +489,26 @@
 .campaign-import-compact{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(520px,1.5fr);align-items:center;column-gap:20px;row-gap:10px}.campaign-import-copy{display:grid;gap:4px;min-width:0}.campaign-import-compact .campaign-import-box{min-width:0;width:100%}.campaign-import-compact .campaign-import-recovery{grid-column:1/-1;margin:0;padding:7px 9px;max-width:none;border-color:#3f315f;background:#110d20}.campaign-import-compact .campaign-import-recovery>span{display:flex;align-items:baseline;gap:7px}.campaign-import-compact .campaign-import-recovery b{font-size:10px}.campaign-import-compact .campaign-import-recovery small{font-size:9px}.campaign-import-compact .campaign-import-recovery .compact-btn{padding:7px 10px}.campaign-import-compact .campaign-import-recovery .icon-btn{width:30px;height:30px}
 @media(max-width:1100px){.campaign-import-compact{grid-template-columns:1fr}.campaign-import-compact .campaign-import-recovery{grid-column:1}}
 @media(max-width:620px){.campaign-import-compact .campaign-import-recovery{align-items:flex-start;flex-wrap:wrap}.campaign-import-compact .campaign-import-recovery>span{display:grid;flex-basis:100%}.campaign-import-compact .campaign-import-recovery .compact-btn{margin-left:0}}
+
+/* ClipBoost 21.5.6 — Campaign Asset Pack Browser */
+.campaign-resource-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.campaign-asset-browser-backdrop{padding:28px;align-items:center;justify-content:center}
+.campaign-asset-browser{width:min(1120px,94vw);max-height:88vh;overflow:auto;padding:0;border:1px solid rgba(139,92,246,.42);box-shadow:0 28px 80px rgba(0,0,0,.55)}
+.campaign-asset-browser-head{position:sticky;top:0;z-index:3;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:20px 22px;border-bottom:1px solid rgba(148,163,184,.14);background:rgba(9,18,32,.97);backdrop-filter:blur(14px)}
+.campaign-asset-browser-head h2{margin:4px 0 6px;font-size:22px}
+.campaign-asset-browser-head p{margin:0;color:#91a6c4;max-width:720px}
+.campaign-asset-browser-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.campaign-asset-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:18px}
+.campaign-asset-card{overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:#0a1524}
+.campaign-asset-preview{aspect-ratio:16/9;background:#02060d;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.campaign-asset-preview video,.campaign-asset-preview img{width:100%;height:100%;object-fit:contain;background:#000}
+.campaign-asset-placeholder{font-size:12px;letter-spacing:.14em;color:#7186a7;border:1px dashed rgba(148,163,184,.25);padding:16px 20px;border-radius:10px}
+.campaign-asset-card-copy{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px}
+.campaign-asset-card-copy>div:first-child{min-width:0;display:flex;flex-direction:column;gap:4px}
+.campaign-asset-card-copy b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.campaign-asset-card-copy small{color:#8196b4}
+.campaign-asset-card-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.campaign-asset-browser-loading,.campaign-asset-browser-empty{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:36px;color:#90a6c5}
+.campaign-asset-browser-loading strong,.campaign-asset-browser-empty b{color:#eef5ff;font-size:17px}
+.campaign-asset-browser-empty p{max-width:580px;margin:0}
+@media (max-width:900px){.campaign-asset-grid{grid-template-columns:1fr}.campaign-asset-browser-head,.campaign-asset-card-copy{align-items:stretch;flex-direction:column}.campaign-asset-browser-actions,.campaign-asset-card-actions{justify-content:flex-start}}

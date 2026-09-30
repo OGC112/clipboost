@@ -519,6 +519,62 @@ async function loadCampaignWorkerSnapshot(url) {
     if (campaignImportWorker === worker) campaignImportWorker = null;
   }
 }
+async function discoverCampaignAssetPack(rawUrl) {
+  const target=safeHttpUrl(rawUrl);if(!target)throw new Error('Invalid asset pack URL.');
+  let host='';try{host=new URL(target).hostname}catch{}
+  if(!/canto\.global$/i.test(host)){
+    const inspected=await inspectCampaignResource({url:target,label:'Campaign asset'});
+    const fallback=(inspected.mediaUrls||[]).map((mediaUrl,i)=>({label:`Media ${i+1}`,kind:'video',mediaUrl,pageUrl:target,previewUrl:'',duration:0}));
+    return {ok:true,items:fallback,summary:fallback.length?`${fallback.length} directly usable media file${fallback.length===1?'':'s'} detected.`:'No direct media file was exposed by this pack.'};
+  }
+  const worker=new BrowserWindow({width:1180,height:820,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  configureCampaignBrowser(worker);
+  const items=[],seenMedia=new Set();
+  const waitForGallery=async()=>{await sleep(2600);try{await worker.webContents.executeJavaScript(`window.scrollTo(0, Math.min(document.body.scrollHeight, 900)); true`);await sleep(650)}catch{}};
+  const clickTile=async index=>worker.webContents.executeJavaScript(`(() => {
+    const idx=${Number(index)};
+    const visible=el=>{try{const r=el.getBoundingClientRect(),cs=getComputedStyle(el);return r.width>=28&&r.height>=28&&r.bottom>0&&r.right>0&&cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity||1)>0}catch{return false}};
+    const clean=v=>String(v||'').replace(/\\s+/g,' ').trim();
+    const raw=[...document.querySelectorAll('a[href],button,[role="button"],[class*="thumb"],[class*="asset"],[class*="tile"],[class*="item"]')].map(el=>{
+      if(!visible(el))return null;const media=el.matches('img,video')?el:el.querySelector('img,video');if(!media||!visible(media))return null;
+      const r=media.getBoundingClientRect();if(r.width<36||r.height<36)return null;
+      const src=media.tagName==='IMG'?(media.currentSrc||media.src||''):(media.poster||media.currentSrc||media.src||'');
+      const text=clean(el.getAttribute('aria-label')||el.innerText||el.textContent||media.alt||'');if(/logo|roadshow films|download|close|next|previous|filter|search/i.test(text))return null;
+      const clickable=el.closest('a[href],button,[role="button"]')||el;const href=clickable.href||clickable.closest?.('a[href]')?.href||'';
+      return {el:clickable,src,text,href};
+    }).filter(Boolean);
+    const out=[],seen=new Set();for(const x of raw){const key=x.src||x.href;if(!key||seen.has(key))continue;seen.add(key);out.push(x)}
+    const x=out[idx];if(!x)return {clicked:false,count:out.length};x.el.click();return {clicked:true,count:out.length,previewUrl:x.src||'',label:x.text||'',href:x.href||''};
+  })()`);
+  try{
+    await worker.loadURL(target);await waitForGallery();
+    let top=await campaignBrowserSnapshot(worker);const declared=cantoDeclaredItemCount(top||{}),visible=cantoVisibleAssetCount(top||{});const targetCount=Math.min(12,Math.max(declared,visible,(top?.visibleMediaTiles||[]).length,1));
+    for(let i=0;i<targetCount;i++){
+      if(i>0){try{await worker.loadURL(target);await waitForGallery()}catch{continue}}
+      let clicked=null;try{clicked=await clickTile(i)}catch{}
+      if(!clicked?.clicked)continue;
+      await sleep(1150);
+      let snap=null;try{snap=await campaignBrowserSnapshot(worker)}catch{}
+      let videos=Array.isArray(snap?.videos)?snap.videos:[];
+      if(!videos.some(v=>/^https?:/i.test(String(v?.src||''))||(v?.sources||[]).some(x=>/^https?:/i.test(String(x||''))))) {
+        try{await worker.webContents.executeJavaScript(`(() => { const b=[...document.querySelectorAll('button,[role="button"]')].find(el=>/play/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||''))); if(b){b.click();return true} const v=document.querySelector('video'); if(v){try{v.play()}catch{};return true} return false })()`);await sleep(700);snap=await campaignBrowserSnapshot(worker);videos=Array.isArray(snap?.videos)?snap.videos:[]}catch{}
+      }
+      const candidates=[];for(const v of videos){for(const u of [v?.src,...(v?.sources||[])])if(/^https?:/i.test(String(u||'')))candidates.push(String(u))}
+      const mediaUrl=candidates.find(u=>!seenMedia.has(u))||'';
+      const v=videos.find(v=>String(v?.src||'')===mediaUrl||(v?.sources||[]).includes(mediaUrl))||videos[0]||{};
+      const pageUrl=safeHttpUrl(snap?.url)||clicked.href||target;const previewUrl=String(v?.poster||clicked.previewUrl||'');
+      if(mediaUrl){seenMedia.add(mediaUrl);items.push({label:clicked.label||`Video ${i+1}`,kind:'video',mediaUrl,pageUrl,previewUrl,duration:Number(v?.duration||0)||0})}
+      else if(clicked.href||clicked.previewUrl){items.push({label:clicked.label||`Media ${i+1}`,kind:'media',mediaUrl:'',pageUrl:safeHttpUrl(clicked.href)||pageUrl,previewUrl:clicked.previewUrl||'',duration:0})}
+    }
+    if(!items.some(x=>x.mediaUrl)){
+      const inspected=await inspectCampaignResource({url:target,label:'Campaign asset'});
+      for(const mediaUrl of inspected.mediaUrls||[]){if(!/^https?:/i.test(mediaUrl)||seenMedia.has(mediaUrl))continue;seenMedia.add(mediaUrl);items.push({label:`Video ${items.length+1}`,kind:'video',mediaUrl,pageUrl:target,previewUrl:'',duration:0})}
+    }
+    const direct=items.filter(x=>x.mediaUrl).length;const summary=direct?`${direct} video${direct===1?'':'s'} ready to preview and send to AI Studio${items.length>direct?` · ${items.length-direct} additional item${items.length-direct===1?'':'s'} can be opened in Canto`:''}.`:`${items.length||0} pack item${items.length===1?'':'s'} detected, but Canto did not expose a direct video URL for AI Studio.`;
+    return {ok:true,items:items.slice(0,12),summary};
+  } finally {if(!worker.isDestroyed())worker.destroy()}
+}
+
 async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot=null, termsSnapshot=null, resourceInspections=[]) {
   const endpoint = backendRuntimeUrl('/api/campaigns/import-snapshot');
   if (!endpoint) throw new Error('ClipBoost backend is not available.');
@@ -737,6 +793,7 @@ function stopBackend() { stopBackendTree(); }
 
 ipcMain.on('desktop:activity', () => markRendererActivity());
 ipcMain.handle('desktop:import-campaign-authenticated', async (_event, url) => runAuthenticatedCampaignImport(url));
+ipcMain.handle('desktop:inspect-campaign-asset-pack', async (_event, url) => { try { return await discoverCampaignAssetPack(url); } catch (err) { return { ok:false, error:err?.message || 'Could not inspect this asset pack.' }; } });
 ipcMain.handle('desktop:clear-campaign-import-session', async () => { await session.fromPartition(CAMPAIGN_IMPORT_PARTITION).clearStorageData(); return { ok:true }; });
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });

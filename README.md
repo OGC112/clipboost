@@ -1,3 +1,16 @@
+# ClipBoost 21.5.6 — Asset Pack Browser
+
+Campaign asset packs are now usable inside ClipBoost instead of being external links only. In Campaigns → Sources, **Browse media** inspects the Canto pack with the same persistent authenticated campaign session, shows the media that Canto actually exposes, lets you preview detected videos, and sends a selected direct video into AI Studio while keeping the campaign context attached.
+
+## 21.5.6 highlights
+- New **Browse media** action for campaign asset packs.
+- Canto packs are inspected on demand rather than trusting the import-time media counter.
+- Detected direct videos can be previewed inside ClipBoost.
+- **Edit with AI Studio** creates a campaign-linked project from the selected asset and starts ingestion immediately.
+- Items whose direct media URL is not exposed are never guessed; they remain openable in Canto.
+- The original pack is always one click away.
+- Keeps Smart Import, reference-artwork separation, 100K qualification cross-check, recoverable review drafts, Eco AI mode and seamless updates.
+
 # ClipBoost 21.5.3 — Recoverable Smart Import Review
 
 Smart Import reviews are now recoverable instead of disposable. Closing the Review Import modal no longer destroys the imported campaign draft. ClipBoost saves the unsaved review locally and exposes a **Review import** action on the Campaigns page. The draft also survives navigation and a full app restart until the campaign is saved, explicitly discarded, or replaced by a newer Smart Import.

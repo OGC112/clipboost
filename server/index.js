@@ -1292,8 +1292,8 @@ app.delete('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
 app.post('/api/campaigns/:id/source-project', async (req,res,next) => {
   try {
     const data=await readCampaigns(); const campaign=data.campaigns.find(c=>c.id===req.params.id); if(!campaign)return res.status(404).json({error:'Campaign not found.'});
-    const sourceId=String(req.body?.sourceId||''); const requested=String(req.body?.url||'').trim();
-    const source=campaign.sourceUrls.find(s=>s.id===sourceId)||(requested?{url:requested,label:'Campaign source'}:null);
+    const sourceId=String(req.body?.sourceId||''); const requested=String(req.body?.url||'').trim(); const requestedLabel=String(req.body?.label||'').trim();
+    const source=campaign.sourceUrls.find(s=>s.id===sourceId)||(requested?{url:requested,label:requestedLabel||'Campaign asset'}:null);
     if(!source?.url)return res.status(400).json({error:'Campaign source not found.'});
     const parsed=parseCampaignSourceUrl(source.url); if(!parsed)return res.status(400).json({error:'Unsupported source URL.'});
     const id=crypto.randomUUID();

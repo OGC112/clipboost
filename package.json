@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.5.5",
-  "description": "Confidence-aware Canto media counts, recoverable Smart Import drafts, campaign cross-checking, Eco AI mode and seamless silent updates",
+  "version": "21.5.6",
+  "description": "Campaign Asset Pack Browser with Canto media preview and direct AI Studio handoff, Smart Import recovery, Eco AI mode and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('clipboostDesktop', {
   getSettings: () => ipcRenderer.invoke('desktop:get-settings'),
   importCampaignAuthenticated: (url) => ipcRenderer.invoke('desktop:import-campaign-authenticated', url),
+  inspectCampaignAssetPack: (url) => ipcRenderer.invoke('desktop:inspect-campaign-asset-pack', url),
   clearCampaignImportSession: () => ipcRenderer.invoke('desktop:clear-campaign-import-session'),
   saveSettings: (settings) => ipcRenderer.invoke('desktop:save-settings', settings),
   checkForUpdates: () => ipcRenderer.invoke('desktop:check-updates'),
