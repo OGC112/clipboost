@@ -1,0 +1,121 @@
+/* Mint 21.14.5 — Header cleanup
+   - remove search bar
+   - remove visible header/page demarcation
+   - physically center the workflow navigation
+   - keep only Settings + update state on the right
+*/
+
+.mint-clean-topbar{
+  height:78px!important;
+  grid-template-columns:220px minmax(0,1fr) 220px!important;
+  padding:0 28px!important;
+  background:transparent!important;
+  border-bottom:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.mint-clean-topbar:after{
+  content:none!important;
+}
+.mint-clean-topbar .mint-home-brand{
+  justify-self:start!important;
+}
+.mint-centered-nav{
+  justify-self:center!important;
+  width:max-content!important;
+  max-width:100%!important;
+}
+.mint-clean-actions{
+  justify-self:end!important;
+  min-width:0!important;
+}
+.mint-clean-actions .update-pill{
+  max-width:165px!important;
+}
+.mint-clean-actions .mint-settings-gear{
+  width:38px!important;
+  height:38px!important;
+  border:0!important;
+  background:rgba(255,255,255,.035)!important;
+  color:#9b9da7!important;
+  border-radius:10px!important;
+}
+.mint-clean-actions .mint-settings-gear:hover{
+  background:rgba(255,255,255,.065)!important;
+  color:#d7d8de!important;
+}
+
+/* Menu refinement after search removal */
+.mint-centered-nav{
+  gap:13px!important;
+}
+.mint-centered-nav .mint-nav-home{
+  min-width:62px!important;
+}
+.mint-centered-nav .mint-nav-group{
+  gap:4px!important;
+}
+.mint-centered-nav .mint-nav-label{
+  padding-left:9px!important;
+  color:#60616a!important;
+  font-size:6.5px!important;
+  letter-spacing:.13em!important;
+}
+.mint-centered-nav .mint-nav-group button{
+  padding:0 11px!important;
+  font-size:10.5px!important;
+}
+.mint-centered-nav .mint-nav-separator{
+  margin:0 2px!important;
+  height:32px!important;
+  opacity:.7!important;
+}
+
+/* Blend header and page into a single continuous surface */
+.main{
+  background:
+    radial-gradient(circle at 18% -12%, rgba(124,92,252,.035), transparent 26%),
+    linear-gradient(180deg,#0b0c10 0%,#090a0e 100%)!important;
+}
+.mint-home-page,
+.mint-studio-page-v142,
+.campaign-discover-v143{
+  padding-top:18px!important;
+}
+.mint-home-heading{
+  padding-top:2px!important;
+}
+
+/* Avoid old search styles taking layout space if stale markup survives briefly */
+.mint-home-search{
+  display:none!important;
+}
+
+@media(max-width:1250px){
+  .mint-clean-topbar{
+    grid-template-columns:170px minmax(0,1fr) 170px!important;
+    padding:0 20px!important;
+  }
+  .mint-centered-nav{gap:7px!important}
+  .mint-centered-nav .mint-nav-group button{
+    padding:0 8px!important;
+    font-size:9.5px!important;
+  }
+}
+@media(max-width:980px){
+  .mint-clean-topbar{
+    grid-template-columns:auto 1fr auto!important;
+  }
+  .mint-centered-nav{
+    gap:3px!important;
+  }
+  .mint-centered-nav .mint-nav-label{
+    display:none!important;
+  }
+  .mint-centered-nav .mint-nav-group{
+    display:block!important;
+  }
+  .mint-centered-nav .mint-nav-separator{
+    height:26px!important;
+  }
+}

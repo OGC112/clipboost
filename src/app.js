@@ -1,3 +1,4 @@
+/* MINT-HEADER-21.14.5 */
 /* MINT-NAVIGATION-21.14.3 */
 /* MINT-AI-STUDIO-21.14.2 */
 /* MINT-HOME-21.14.1 */
@@ -103,12 +104,12 @@
     const updatePill=['checking','downloading','ready','error'].includes(u.status)
       ? `<button class="update-pill ${u.status}" id="updateCenterBtn" type="button"><span>${u.status==='ready'?'✓':u.status==='error'?'!':'↻'}</span>${u.status==='downloading'?`Update ${Math.round(u.percent||0)}%`:u.status==='checking'?'Checking update…':u.status==='ready'?`Update ${escapeHtml(u.version||'')} ready`:'Update issue'}</button>`
       : '';
-    return `<header class="topbar mint-home-topbar mint-split-topbar">
+    return `<header class="topbar mint-home-topbar mint-split-topbar mint-clean-topbar">
       <button class="mint-home-brand" data-page="home" type="button">
         <span class="mint-home-logo"><i></i><b></b></span><strong>Mint</strong>
       </button>
 
-      <nav class="mint-split-nav">
+      <nav class="mint-split-nav mint-centered-nav">
         <button data-page="home" class="mint-nav-home ${state.page==='home'?'active':''}" type="button">Home</button>
 
         <div class="mint-nav-group campaign-group">
@@ -132,9 +133,8 @@
         </div>
       </nav>
 
-      <div class="mint-home-top-actions mint-split-actions">
+      <div class="mint-home-top-actions mint-split-actions mint-clean-actions">
         ${updatePill}
-        <label class="mint-home-search"><span>⌕</span><input type="text" placeholder="Search projects, campaigns, media…"></label>
         <button class="mint-home-icon-btn mint-settings-gear" data-page="settings" type="button" aria-label="Settings" title="Settings">⚙</button>
       </div>
     </header>`

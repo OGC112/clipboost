@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.4",
-  "description": "Mint premium art direction polish",
+  "version": "21.14.5",
+  "description": "Mint header cleanup and centered workflow navigation",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
