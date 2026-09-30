@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.3",
-  "description": "Mint navigation split: Campaigns vs Create workflows",
+  "version": "21.14.4",
+  "description": "Mint premium art direction polish",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

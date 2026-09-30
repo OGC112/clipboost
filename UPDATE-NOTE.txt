@@ -1,24 +1,21 @@
-Mint 21.14.3 — Product Navigation Split
+Mint 21.14.4 — Premium Art Direction
 
-Mint is now presented as two clear workflows.
+Structure is unchanged.
 
-CAMPAIGNS
-- Discover: campaign search/import + campaign information
-- Campaign Studio: campaign editing workspace
-- Results: campaign performance
+This pass addresses the "cheap dashboard" feeling by changing only visual direction:
+- neutral graphite background instead of blue-black
+- much fewer visible borders
+- flatter premium surfaces instead of outlined dashboard cards
+- violet changed from neon/magenta to a more restrained accent
+- reduced gradients
+- lighter title weights and better typography hierarchy
+- larger metadata where necessary
+- campaign stats simplified into rows instead of mini-dashboard boxes
+- recent project cards become media-first instead of bordered widgets
+- top navigation becomes more restrained
+- AI Studio surfaces now use the same graphite system
+- Campaign Discover matches the same visual system
 
-CREATE
-- AI Studio: long-form to short-form editing / own video creation
-- Library: creator content discovery
-- Projects: non-campaign creative projects
-
-Other changes
-- Settings is removed from the page menu.
-- Settings is now a gear icon at the top right.
-- Home remains the global entry point.
-- Added a dedicated Campaign Discover page.
-- Campaign cards can open directly into Campaign Studio.
-
-No backend changes.
-No AI engine, Smart Import, Canto, updater or Auto Publisher changes.
+No page hierarchy changes.
+No backend, AI engine, Smart Import, Canto, updater or Auto Publisher changes.
 No .env or secrets included.
