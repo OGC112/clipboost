@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.5.1",
-  "description": "Campaign Smart Import cross-checks, asset classification, shared platform rules, Eco AI mode and seamless silent updates",
+  "version": "21.5.2",
+  "description": "Canto asset discovery, reference artwork separation, Campaign Smart Import, Eco AI mode and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

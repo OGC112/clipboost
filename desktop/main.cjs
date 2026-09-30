@@ -325,7 +325,7 @@ async function campaignBrowserSnapshot(win) {
       headings: headingEls.map(h => ({ level:h.tagName.toLowerCase(), text:clean(h.innerText || h.textContent) })).filter(x => x.text).slice(0,160),
       links: [...document.querySelectorAll('a[href]')].map(a => ({ text:clean(a.innerText || a.textContent), href:a.href, section:headingFor(a) })).filter(x => /^https?:/i.test(x.href)).slice(0,500),
       listItems: [...document.querySelectorAll('li')].map(li => ({ text:clean(li.innerText || li.textContent), section:headingFor(li) })).filter(x => x.text).slice(0,500),
-      images: [...document.querySelectorAll('img[src]')].map(img => ({ alt:clean(img.alt), src:img.currentSrc || img.src })).filter(x => /^https?:/i.test(x.src)).slice(0,160),
+      images: [...document.querySelectorAll('img[src]')].map(img => ({ alt:clean(img.alt), src:img.currentSrc || img.src, width:Number(img.naturalWidth||img.width||0), height:Number(img.naturalHeight||img.height||0) })).filter(x => /^https?:/i.test(x.src)).slice(0,160),
       videos: [...document.querySelectorAll('video')].map(v => ({
         src:v.currentSrc || v.src || '', poster:v.poster || '',
         duration:Number.isFinite(v.duration) ? Number(v.duration) : null,
@@ -386,7 +386,11 @@ function resourceLinksFromRequirements(snapshot={}, providerHost='') {
     if(!/^https?:\/\//i.test(href))continue;
     let host='';try{host=new URL(href).hostname.replace(/^www\./,'').toLowerCase()}catch{}
     if(!host||host===providerHost||/clipping\.net$/i.test(host)||/(?:youtube\.com|youtu\.be|twitch\.tv)$/i.test(host)||host.endsWith('.youtube.com')||host.endsWith('.twitch.tv'))continue;
-    const relevant=/^(content|sources?|assets?|media)$/i.test(section)||/^(assets?(?:\s*#?\d+)?|media|downloads?)$/i.test(label)||/asset|media/i.test(label);
+    // Generic "Download" links inside Clip Requirements are reference artwork, not asset packs.
+    const assetLabel=/^(assets?(?:\s*#?\d+)?|media(?:\s*#?\d+)?)$/i.test(label)||/\basset(?:s)?\b/i.test(label);
+    const assetSection=/^(content|sources?|assets?|media)$/i.test(section);
+    const isGenericDownload=/^downloads?$/i.test(label);
+    const relevant=assetLabel||(assetSection&&!isGenericDownload);
     if(!relevant||seen.has(href))continue;seen.add(href);out.push({url:href,label:label||'Campaign asset'});
   }
   return out.slice(0,8);
@@ -396,24 +400,40 @@ function resourceSnapshotKind(snapshot={}) {
   const mediaHints=Array.isArray(snapshot.mediaHints)?snapshot.mediaHints:[];
   const videoLinks=(Array.isArray(snapshot.links)?snapshot.links:[]).filter(x=>/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)/i.test(String(x?.href||'')));
   const videoCount=Math.max(videoEls.length,videoLinks.length,mediaHints.filter(x=>/video|movie/i.test(String(x))).length?1:0);
-  const imageCount=(Array.isArray(snapshot.images)?snapshot.images:[]).filter(x=>!/(?:logo|icon|avatar)/i.test(String(x?.alt||''))).length;
+  const imageCount=(Array.isArray(snapshot.images)?snapshot.images:[]).filter(x=>!/(?:logo|icon|avatar|brand mark)/i.test(String(x?.alt||''))&&Number(x?.width||0)>=220&&Number(x?.height||0)>=120).length;
   let kind='asset-pack';if(videoCount&&imageCount)kind='mixed-pack';else if(videoCount)kind='video-pack';else if(imageCount)kind='image-pack';
   const mediaUrls=[...new Set([...videoEls.flatMap(v=>[v.src,...(v.sources||[])]),...videoLinks.map(x=>x.href)].filter(x=>/^https?:/i.test(String(x))))].slice(0,20);
   return {kind,videoCount,imageCount,mediaCount:Math.max(videoCount+imageCount,videoCount,imageCount),mediaUrls};
 }
 async function inspectCampaignResource(item={}) {
-  const url=safeHttpUrl(item.url);if(!url)return {...item,kind:'external',inspectStatus:'invalid'};
+  const url=safeHttpUrl(item.url);if(!url)return {...item,kind:'external',inspectStatus:'invalid',items:[]};
   try{
-    const top=await loadCampaignWorkerSnapshot(url);let info=resourceSnapshotKind(top||{});
-    if(info.videoCount===0){
-      let host='';try{host=new URL(url).hostname}catch{}
-      const childLinks=(Array.isArray(top?.links)?top.links:[]).map(x=>String(x?.href||'')).filter(h=>{try{const u=new URL(h);return u.hostname===host&&h!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(h)}catch{return false}});
-      for(const childUrl of [...new Set(childLinks)].slice(0,4)){
-        try{const child=await loadCampaignWorkerSnapshot(childUrl);const childInfo=resourceSnapshotKind(child||{});if(childInfo.videoCount){info={kind:childInfo.imageCount?'mixed-pack':'video-pack',videoCount:info.videoCount+childInfo.videoCount,imageCount:Math.max(info.imageCount,childInfo.imageCount),mediaCount:Math.max(1,info.mediaCount)+Math.max(1,childInfo.mediaCount),mediaUrls:[...new Set([...(info.mediaUrls||[]),...(childInfo.mediaUrls||[])])].slice(0,20)};break}}catch{}
-      }
+    const top=await loadCampaignWorkerSnapshot(url);const topInfo=resourceSnapshotKind(top||{});
+    let host='';try{host=new URL(url).hostname}catch{}
+    const rawChildren=(Array.isArray(top?.links)?top.links:[]).map(x=>({url:String(x?.href||''),label:String(x?.text||'').trim()})).filter(x=>{try{const u=new URL(x.url);return u.hostname===host&&x.url!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(x.url)&&!/^downloads?$/i.test(x.label)}catch{return false}});
+    const unique=[];const seen=new Set();
+    for(const x of rawChildren){if(seen.has(x.url))continue;seen.add(x.url);unique.push(x)}
+    // Canto shared galleries expose individual media on /s/... or viewIndex pages. Prefer those links.
+    const preferred=unique.filter(x=>/\/s\//i.test(x.url)||/[?&]viewIndex=\d+/i.test(x.url));
+    const candidates=(preferred.length?preferred:unique).slice(0,12);
+    const items=[];const mediaUrls=new Set(topInfo.mediaUrls||[]);let videoCount=topInfo.videoCount||0;let imageCount=0;
+    for(const childRef of candidates){
+      try{
+        const child=await loadCampaignWorkerSnapshot(childRef.url);const childInfo=resourceSnapshotKind(child||{});
+        if(!childInfo.videoCount&&!childInfo.imageCount)continue;
+        const childKind=childInfo.videoCount&&childInfo.imageCount?'mixed':childInfo.videoCount?'video':'image';
+        items.push({url:childRef.url,label:childRef.label||`Asset ${items.length+1}`,kind:childKind,videoCount:Number(childInfo.videoCount||0),imageCount:Number(childInfo.imageCount||0)});
+        videoCount+=Number(childInfo.videoCount||0);imageCount+=Number(childInfo.imageCount||0);
+        for(const mediaUrl of childInfo.mediaUrls||[])mediaUrls.add(mediaUrl);
+      }catch{}
     }
-    return {...item,...info,inspectStatus:'ok'};
-  }catch(err){return {...item,kind:'asset-pack',videoCount:0,imageCount:0,mediaCount:0,inspectStatus:'unavailable'};}
+    // Gallery thumbnails are previews. Once child media are found, do not count those thumbnails as real images.
+    if(!items.length)imageCount=Number(topInfo.imageCount||0);
+    const hasVideo=videoCount>0,hasImage=imageCount>0;
+    const kind=hasVideo&&hasImage?'mixed-pack':hasVideo?'video-pack':hasImage?'image-pack':'asset-pack';
+    const mediaCount=items.length||Math.max(videoCount+imageCount,Number(topInfo.mediaCount||0));
+    return {...item,kind,videoCount,imageCount,mediaCount,mediaUrls:[...mediaUrls].slice(0,30),items:items.slice(0,20),inspectStatus:'ok'};
+  }catch(err){return {...item,kind:'asset-pack',videoCount:0,imageCount:0,mediaCount:0,items:[],inspectStatus:'unavailable'};}
 }
 async function loadCampaignWorkerSnapshot(url) {
   const target = safeHttpUrl(url);

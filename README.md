@@ -1,3 +1,18 @@
+# ClipBoost 21.5.2 — Canto Asset Discovery
+
+V21.5.2 separates real campaign media packs from requirement artwork during authenticated Smart Import. Canto galleries are inspected through hidden browser workers, generic requirement download links are stored as reference artwork, and imported asset packs can be opened safely from Review/Sources after the import browser closes.
+
+## 21.5.2 highlights
+
+- CLIPPING.NET `Assets` / `Assets #2` remain campaign asset packs instead of being confused with requirement download images.
+- Generic `Download` links under Clip Requirements are stored as **Reference artwork** and are not counted as editable media.
+- Canto gallery thumbnails no longer count as real image assets.
+- ClipBoost follows Canto child media pages in the background and counts detected videos across the pack.
+- Review Import now shows direct sources, asset packs, reference images, requirements and violations separately.
+- Asset pack links in Review/Sources open externally, so the Smart Import window closing cannot prevent opening the second pack.
+- When Smart Import starts from the campaign listing, ClipBoost keeps the actual selected campaign detail URL rather than saving `/dashboard/campaigns`.
+- Existing 21.5.1 cross-checking, platform rules, Eco AI mode, stuck-project recovery and silent updater remain preserved.
+
 # ClipBoost 21.4.9 — Stuck Project Recovery
 
 V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
