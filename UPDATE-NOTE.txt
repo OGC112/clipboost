@@ -1,15 +1,24 @@
-Mint 21.13.0 — True Structural Rebuild
+ClipBoost 21.14.0 — Original Design Rollback
 
-This release no longer uses a post-render Mint overlay.
+This rollback restores the exact frontend files from ClipBoost v21.6.0
+(commit 243cb278112bff6f5cb2a85896222ebc1082b3ba), which is the version
+immediately before the redesign work began.
 
-During npm install, scripts/apply-21.13-ui.cjs patches src/app.js directly:
-- replaces the native top navigation
-- rebuilds Home markup
-- rebuilds AI Studio's final markup into a 2-column editing workbench
-- rebuilds Library markup into a source sidebar + media grid
-- rebuilds Projects into media-first cards
-- rebuilds Results using real saved campaign/post data only
-- rebuilds Campaign Studio into a campaign sidebar + selected workspace
+Restored:
+- src/app.js
+- src/static.css
+- index.html
 
-The patch preserves the existing state, APIs, IDs and data-* hooks used by bind().
-No backend endpoints, AI engine, Smart Import, Canto, updater logic, or secrets are changed.
+Cleanup:
+- removes mint-*.css / mint-*.js redesign layers
+- removes redesign-*.css/js layers
+- removes prior apply-21.* UI patch scripts
+- removes its own postinstall hook after the rollback has run
+
+Preserved:
+- Mint display branding in the restored UI
+- current repository/backend files not related to the frontend rollback
+- Auto Publisher / updater workflow
+- no .env or secrets are touched
+
+The rollback is applied during npm install, before Auto Publisher creates its commit.
