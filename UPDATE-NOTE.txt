@@ -1,16 +1,19 @@
-Mint 21.9.0 — Reference Reset
+Mint 21.10.0 — Stable Reference Build
 
-This release stops loading every previous Mint override stylesheet/script.
-Only the base app + one clean Mint 21.9 UI layer are loaded.
+Key fix:
+- Navigation now calls the app's original data-page handlers instead of changing the hash directly.
+- Settings remains accessible.
+- Previous Mint CSS/JS layers are not loaded.
 
-Reference-driven changes:
-- Home rebuilt into a media-first hero, one KPI row, Recent Clips and Active Campaigns.
-- AI Studio receives the reference-style hero, five feature cards and a cleaner editor shell.
-- Campaign Studio receives the illustrated hero, 4-step workflow and horizontal active-campaign area.
-- Library becomes a real media-card grid while preserving existing creator/source actions.
-- Projects becomes a two-column media-first project grid.
-- Results is kept factual and simplified.
-- Mint navigation and Settings access remain available.
+Visual direction:
+- Built from the approved reference board.
+- Warm white background, compact top navigation, media-first cards.
+- Home: reference-style hero and compact work sections.
+- AI Studio: reference-style hero, five AI feature cards, existing editor preserved.
+- Campaign Studio: illustrated header and four-step workflow while preserving real campaign tools.
+- Library: media discovery grid.
+- Projects: two-column media cards.
+- Results: compact factual performance layout.
 
-Backend, APIs, AI processing, Smart Import, Canto, campaign rules, updater and Auto Publisher are untouched.
+Backend/APIs/AI processing/Smart Import/Canto/updater/Auto Publisher remain untouched.
 No .env or secrets included.

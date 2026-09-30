@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.9.0",
-  "description": "Mint reference reset: single coherent UI layer based on approved six-screen reference",
+  "version": "21.10.0",
+  "description": "Mint stable reference redesign with restored native navigation",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
