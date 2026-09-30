@@ -1,22 +1,24 @@
-Mint 21.14.2 — AI Studio + Home Polish
+Mint 21.14.3 — Product Navigation Split
 
-Home:
-- Recent Projects is aligned exactly with Continue Working.
-- Recent Imports is aligned exactly with Active Campaign.
-- Both rows use the same left/right column proportions.
-- Refined navy/violet palette, typography weight and card treatment.
+Mint is now presented as two clear workflows.
 
-AI Studio:
-- New direct page hierarchy.
-- Compact page header + action bar.
-- Feature tool strip.
-- Main source/editor column on the left.
-- Sticky Preview + AI Director rail on the right.
-- Timeline and detected moments are grouped together below the source.
-- Existing IDs and handlers for upload, timeline, candidates, captions, preview, exports and AI generation are preserved.
+CAMPAIGNS
+- Discover: campaign search/import + campaign information
+- Campaign Studio: campaign editing workspace
+- Results: campaign performance
 
-Only Home polish + AI Studio are changed.
-Campaign Studio, Library, Projects, Results and Settings remain on the current base.
+CREATE
+- AI Studio: long-form to short-form editing / own video creation
+- Library: creator content discovery
+- Projects: non-campaign creative projects
 
-No backend, AI engine, Smart Import, Canto, updater or Auto Publisher changes.
+Other changes
+- Settings is removed from the page menu.
+- Settings is now a gear icon at the top right.
+- Home remains the global entry point.
+- Added a dedicated Campaign Discover page.
+- Campaign cards can open directly into Campaign Studio.
+
+No backend changes.
+No AI engine, Smart Import, Canto, updater or Auto Publisher changes.
 No .env or secrets included.

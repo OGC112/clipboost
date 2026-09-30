@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.2",
-  "description": "Mint AI Studio redesign + Home alignment polish",
+  "version": "21.14.3",
+  "description": "Mint navigation split: Campaigns vs Create workflows",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

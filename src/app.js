@@ -1,7 +1,8 @@
+/* MINT-NAVIGATION-21.14.3 */
 /* MINT-AI-STUDIO-21.14.2 */
 /* MINT-HOME-21.14.1 */
 (function(){
-  const validPages=new Set(['home','studio','campaigns','analytics','library','projects','settings']);
+  const validPages=new Set(['home','campaign-discover','campaigns','analytics','studio','library','projects','settings']);
   function pageFromHash(){
     const raw=String(location.hash||'').replace(/^#\/?/,'').split(/[?&]/)[0].trim();
     return validPages.has(raw)?raw:'home';
@@ -102,16 +103,39 @@
     const updatePill=['checking','downloading','ready','error'].includes(u.status)
       ? `<button class="update-pill ${u.status}" id="updateCenterBtn" type="button"><span>${u.status==='ready'?'✓':u.status==='error'?'!':'↻'}</span>${u.status==='downloading'?`Update ${Math.round(u.percent||0)}%`:u.status==='checking'?'Checking update…':u.status==='ready'?`Update ${escapeHtml(u.version||'')} ready`:'Update issue'}</button>`
       : '';
-    const links=[['home','Home'],['studio','AI Studio'],['campaigns','Campaign Studio'],['library','Library'],['projects','Projects'],['analytics','Results'],['settings','Settings']];
-    return `<header class="topbar mint-home-topbar">
+    return `<header class="topbar mint-home-topbar mint-split-topbar">
       <button class="mint-home-brand" data-page="home" type="button">
         <span class="mint-home-logo"><i></i><b></b></span><strong>Mint</strong>
       </button>
-      <nav class="mint-home-nav">${links.map(([id,label])=>`<button data-page="${id}" class="${state.page===id?'active':''}" type="button">${label}</button>`).join('')}</nav>
-      <div class="mint-home-top-actions">
+
+      <nav class="mint-split-nav">
+        <button data-page="home" class="mint-nav-home ${state.page==='home'?'active':''}" type="button">Home</button>
+
+        <div class="mint-nav-group campaign-group">
+          <span class="mint-nav-label">Campaigns</span>
+          <div>
+            <button data-page="campaign-discover" class="${state.page==='campaign-discover'?'active':''}" type="button">Discover</button>
+            <button data-page="campaigns" class="${state.page==='campaigns'?'active':''}" type="button">Campaign Studio</button>
+            <button data-page="analytics" class="${state.page==='analytics'?'active':''}" type="button">Results</button>
+          </div>
+        </div>
+
+        <i class="mint-nav-separator"></i>
+
+        <div class="mint-nav-group create-group">
+          <span class="mint-nav-label">Create</span>
+          <div>
+            <button data-page="studio" class="${state.page==='studio'?'active':''}" type="button">AI Studio</button>
+            <button data-page="library" class="${state.page==='library'?'active':''}" type="button">Library</button>
+            <button data-page="projects" class="${state.page==='projects'?'active':''}" type="button">Projects</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="mint-home-top-actions mint-split-actions">
         ${updatePill}
         <label class="mint-home-search"><span>⌕</span><input type="text" placeholder="Search projects, campaigns, media…"></label>
-        <button class="mint-home-icon-btn" type="button" aria-label="Notifications">♢</button>
+        <button class="mint-home-icon-btn mint-settings-gear" data-page="settings" type="button" aria-label="Settings" title="Settings">⚙</button>
       </div>
     </header>`
   }
@@ -702,6 +726,68 @@
     return `<div class="modal-backdrop campaign-asset-browser-backdrop" id="campaignAssetBrowserBackdrop"><section class="card campaign-asset-browser" role="dialog" aria-modal="true" aria-labelledby="campaignAssetBrowserTitle"><div class="campaign-asset-browser-head"><div><div class="eyebrow">CAMPAIGN ASSET PACK</div><h2 id="campaignAssetBrowserTitle">${escapeHtml(b.label||'Campaign media')}</h2><p>${escapeHtml(b.summary||'Preview the approved campaign media, then send the exact video you want to AI Studio.')}</p></div><div class="campaign-asset-browser-actions">${b.packUrl?`<a class="btn secondary" href="${escapeHtml(b.packUrl)}" target="_blank" rel="noreferrer">Open original pack ↗</a>`:''}<button class="modal-close" id="closeCampaignAssetBrowser" type="button">×</button></div></div>${b.error?`<div class="library-banner error">${escapeHtml(b.error)}</div>`:''}${body}</section></div>`;
   }
 
+  function campaignDiscover(){
+    const list=state.campaigns?.campaigns||[];
+    const active=list.filter(c=>String(c.status||'active')==='active');
+    const cards=list.length?list.map(c=>{
+      const t=c.totals||{};
+      const readiness=campaignReadiness(c);
+      const q=campaignQualification(c);
+      return `<article class="campaign-discover-card-v143">
+        <div class="campaign-discover-card-top-v143">
+          <div><span class="campaign-state ${escapeHtml(c.status||'active')}">${escapeHtml(c.status||'active')}</span><small>${escapeHtml(c.provider||'Campaign')}</small></div>
+          <span class="campaign-discover-score-v143">${readiness.score}% setup</span>
+        </div>
+        <h3>${escapeHtml(c.name||'Campaign')}</h3>
+        <p>${escapeHtml(String(c.brief||c.objective||'No campaign brief saved yet.').slice(0,150))}</p>
+        <div class="campaign-discover-facts-v143">
+          <div><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(c))}</b></div>
+          <div><small>Minimum</small><b>${q?formatCount(q):'—'}</b></div>
+          <div><small>Tracked</small><b>${formatCount(t.totalViews||0)}</b></div>
+        </div>
+        <div class="campaign-discover-actions-v143">
+          <button class="btn secondary" data-campaign-discover-select="${escapeHtml(c.id)}">View details</button>
+          <button class="btn primary" data-campaign-open-studio="${escapeHtml(c.id)}">Edit in Campaign Studio →</button>
+        </div>
+      </article>`;
+    }).join(''):`<div class="campaign-discover-empty-v143"><b>No campaigns yet</b><span>Paste a campaign page or create one manually.</span></div>`;
+
+    return `<div class="content campaign-discover-v143">
+      <section class="campaign-discover-header-v143">
+        <div>
+          <div class="eyebrow">CAMPAIGN DISCOVERY</div>
+          <h1>Find and manage campaigns</h1>
+          <p>Bring campaign opportunities into Mint, review every requirement, then open the selected campaign in Campaign Studio.</p>
+        </div>
+        <button class="btn primary" data-page="campaigns">Open Campaign Studio →</button>
+      </section>
+
+      <section class="campaign-discover-import-v143">
+        <div>
+          <div class="eyebrow">SMART IMPORT</div>
+          <h3>Import a campaign from its real page</h3>
+          <p>Paste the campaign URL. Mint can open the authenticated page and read the campaign requirements without an API.</p>
+        </div>
+        <div class="campaign-discover-import-controls-v143">
+          <input id="campaignImportUrl" value="${escapeHtml(state.campaignDraftUrl||'')}" placeholder="Paste campaign URL">
+          <button class="btn secondary" id="importCampaignBtn" ${state.campaignBusy?'disabled':''}>${state.campaignBusy?'Waiting…':'Smart Import'}</button>
+          <button class="btn primary" id="newCampaignBtn">＋ Add campaign</button>
+        </div>
+      </section>
+
+      <section class="campaign-discover-summary-v143">
+        <article><small>Total campaigns</small><b>${list.length}</b></article>
+        <article><small>Active</small><b>${active.length}</b></article>
+        <article><small>Tracked views</small><b>${formatCount(list.reduce((n,c)=>n+Number(c.totals?.totalViews||0),0))}</b></article>
+        <article><small>Confirmed payout</small><b>${formatMoney(list.reduce((n,c)=>n+Number(c.totals?.confirmedRevenue||0),0),list[0]?.currency||'USD')}</b></article>
+      </section>
+
+      <section class="campaign-discover-grid-v143">
+        ${state.campaignsLoading?'<div class="campaign-discover-empty-v143">Loading campaigns…</div>':cards}
+      </section>
+    </div>`
+  }
+
   function campaigns(){
     const list=state.campaigns?.campaigns||[];const active=selectedCampaign();const totals=list.reduce((a,c)=>{a.views+=Number(c.totals?.totalViews||0);a.revenue+=Math.max(Number(c.totals?.estimatedRevenue||0),Number(c.totals?.confirmedRevenue||0));a.confirmed+=Number(c.totals?.confirmedRevenue||0);a.posts+=Number(c.totals?.postCount||0);return a},{views:0,revenue:0,confirmed:0,posts:0});
     const importRecovery=state.campaignImportDraft?`<div class="campaign-import-recovery"><span><b>Unsaved import</b><small>${escapeHtml(state.campaignImportDraft.name||'Campaign')} · review saved automatically</small></span><button class="btn secondary compact-btn" id="reopenCampaignImportBtn">Review import</button><button class="icon-btn danger-lite" id="discardCampaignImportBtn" title="Discard saved import">×</button></div>`:'';
@@ -972,7 +1058,7 @@
     else prepareCandidatePreview(index,{autoplay});
   }
 
-  function render(){const pages={home,studio,campaigns,analytics,library,projects,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
+  function render(){const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,analytics,library,projects,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
   function bind(){
     const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
     const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
@@ -981,6 +1067,8 @@
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaigns')});
+    document.querySelectorAll('[data-campaign-open-studio]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignOpenStudio;state.campaignTab='overview';navigate('campaigns')});
+    document.querySelectorAll('[data-campaign-discover-select]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignDiscoverSelect;state.campaignTab='overview';navigate('campaigns')});
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
     const updateCenter=document.getElementById('updateCenterBtn');if(updateCenter)updateCenter.onclick=async()=>{const u=state.desktopUpdate||{};if(u.status==='ready'){await promptReadyUpdate(u.version,{force:true});}else if(u.status==='error'){showNotice({kind:'danger',eyebrow:'Updates',title:'Update issue',message:u.message||'ClipBoost could not finish the update.'});}else{showNotice({kind:'update',eyebrow:'Updates',title:u.status==='checking'?'Checking for updates':`Downloading ClipBoost ${u.version||''}`,message:u.status==='downloading'?`${Math.round(u.percent||0)}% downloaded`:'ClipBoost is checking the release channel.'});}};
     const file=document.getElementById('videoFile'),drop=document.getElementById('dropZone');
