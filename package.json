@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.7.1",
-  "description": "Mint UI refinement aligned to the approved light creator workspace",
+  "version": "21.7.2",
+  "description": "Mint settings navigation fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -1,14 +1,7 @@
-Mint 21.7.1 — UI polish only
+Mint 21.7.2 — Settings navigation fix
 
-This patch keeps the 21.7.0 backend and all existing handlers intact.
-
-Changes:
-- Home: replaces the empty hero placeholder with a creator/media composition.
-- AI Studio: wider inspector, readable AI Director, better editor/preview/tools hierarchy.
-- Campaign Studio: removes remaining dark legacy panels and reduces empty space.
-- Library: styles content discovery as a more visual media grid where supported by current markup.
-- Projects: converts project rows into visual cards.
-- Results: adds a factual empty state without inventing metrics.
-- Top navigation and Mint branding preserved.
-
-No .env or secrets are included.
+- Restores Settings in the top navigation.
+- Clicking the top-right avatar now also opens Settings.
+- Existing Settings page and updater logic are unchanged.
+- No backend changes.
+- No .env or secrets included.
