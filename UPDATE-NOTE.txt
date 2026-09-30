@@ -1,4 +1,20 @@
-ClipBoost 21.6.3 UI redesign patch.
-Drop this ZIP into Downloads. ClipBoost Auto Publisher will apply it.
-Changes: package.json version, index.html stylesheet activation, src/redesign-21.6.css.
-No backend, routes, stores, Smart Import, Canto, updater or AI pipeline changes.
+Mint / ClipBoost 21.7.0 — Full visual redesign
+
+VISIBLE BRAND
+- App display name: Mint
+- New ribbon-V logo inspired by the approved VividCut direction
+- Technical updater/app identifiers remain ClipBoost for compatibility
+
+STRUCTURE
+- Horizontal top navigation
+- Home: real project/campaign overview and real tracked campaign KPIs
+- AI Studio: general long/short video editing workspace
+- Campaign Studio: campaign sources, rules, generation and results
+- Library: creator/content discovery and Send to AI Studio workflow
+- Projects: unified AI Studio + Campaign Studio project list
+- Results: rebuilt from real campaign tracking only; no fabricated analytics
+
+IMPORTANT
+- No backend/API rewrite
+- Smart Import, Canto, updater, Eco AI, project recovery and existing handlers remain in place
+- Campaign-linked editor is visually identified as Campaign Editor

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.6.3",
-  "description": "Simplified workspace with dedicated Campaign Studio, real Results analytics, Smart Import, Asset Pack Browser and Eco AI mode",
+  "version": "21.7.0",
+  "description": "Mint visual redesign with top navigation, unified projects, creator library, AI Studio and campaign-first workspace",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
