@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.8.1",
-  "description": "Mint typography scale and readability refinement",
+  "version": "21.9.0",
+  "description": "Mint reference reset: single coherent UI layer based on approved six-screen reference",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

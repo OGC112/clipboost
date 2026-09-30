@@ -1,15 +1,16 @@
-Mint 21.8.1 — Typography Fix
+Mint 21.9.0 — Reference Reset
 
-Typography-only patch on top of 21.8.0.
+This release stops loading every previous Mint override stylesheet/script.
+Only the base app + one clean Mint 21.9 UI layer are loaded.
 
-Changes:
-- More consistent font sizes across all pages.
-- Large headings reduced.
-- Secondary text made more readable.
-- Buttons, navigation and form labels normalized.
-- KPI typography balanced.
-- AI Studio inspector text enlarged where it was too small.
-- Campaign Studio, Library, Projects and Results now share one type scale.
+Reference-driven changes:
+- Home rebuilt into a media-first hero, one KPI row, Recent Clips and Active Campaigns.
+- AI Studio receives the reference-style hero, five feature cards and a cleaner editor shell.
+- Campaign Studio receives the illustrated hero, 4-step workflow and horizontal active-campaign area.
+- Library becomes a real media-card grid while preserving existing creator/source actions.
+- Projects becomes a two-column media-first project grid.
+- Results is kept factual and simplified.
+- Mint navigation and Settings access remain available.
 
-No layout, backend, AI, campaign, updater or Auto Publisher logic changed.
+Backend, APIs, AI processing, Smart Import, Canto, campaign rules, updater and Auto Publisher are untouched.
 No .env or secrets included.
