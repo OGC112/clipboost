@@ -2,7 +2,7 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.6.0",
+  "version": "21.6.3",
   "description": "Simplified workspace with dedicated Campaign Studio, real Results analytics, Smart Import, Asset Pack Browser and Eco AI mode",
   "type": "module",
   "main": "desktop/main.cjs",

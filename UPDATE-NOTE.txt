@@ -1,0 +1,4 @@
+ClipBoost 21.6.3 UI redesign patch.
+Drop this ZIP into Downloads. ClipBoost Auto Publisher will apply it.
+Changes: package.json version, index.html stylesheet activation, src/redesign-21.6.css.
+No backend, routes, stores, Smart Import, Canto, updater or AI pipeline changes.
