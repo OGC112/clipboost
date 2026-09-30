@@ -1,17 +1,15 @@
-Mint 21.12.0 — Hierarchy Redesign
+Mint 21.13.0 — True Structural Rebuild
 
-This is a structural redesign, not a typography/color pass.
+This release no longer uses a post-render Mint overlay.
 
-Hierarchy changes:
-- Home: content/discovery first, campaign rail second; old KPI dashboard hierarchy removed.
-- AI Studio: source/editor workspace on the left, preview + AI tools in one right rail.
-- Campaign Studio: campaign selector + Smart Import in a left sidebar; selected campaign workspace on the right.
-- Library: Sources/Creators sidebar on the left, media discovery grid on the right.
-- Projects: filters above a compact two-column project grid.
-- Results: performance chart + top clips become the primary row; campaign table follows below.
+During npm install, scripts/apply-21.13-ui.cjs patches src/app.js directly:
+- replaces the native top navigation
+- rebuilds Home markup
+- rebuilds AI Studio's final markup into a 2-column editing workbench
+- rebuilds Library markup into a source sidebar + media grid
+- rebuilds Projects into media-first cards
+- rebuilds Results using real saved campaign/post data only
+- rebuilds Campaign Studio into a campaign sidebar + selected workspace
 
-Existing DOM nodes are moved instead of replaced where possible, preserving the app's native handlers.
-Navigation still uses the original internal data-page handlers, with analytics hash fallback.
-
-No backend, APIs, AI engine, campaign logic, Smart Import, Canto, updater or Auto Publisher changes.
-No .env or secrets included.
+The patch preserves the existing state, APIs, IDs and data-* hooks used by bind().
+No backend endpoints, AI engine, Smart Import, Canto, updater logic, or secrets are changed.
