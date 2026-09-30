@@ -304,8 +304,13 @@
       state.video=data;render();
       if(['ingesting','analyzing'].includes(data.status)){
         window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);
-      }else if(data.status==='ready'){
-        state.selectedCandidate=0;state.projects=null;render();
+      }else{
+        if(data.status==='ready')state.selectedCandidate=0;
+        state.projects=null;
+        render();
+        if(data.processingInterrupted){
+          showNotice({kind:'warning',eyebrow:'AI Studio',title:'Processing was interrupted',message:'ClipBoost recovered this project. You can retry the analysis or delete the project safely.'});
+        }
       }
     }catch(e){console.warn(e);window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),2500)}
   }
@@ -581,23 +586,41 @@
   async function deleteCampaign(){const c=selectedCampaign();if(!c)return;const ok=await confirmAction({kind:'danger',eyebrow:'Campaigns',title:`Delete ${c.name}?`,message:'This removes the campaign workspace and its view tracking. Existing AI Studio projects and exported videos are kept.',confirmLabel:'Delete campaign'});if(!ok)return;const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}`,{method:'DELETE'});await readJsonResponse(r,'Could not delete campaign');state.campaignSelected=null;state.campaigns=null;await loadCampaigns()}
   async function runCampaignCheck(){const v=state.video;if(!v?.campaign?.id)return;const ci=state.selectedCandidate||0,base=v.candidates?.[ci]||{};const start=Number(document.getElementById('clipStart')?.value??base.start??0),end=Number(document.getElementById('clipEnd')?.value??base.end??start+30);const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci,start,end,options:currentRenderOptions()})});state.campaignCompliance=await readJsonResponse(r,'Campaign check failed');render()}
   async function generateCampaignVariants(){const v=state.video;if(!v?.campaign?.id)return;const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/variants`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:state.selectedCandidate||0})});const data=await readJsonResponse(r,'Could not generate variants');state.campaignVariants=data.variants||[];render()}
+  function projectDisplayState(p){
+    if(p?.processingInterrupted)return {progress:36,progressLabel:'Interrupted',badge:'Needs attention',done:false};
+    if(p?.status==='ready')return {progress:100,progressLabel:'Ready',badge:'Ready',done:true};
+    if(p?.status==='uploaded')return {progress:92,progressLabel:'Source ready',badge:'Ready to analyze',done:false};
+    if(p?.status==='linked')return {progress:15,progressLabel:'Linked',badge:p?.ingestionError?'Retry source':'Needs source file',done:false};
+    if(['ingesting','analyzing'].includes(p?.status))return {progress:p?.status==='ingesting'?45:65,progressLabel:p?.status==='ingesting'?'Downloading':'Processing',badge:'In progress',done:false};
+    return {progress:35,progressLabel:'Needs attention',badge:'Needs attention',done:false};
+  }
   function projects(){
     const list=Array.isArray(state.projects)?state.projects:[];
-    const rows=list.length?list.map((p,i)=>`<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div><strong>${escapeHtml(p.originalName||'Untitled project')}</strong><div class="muted">${p.campaignId?'◎ Campaign · ':''}${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}</div></div><div class="project-progress"><div class="progress"><i style="width:${p.status==='ready'?100:p.status==='linked'?15:55}%"></i></div><span>${p.status==='ready'?'Ready':p.status==='linked'?'Linked':'Processing'}</span></div><div class="project-row-actions"><span class="status ${p.status==='ready'?'done':''}">${p.status==='linked'?'Needs source file':p.status==='ready'?'Ready':'In progress'}</span><button class="btn secondary" data-open-project="${escapeHtml(p.id)}">Open</button><button class="icon-btn project-delete-btn" type="button" data-delete-project="${escapeHtml(p.id)}" data-delete-project-name="${escapeHtml(p.originalName||'Untitled project')}" title="Delete project">×</button></div></div>`).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
+    const rows=list.length?list.map((p,i)=>{const ui=projectDisplayState(p);return `<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div><strong>${escapeHtml(p.originalName||'Untitled project')}</strong><div class="muted">${p.campaignId?'◎ Campaign · ':''}${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}${p.processingInterrupted?' · processing was interrupted':''}</div></div><div class="project-progress"><div class="progress"><i style="width:${ui.progress}%"></i></div><span>${ui.progressLabel}</span></div><div class="project-row-actions"><span class="status ${ui.done?'done':''}">${ui.badge}</span><button class="btn secondary" data-open-project="${escapeHtml(p.id)}">Open</button><button class="icon-btn project-delete-btn" type="button" data-delete-project="${escapeHtml(p.id)}" data-delete-project-name="${escapeHtml(p.originalName||'Untitled project')}" title="${['ingesting','analyzing'].includes(p.status)?'Stop processing and delete project':'Delete project'}">×</button></div></div>`}).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
     return `<div class="content"><div class="page-title"><div><div class="eyebrow">Workflow</div><h1>My projects</h1><p>Sources sent from your Library appear here automatically.</p></div><button class="btn primary" data-page="library">+ From Library</button></div><section class="card projects">${state.projectsLoading?'<div class="projects-empty">Loading projects…</div>':rows}</section></div>`
   }
 
   async function removeProject(id,name){
     const label=name||'this project';
-    const ok=await confirmAction({kind:'danger',eyebrow:'Projects',title:`Delete ${label}?`,message:'This removes the project, its local source file, cached transcript and generated previews from ClipBoost.',detail:'Previously exported MP4 files are kept in your exports folder.',confirmLabel:'Delete project'});
+    const current=(Array.isArray(state.projects)?state.projects:[]).find(p=>p.id===id);
+    const processing=['ingesting','analyzing'].includes(current?.status);
+    const ok=await confirmAction({
+      kind:'danger',
+      eyebrow:'Projects',
+      title:processing?`Stop and delete ${label}?`:`Delete ${label}?`,
+      message:processing?'ClipBoost will stop the active local processing job first, then remove the project and its temporary files.':'This removes the project, its local source file, cached transcript and generated previews from ClipBoost.',
+      detail:'Previously exported MP4 files are kept in your exports folder.',
+      confirmLabel:processing?'Stop & delete':'Delete project'
+    });
     if(!ok)return;
     try{
       const r=await fetch(`/api/projects/${encodeURIComponent(id)}`,{method:'DELETE'});
-      await readJsonResponse(r,'Could not delete project');
+      const result=await readJsonResponse(r,'Could not delete project');
       if(state.video?.id===id)state.video=null;
+      clearTimeout(window.__clipboostProjectPoll);
       try{if(localStorage.getItem('clipboost:lastProjectId')===id)localStorage.removeItem('clipboost:lastProjectId')}catch{}
       state.projects=null;await loadProjects();
-      showNotice({kind:'success',eyebrow:'Projects',title:'Project deleted',message:`${label} was removed from ClipBoost.`});
+      showNotice({kind:'success',eyebrow:'Projects',title:'Project deleted',message:result?.processingStopped?`${label} processing was stopped and the project was removed.`:`${label} was removed from ClipBoost.`});
     }catch(e){showNotice({kind:'danger',eyebrow:'Projects',title:'Could not delete project',message:e.message||'Could not delete project'})}
   }
   async function loadSettings(){

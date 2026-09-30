@@ -1,4 +1,4 @@
-# ClipBoost 21.4.7 — Progressive Campaign Setup
+# ClipBoost 21.4.8 — Stuck Project Recovery
 
 V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
 
@@ -491,6 +491,18 @@ Campaigns is now designed as an operational workspace rather than a long configu
 - AI Studio can jump directly back to the active campaign;
 - existing View Potential, Campaign Fit, hook variants, compliance checks, Used Moments and submission packs remain active;
 - Smart YouTube Authentication from 21.4.1 and the validated seamless updater are preserved.
+
+
+## 21.4.8
+
+- Projects no longer become permanently undeletable when an ingest or Local AI analysis is interrupted.
+- ClipBoost tracks active yt-dlp, FFmpeg and local Python processes per project.
+- Deleting a project that is still processing now stops its local child processes first, then removes the project.
+- A deletion tombstone prevents a late background task from recreating a deleted project metadata file.
+- After an app/server restart, stale `ingesting` / `analyzing` metadata is recovered automatically instead of polling forever.
+- Recovered projects show `Needs attention`; if the source file already exists they can be opened and analyzed again, or deleted safely.
+- Project polling stops after recovery instead of looping indefinitely.
+- All 21.4.7 Campaign setup, Trends removal, YouTube authentication and updater behavior are preserved.
 
 ## 21.4.7
 

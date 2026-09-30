@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.4.7",
-  "description": "Centered progressive Campaign setup, simplified payment fields, Trends page removal, Projects protected action-cell fix, Smart YouTube authentication and seamless silent updates",
+  "version": "21.4.8",
+  "description": "Stuck project recovery, safe stop-and-delete for active AI jobs, progressive centered Campaign setup, protected Projects actions, Smart YouTube authentication and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

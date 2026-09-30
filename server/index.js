@@ -9,6 +9,7 @@ import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { AsyncLocalStorage } from 'async_hooks';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +21,87 @@ const exportsDir = process.env.CLIPBOOST_EXPORT_DIR ? path.resolve(process.env.C
 const previewsDir = path.join(storageRoot, 'previews');
 const trackingDir = path.join(storageRoot, 'tracking');
 for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir, trackingDir]) fsSync.mkdirSync(dir, { recursive: true });
+
+// Project task lifecycle.
+// Keep processing tied to the project that started it so a stuck/obsolete job can
+// be stopped safely from Projects without leaving yt-dlp/FFmpeg/Python behind.
+const projectTaskContext = new AsyncLocalStorage();
+const activeProjectTasks = new Set();
+const activeProjectProcesses = new Map();
+const deletedProjectIds = new Set();
+
+function processingStatus(value='') {
+  return ['ingesting','analyzing'].includes(String(value || ''));
+}
+function registerProjectProcess(child) {
+  const projectId = projectTaskContext.getStore()?.projectId;
+  if (!projectId || !child) return;
+  let set = activeProjectProcesses.get(projectId);
+  if (!set) { set = new Set(); activeProjectProcesses.set(projectId, set); }
+  set.add(child);
+  const cleanup = () => {
+    const current = activeProjectProcesses.get(projectId);
+    current?.delete(child);
+    if (current && !current.size) activeProjectProcesses.delete(projectId);
+  };
+  child.once('close', cleanup);
+  child.once('error', cleanup);
+}
+function stopChildProcess(child) {
+  if (!child || child.exitCode !== null || child.killed) return;
+  try {
+    if (process.platform === 'win32' && child.pid) {
+      const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide:true });
+      killer.on('error', () => { try { child.kill('SIGKILL'); } catch {} });
+    } else {
+      child.kill('SIGKILL');
+    }
+  } catch { try { child.kill('SIGKILL'); } catch {} }
+}
+function stopProjectProcesses(projectId) {
+  const set = activeProjectProcesses.get(projectId);
+  if (!set) return 0;
+  const children = [...set];
+  for (const child of children) stopChildProcess(child);
+  return children.length;
+}
+async function withProjectTask(projectId, fn) {
+  const id = String(projectId || '');
+  if (!id) return await fn();
+  deletedProjectIds.delete(id);
+  activeProjectTasks.add(id);
+  try { return await projectTaskContext.run({ projectId:id }, fn); }
+  finally { activeProjectTasks.delete(id); }
+}
+function projectTaskIsActive(projectId) {
+  return activeProjectTasks.has(String(projectId || ''));
+}
+function interruptedProcessing(meta, graceMs = 20_000) {
+  if (!meta || !processingStatus(meta.status) || projectTaskIsActive(meta.id)) return false;
+  const stamp = new Date(meta.updatedAt || meta.createdAt || 0).getTime();
+  return Number.isFinite(stamp) && stamp > 0 && (Date.now() - stamp) > graceMs;
+}
+async function recoverInterruptedProject(meta) {
+  if (!interruptedProcessing(meta)) return { meta, recovered:false };
+  const recovered = { ...meta };
+  recovered.status = recovered.sourcePath && fsSync.existsSync(recovered.sourcePath) ? 'uploaded' : 'linked';
+  recovered.updatedAt = new Date().toISOString();
+  recovered.processingInterruptedAt = recovered.updatedAt;
+  recovered.analysis = {
+    ...(recovered.analysis || {}),
+    stage:'interrupted',
+    progress:Number(recovered.analysis?.progress || 0),
+    interrupted:true,
+    error:'The previous processing job stopped unexpectedly. Retry analysis or delete the project.'
+  };
+  recovered.ingestion = {
+    ...(recovered.ingestion || {}),
+    stage: recovered.sourcePath ? (recovered.ingestion?.stage || 'downloaded') : 'interrupted',
+    error: recovered.sourcePath ? (recovered.ingestion?.error || null) : 'The previous source download stopped unexpectedly. Retry automatic ingest.'
+  };
+  await writeMeta(recovered);
+  return { meta:recovered, recovered:true };
+}
 
 const libraryFile = path.join(storageRoot, 'library.json');
 const campaignsFile = path.join(storageRoot, 'campaigns.json');
@@ -707,6 +789,7 @@ function run(command, args, { timeout = 15 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
     const executable = runtimeCommand(command);
     const proc = spawn(executable, args, { windowsHide: true, env: process.env });
+    registerProjectProcess(proc);
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
@@ -896,28 +979,31 @@ async function downloadExternalSource(projectId) {
 }
 
 async function startExternalIngestion(projectId) {
-  try {
-    await downloadExternalSource(projectId);
-    const current = await readMeta(projectId);
-    current.status = 'analyzing';
-    current.ingestion = { ...(current.ingestion || {}), stage: 'downloaded', progress: 100, error: null };
-    await writeMeta(current);
-    await analyzeProject(projectId);
-  } catch (err) {
+  return withProjectTask(projectId, async () => {
     try {
+      await downloadExternalSource(projectId);
       const current = await readMeta(projectId);
-      current.status = current.sourcePath ? 'uploaded' : 'linked';
-      current.ingestion = {
-        ...(current.ingestion || {}),
-        stage: 'error',
-        progress: Number(current.ingestion?.progress || 0),
-        error: err?.message || 'Automatic source ingestion failed.'
-      };
+      current.status = 'analyzing';
+      current.ingestion = { ...(current.ingestion || {}), stage: 'downloaded', progress: 100, error: null };
       current.updatedAt = new Date().toISOString();
       await writeMeta(current);
-    } catch {}
-    console.error('External ingestion failed:', err);
-  }
+      await analyzeProject(projectId);
+    } catch (err) {
+      try {
+        const current = await readMeta(projectId);
+        current.status = current.sourcePath ? 'uploaded' : 'linked';
+        current.ingestion = {
+          ...(current.ingestion || {}),
+          stage: err?.code === 'PROJECT_DELETED' ? 'cancelled' : 'error',
+          progress: Number(current.ingestion?.progress || 0),
+          error: err?.code === 'PROJECT_DELETED' ? null : (err?.message || 'Automatic source ingestion failed.')
+        };
+        current.updatedAt = new Date().toISOString();
+        await writeMeta(current);
+      } catch {}
+      if (err?.code !== 'PROJECT_DELETED') console.error('External ingestion failed:', err);
+    }
+  });
 }
 
 async function probe(file) {
@@ -947,6 +1033,10 @@ async function readMeta(id) {
   return JSON.parse(await fs.readFile(file, 'utf8'));
 }
 async function writeMeta(meta) {
+  if (deletedProjectIds.has(String(meta?.id || ''))) {
+    const error = Object.assign(new Error('Project was deleted while processing.'), { code:'PROJECT_DELETED', status:410 });
+    throw error;
+  }
   await fs.writeFile(path.join(metaDir, `${meta.id}.json`), JSON.stringify(meta, null, 2));
 }
 
@@ -1425,6 +1515,8 @@ app.post('/api/projects/:id/ingest', async (req, res, next) => {
     if (meta.sourcePath && fsSync.existsSync(meta.sourcePath)) return res.json(meta);
     if (['ingesting','analyzing'].includes(meta.status)) return res.status(202).json(meta);
     meta.status = 'ingesting';
+    delete meta.processingInterruptedAt;
+    meta.analysis = { ...(meta.analysis || {}), interrupted:false, error:null };
     meta.ingestion = { ...(meta.ingestion || {}), stage: 'queued', progress: 1, engine: 'yt-dlp', error: null };
     meta.updatedAt = new Date().toISOString();
     await writeMeta(meta);
@@ -1439,19 +1531,25 @@ app.get('/api/projects', async (req, res, next) => {
     const projects = [];
     for (const name of names.filter(n => n.endsWith('.json'))) {
       try {
-        const meta = JSON.parse(await fs.readFile(path.join(metaDir, name), 'utf8'));
+        let meta = JSON.parse(await fs.readFile(path.join(metaDir, name), 'utf8'));
+        const recovery = await recoverInterruptedProject(meta).catch(() => ({ meta, recovered:false }));
+        meta = recovery.meta;
         projects.push({
           id: meta.id,
           originalName: meta.originalName,
           createdAt: meta.createdAt,
           updatedAt: meta.updatedAt || meta.createdAt,
           status: meta.status,
+          processingActive: projectTaskIsActive(meta.id),
+          processingInterrupted: Boolean(recovery.recovered || meta.processingInterruptedAt || meta.analysis?.interrupted),
           details: meta.details || {},
           externalSource: meta.externalSource || null,
           campaignId: meta.campaignId || null,
           campaignName: meta.campaign?.name || null,
           candidateCount: Array.isArray(meta.candidates) ? meta.candidates.length : 0,
-          sourceUrl: meta.sourceUrl || null
+          sourceUrl: meta.sourceUrl || null,
+          ingestionError: meta.ingestion?.error || null,
+          analysisStage: meta.analysis?.stage || null
         });
       } catch {}
     }
@@ -1463,7 +1561,8 @@ app.get('/api/projects', async (req, res, next) => {
 app.delete('/api/projects/:id', async (req, res, next) => {
   try {
     const meta = await readMeta(req.params.id);
-    if (['ingesting','analyzing'].includes(meta.status)) return res.status(409).json({ error: 'Wait for the current analysis to finish before deleting this project.' });
+    const stoppedProcesses = stopProjectProcesses(meta.id);
+    deletedProjectIds.add(String(meta.id));
     const insideStorage = value => {
       if (!value) return false;
       const resolved = path.resolve(value);
@@ -1478,7 +1577,7 @@ app.delete('/api/projects/:id', async (req, res, next) => {
     const tracks = await fs.readdir(trackingDir).catch(() => []);
     await Promise.all(tracks.filter(name => name.startsWith(`${meta.id}-`)).map(name => fs.rm(path.join(trackingDir,name), { force:true }).catch(() => {})));
     await fs.rm(path.join(metaDir, `${meta.id}.json`), { force:true });
-    res.json({ ok:true, id:meta.id });
+    res.json({ ok:true, id:meta.id, processingStopped:processingStatus(meta.status), stoppedProcesses });
   } catch (e) {
     if (e?.code === 'ENOENT') return res.status(404).json({ error:'Project not found.' });
     next(e);
@@ -1817,6 +1916,7 @@ async function runJsonProcess(command, args, options = {}) {
   return await new Promise((resolve, reject) => {
     const { onStderrLine, idleTimeout = 12 * 60_000, ...spawnOptions } = options;
     const child = spawn(command, args, { cwd: root, windowsHide: true, ...spawnOptions });
+    registerProjectProcess(child);
     let stdout = '';
     let stderr = '';
     let stderrLineBuffer = '';
@@ -3356,7 +3456,8 @@ async function analyzeProject(projectId, options = {}) {
       if(latest)meta.campaign={...latest,totals:campaignTotals(latest)};
     }
     meta.status = 'analyzing';
-    meta.analysis = { ...(meta.analysis || {}), stage: 'signals', progress: 12 };
+    delete meta.processingInterruptedAt;
+    meta.analysis = { ...(meta.analysis || {}), stage: 'signals', progress: 12, interrupted:false, error:null };
     await writeMeta(meta);
     const input = meta.sourcePath;
     const duration = meta.details.duration || 0;
@@ -3498,7 +3599,10 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
 }
 
 app.post('/api/videos/:id/analyze', async (req, res, next) => {
-  try { res.json(await analyzeProject(req.params.id, { clipCount: req.body?.clipCount ?? 'auto' })); } catch (e) { next(e); }
+  try {
+    deletedProjectIds.delete(String(req.params.id));
+    res.json(await withProjectTask(req.params.id, () => analyzeProject(req.params.id, { clipCount: req.body?.clipCount ?? 'auto' })));
+  } catch (e) { next(e); }
 });
 
 
@@ -3584,7 +3688,13 @@ app.post('/api/videos/:id/export-all', async (req, res, next) => {
 });
 
 app.get('/api/videos/:id', async (req,res,next) => {
-  try { res.json(await readMeta(req.params.id)); } catch (e) { next(e); }
+  try {
+    let meta = await readMeta(req.params.id);
+    const recovery = await recoverInterruptedProject(meta).catch(() => ({ meta, recovered:false }));
+    meta = recovery.meta;
+    meta.processingInterrupted = Boolean(recovery.recovered || meta.processingInterruptedAt || meta.analysis?.interrupted);
+    res.json(meta);
+  } catch (e) { next(e); }
 });
 
 app.use((err, req, res, next) => {
