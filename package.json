@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.4.9",
-  "description": "Eco AI mode, idle local-AI release, clean worker shutdown on quit, stuck project recovery, compact Campaign workspace and seamless silent updates",
+  "version": "21.5.0",
+  "description": "Authenticated Campaign Smart Import, automatic campaign + requirements extraction, Eco AI mode, stuck-project recovery and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

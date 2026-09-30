@@ -515,3 +515,17 @@ Campaign setup is now centered and progressive: only essential fields are shown 
 - Idle cleanup never interrupts an active analysis/export job.
 - Fully quitting ClipBoost now stops ClipBoost-owned FFmpeg/Python/yt-dlp workers and unloads the configured Ollama model.
 - Closing to tray remains available; Eco mode still activates while the window is hidden.
+
+
+## 21.5.0 — Campaign Smart Import
+
+- Campaign URL import can now use an authenticated Electron browser session instead of relying only on public HTTP pages.
+- Sign in to campaign sites inside the dedicated import window; ClipBoost keeps that browser session persistent without asking for API access.
+- After authentication, ClipBoost reads the rendered campaign DOM and follows the campaign requirements link using the same session.
+- Smart Import extracts campaign name, provider, per-view payout/rate basis, start date, payment method, account limit, audience, media sources, asset/resource links, requirements, violations and visible campaign stats when the page exposes them.
+- Unknown values stay unknown: rate basis is not reused as a minimum-view qualification and missing deadlines are not converted to `0 days`.
+- Imported campaigns open in a review step before being saved.
+- Campaign Sources separates editable media sources from external asset/reference folders.
+- Campaign Rules shows imported requirements, violations/disqualifiers, audience and the original requirements link.
+- Imported requirements are included in campaign context, checklists and submission packs.
+- Existing public URL import remains available as a browser/dev fallback.

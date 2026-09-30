@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, dialog, Menu, Tray, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, dialog, Menu, Tray, nativeImage, ipcMain, session } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +23,9 @@ let runtimeEcoPaused = false;
 let backendCleanupInFlight = null;
 let backendCleanupComplete = false;
 let allowImmediateQuit = false;
+let campaignImportWindow = null;
+let campaignImportWorker = null;
+const CAMPAIGN_IMPORT_PARTITION = 'persist:clipboost-campaign-import';
 
 function appRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
@@ -276,6 +279,168 @@ async function checkForUpdates(manual = false) {
   return updateCheckInFlight;
 }
 
+
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function safeHttpUrl(raw='') {
+  try {
+    const u = new URL(String(raw || '').trim());
+    if (!/^https?:$/.test(u.protocol)) return null;
+    return u.toString();
+  } catch { return null; }
+}
+function configureCampaignBrowser(win) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (!/^https:\/\//i.test(String(url || ''))) return { action:'deny' };
+    return {
+      action:'allow',
+      overrideBrowserWindowOptions:{
+        parent:win,
+        autoHideMenuBar:true,
+        backgroundColor:'#0b1018',
+        webPreferences:{ partition:CAMPAIGN_IMPORT_PARTITION, contextIsolation:true, nodeIntegration:false, sandbox:true }
+      }
+    };
+  });
+}
+async function campaignBrowserSnapshot(win) {
+  if (!win || win.isDestroyed()) throw new Error('Campaign import window is no longer available.');
+  return win.webContents.executeJavaScript(`(() => {
+    const clean = value => String(value || '').replace(/\\u00a0/g,' ').replace(/[ \\t]+/g,' ').trim();
+    const headingEls = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+    const headingFor = el => {
+      let best = '';
+      for (const h of headingEls) {
+        if (h === el) continue;
+        const pos = h.compareDocumentPosition(el);
+        if (pos & Node.DOCUMENT_POSITION_FOLLOWING) best = clean(h.innerText || h.textContent);
+        else if (best) break;
+      }
+      return best;
+    };
+    return {
+      url: location.href,
+      title: document.title || '',
+      text: String(document.body?.innerText || '').slice(0, 180000),
+      headings: headingEls.map(h => ({ level:h.tagName.toLowerCase(), text:clean(h.innerText || h.textContent) })).filter(x => x.text).slice(0,160),
+      links: [...document.querySelectorAll('a[href]')].map(a => ({ text:clean(a.innerText || a.textContent), href:a.href })).filter(x => /^https?:/i.test(x.href)).slice(0,500),
+      listItems: [...document.querySelectorAll('li')].map(li => ({ text:clean(li.innerText || li.textContent), section:headingFor(li) })).filter(x => x.text).slice(0,500),
+      images: [...document.querySelectorAll('img[src]')].map(img => ({ alt:clean(img.alt), src:img.currentSrc || img.src })).filter(x => /^https?:/i.test(x.src)).slice(0,120)
+    };
+  })()`);
+}
+function campaignSnapshotIsLogin(snapshot={}) {
+  const text = `${snapshot.title || ''}\n${snapshot.text || ''}`.toLowerCase();
+  const hasPassword = /password/.test(text);
+  const hits = [/\bsign in\b/,/log in/,/continue with (?:google|discord|apple|facebook)/,/welcome back/,/forgot (?:your )?password/].filter(re => re.test(text)).length;
+  return hasPassword || hits >= 2;
+}
+function campaignSnapshotEvidence(snapshot={}) {
+  const text = `${snapshot.title || ''}\n${snapshot.text || ''}`;
+  const signals = [
+    /campaign info/i,/campaign details/i,/campaign bount/i,/bounty rate/i,/payment method/i,
+    /your clips/i,/your views/i,/clip requirements/i,/violations/i,/audience/i
+  ];
+  return signals.filter(re => re.test(text)).length;
+}
+function campaignRequirementsUrl(snapshot={}) {
+  const links = Array.isArray(snapshot.links) ? snapshot.links : [];
+  const direct = links.find(x => /\/campaigns\/doc\//i.test(String(x.href || '')));
+  if (direct) return direct.href;
+  const labeled = links.find(x => /requirements?/i.test(String(x.text || '')) && /^https?:/i.test(String(x.href || '')));
+  return labeled?.href || null;
+}
+async function loadCampaignWorkerSnapshot(url) {
+  const target = safeHttpUrl(url);
+  if (!target) return null;
+  if (campaignImportWorker && !campaignImportWorker.isDestroyed()) campaignImportWorker.destroy();
+  const worker = new BrowserWindow({
+    width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',
+    webPreferences:{ partition:CAMPAIGN_IMPORT_PARTITION, contextIsolation:true, nodeIntegration:false, sandbox:true }
+  });
+  campaignImportWorker = worker;
+  configureCampaignBrowser(worker);
+  try {
+    await worker.loadURL(target);
+    await sleep(1800);
+    const snapshot = await campaignBrowserSnapshot(worker);
+    return snapshot;
+  } finally {
+    if (!worker.isDestroyed()) worker.destroy();
+    if (campaignImportWorker === worker) campaignImportWorker = null;
+  }
+}
+async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot) {
+  const endpoint = backendRuntimeUrl('/api/campaigns/import-snapshot');
+  if (!endpoint) throw new Error('ClipBoost backend is not available.');
+  const response = await fetch(endpoint, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ url:targetUrl, campaign:campaignSnapshot, requirements:requirementsSnapshot })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error || `Campaign parsing failed (${response.status}).`);
+  return body;
+}
+async function runAuthenticatedCampaignImport(rawUrl) {
+  const targetUrl = safeHttpUrl(rawUrl);
+  if (!targetUrl) throw new Error('Enter a valid campaign URL.');
+  if (campaignImportWindow && !campaignImportWindow.isDestroyed()) {
+    campaignImportWindow.focus();
+    throw new Error('A campaign import window is already open.');
+  }
+  markRendererActivity();
+  const target = new URL(targetUrl);
+  const win = new BrowserWindow({
+    width:1280,height:860,minWidth:900,minHeight:650,show:true,autoHideMenuBar:true,
+    title:'ClipBoost · Campaign Smart Import',backgroundColor:'#0b1018',parent:mainWindow || undefined,
+    webPreferences:{ partition:CAMPAIGN_IMPORT_PARTITION, contextIsolation:true, nodeIntegration:false, sandbox:true }
+  });
+  campaignImportWindow = win;
+  configureCampaignBrowser(win);
+  let resolved = false;
+  let returnedToTarget = false;
+  let stableKey = '';
+  let stableSince = 0;
+  const started = Date.now();
+  try {
+    await win.loadURL(targetUrl);
+    while (!win.isDestroyed() && Date.now() - started < 5 * 60_000) {
+      await sleep(900);
+      if (win.isDestroyed()) break;
+      let snapshot;
+      try { snapshot = await campaignBrowserSnapshot(win); } catch { continue; }
+      const currentUrl = safeHttpUrl(snapshot.url) || targetUrl;
+      let current;
+      try { current = new URL(currentUrl); } catch { current = target; }
+      const login = campaignSnapshotIsLogin(snapshot);
+      const evidence = campaignSnapshotEvidence(snapshot);
+      const sameHost = current.hostname === target.hostname;
+      if (!login && sameHost && evidence === 0 && current.pathname !== target.pathname && !returnedToTarget) {
+        returnedToTarget = true;
+        try { await win.loadURL(targetUrl); } catch {}
+        continue;
+      }
+      const key = `${currentUrl}|${String(snapshot.text || '').length}|${evidence}`;
+      if (key !== stableKey) { stableKey = key; stableSince = Date.now(); }
+      if (!login && sameHost && evidence >= 2 && Date.now() - stableSince >= 1200) {
+        const reqUrl = campaignRequirementsUrl(snapshot);
+        let requirementsSnapshot = null;
+        if (reqUrl && reqUrl !== currentUrl) {
+          try { requirementsSnapshot = await loadCampaignWorkerSnapshot(reqUrl); } catch (err) { console.warn('[Campaign import] Requirements page could not be read:', err?.message || err); }
+        } else if (/\/campaigns\/doc\//i.test(currentUrl)) requirementsSnapshot = snapshot;
+        const parsed = await parseCampaignBrowserSnapshots(targetUrl, snapshot, requirementsSnapshot);
+        resolved = true;
+        if (!win.isDestroyed()) win.close();
+        return { ok:true, authenticated:true, ...parsed };
+      }
+    }
+    if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign import window was closed before the campaign could be read.' : 'Timed out waiting for the campaign page. Sign in, then keep the campaign page open while ClipBoost imports it.');
+  } finally {
+    if (campaignImportWindow === win) campaignImportWindow = null;
+    if (!resolved && !win.isDestroyed()) win.close();
+  }
+}
+
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -413,6 +578,8 @@ async function createWindow() {
 function stopBackend() { stopBackendTree(); }
 
 ipcMain.on('desktop:activity', () => markRendererActivity());
+ipcMain.handle('desktop:import-campaign-authenticated', async (_event, url) => runAuthenticatedCampaignImport(url));
+ipcMain.handle('desktop:clear-campaign-import-session', async () => { await session.fromPartition(CAMPAIGN_IMPORT_PARTITION).clearStorageData(); return { ok:true }; });
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
 ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
