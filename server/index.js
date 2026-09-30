@@ -335,6 +335,21 @@ function parseCampaignSourceUrl(raw='') {
 function htmlEntityDecode(text='') {
   return String(text).replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');
 }
+function detectCampaignAccessWall(html='', url='') {
+  const raw=String(html||'');
+  const title=htmlEntityDecode((raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||'').replace(/\s+/g,' ').trim();
+  const text=htmlEntityDecode(raw.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()).slice(0,50000);
+  const loginSignals=[/\bsign in\b/i,/\blog in\b/i,/continue with (?:google|discord|apple|facebook)/i,/welcome back/i,/sign in to your .*account/i,/forgot (?:your )?password/i];
+  const botSignals=[/verify (?:that )?you are human/i,/checking your browser/i,/just a moment/i,/captcha/i,/access denied/i,/unusual traffic/i,/confirm you(?:'re| are) not a bot/i,/cf-chl-/i];
+  const hasPassword=/<input[^>]+type=["']password["']/i.test(raw);
+  const loginHits=loginSignals.filter(re=>re.test(`${title} ${text}`)).length;
+  const botHit=botSignals.some(re=>re.test(`${raw.slice(0,150000)} ${text}`));
+  const titleLooksAuth=/^(?:sign in|log in|login|welcome back)(?:\s*[|—-].*)?$/i.test(title);
+  const campaignEvidence=/(?:campaign|bounty|payout|views? to qualify|clip(?:ping)? brief|required hashtags?)/i.test(text);
+  if(botHit)return {blocked:true,reason:'verification'};
+  if((hasPassword&&loginHits>=1)||(titleLooksAuth&&loginHits>=1)||(loginHits>=3&&!campaignEvidence))return {blocked:true,reason:'login'};
+  return {blocked:false,reason:''};
+}
 function extractCampaignPage(html='', url='') {
   const getMeta=(key)=>{
     const esc=key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -961,6 +976,10 @@ app.post('/api/campaigns/import', async (req,res,next) => {
     const type=String(response.headers.get('content-type')||'');
     if(!type.includes('text/html'))throw Object.assign(new Error('This campaign URL is not a public HTML page. Add the campaign manually.'),{status:400});
     const html=(await response.text()).slice(0,2_000_000);
+    const wall=detectCampaignAccessWall(html,url);
+    if(wall.blocked){
+      return res.status(409).json({error:wall.reason==='login'?'Campaign details unavailable — login required. The URL was kept so you can enter the terms manually.':'Campaign details unavailable — this page is protected by anti-bot verification. The URL was kept so you can enter the terms manually.',manual:true,url,reason:wall.reason});
+    }
     const draft=extractCampaignPage(html,url);
     const data=await readCampaigns();
     const campaign=normalizeCampaign(draft); data.campaigns.unshift(campaign); await writeCampaigns(data);

@@ -1,3 +1,18 @@
+# ClipBoost 21.4.5 — Compact Campaign Workspace
+
+V21.4.5 makes Campaigns substantially shorter and easier to scan. The selected campaign is now organized into **Overview / Sources / Published / Rules**, campaign cards scroll horizontally instead of growing into a long grid, and Add/Edit opens in a right-side drawer. Campaign URL import now detects login and anti-bot walls before saving anything, keeps the URL, and opens manual entry rather than polluting the brief with sign-in text.
+
+## 21.4.5 highlights
+
+- Four primary KPIs only: payment, minimum qualification, tracked views, and deadline.
+- Compact qualification progress plus estimated/confirmed payout in Overview.
+- Setup readiness collapses to one concise status instead of five full-width cards.
+- Sources, published posts and rules live in dedicated tabs and only render when needed.
+- Campaign selector is a single horizontal row to reduce vertical scrolling.
+- Add campaign / Edit terms uses a side drawer.
+- Login-only or anti-bot campaign pages return a safe manual-entry fallback; no login-page text is stored as the campaign brief.
+- Existing payout models, Campaign Fit, View Potential, compliance, submission pack, source workflow and seamless updater remain preserved.
+
 # ClipBoost 21.4.3 — Real Campaign Model
 
 V21.4.3 makes Campaigns match real paid-clipping platforms more closely. Campaign cards now model per-view rates, bounty pools, qualification thresholds, access state, platform-specific payouts, submission status and confirmed payout. Existing Campaign → Sources → AI Studio → Export → Tracking remains intact, with the silent updater and Smart YouTube Authentication preserved.
