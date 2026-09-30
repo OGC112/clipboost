@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.1",
-  "description": "Mint Home redesign on top of the original 21.14.0 UI",
+  "version": "21.14.2",
+  "description": "Mint AI Studio redesign + Home alignment polish",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

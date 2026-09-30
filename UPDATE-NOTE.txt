@@ -1,20 +1,22 @@
-Mint 21.14.1 — Home Redesign
+Mint 21.14.2 — AI Studio + Home Polish
 
-Scope:
-- Home page only
-- global navigation shell moved from the left sidebar to the top
-- removes the right-side user avatar/"A"
+Home:
+- Recent Projects is aligned exactly with Continue Working.
+- Recent Imports is aligned exactly with Active Campaign.
+- Both rows use the same left/right column proportions.
+- Refined navy/violet palette, typography weight and card treatment.
 
-Home hierarchy:
-- workspace title and quick actions
-- dominant Continue Working media card
-- Active Campaign rail with real campaign metrics
-- Recent Projects as visual media cards
-- Recent Imports derived from real project source metadata
+AI Studio:
+- New direct page hierarchy.
+- Compact page header + action bar.
+- Feature tool strip.
+- Main source/editor column on the left.
+- Sticky Preview + AI Director rail on the right.
+- Timeline and detected moments are grouped together below the source.
+- Existing IDs and handlers for upload, timeline, candidates, captions, preview, exports and AI generation are preserved.
 
-Preserved:
-- AI Studio, Campaign Studio, Library, Projects, Results and Settings content markup remain on the original 21.14.0 base
-- existing app state, APIs and native data-page handlers
-- backend, AI engine, Smart Import, Canto, updater and Auto Publisher
+Only Home polish + AI Studio are changed.
+Campaign Studio, Library, Projects, Results and Settings remain on the current base.
 
+No backend, AI engine, Smart Import, Canto, updater or Auto Publisher changes.
 No .env or secrets included.
