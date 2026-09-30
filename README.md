@@ -1,4 +1,19 @@
-# ClipBoost 21.5.6 — Asset Pack Browser
+# ClipBoost 21.6.0 — Simplified Workspace & Campaign Studio
+
+ClipBoost now separates general long-form clipping from paid campaign work without changing the underlying AI pipeline.
+
+## 21.6.0 highlights
+
+- Simplified sidebar: Home, AI Studio, Campaign Studio, Library, Projects, Settings.
+- AI Studio remains the general workspace for YouTube, Twitch, podcasts and long-form videos.
+- Campaign Studio is the dedicated paid-campaign workspace.
+- Campaign Studio now has focused Studio, Sources, Results, Published and Rules tabs.
+- Studio combines campaign context, source media and creation actions in one compact view.
+- Results uses real tracked posts for views, qualification, estimated payout, confirmed payout, best clip, averages and platform breakdown.
+- Results never invents retention, CTR or watch-time metrics that are not available.
+- Home is simplified around Continue Working, Active Campaign and Recent Work.
+- Existing Smart Import, Canto Asset Pack Browser, campaign rules, AI Studio context, recovery, Eco AI mode and updater are preserved.
+
 
 Campaign asset packs are now usable inside ClipBoost instead of being external links only. In Campaigns → Sources, **Browse media** inspects the Canto pack with the same persistent authenticated campaign session, shows the media that Canto actually exposes, lets you preview detected videos, and sends a selected direct video into AI Studio while keeping the campaign context attached.
 
