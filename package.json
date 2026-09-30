@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.4.3",
-  "description": "Real Campaign Model with per-platform payout terms, bounty pools, qualification thresholds, submission tracking, Smart YouTube authentication, Fast Local AI and seamless silent updates",
+  "version": "21.4.4",
+  "description": "Projects layout fix with stable responsive actions, Real Campaign Model, Smart YouTube authentication, Fast Local AI and seamless silent updates",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
