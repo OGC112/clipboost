@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.7.0",
-  "description": "Mint visual redesign with top navigation, unified projects, creator library, AI Studio and campaign-first workspace",
+  "version": "21.7.1",
+  "description": "Mint UI refinement aligned to the approved light creator workspace",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

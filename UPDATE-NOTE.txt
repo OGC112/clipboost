@@ -1,20 +1,14 @@
-Mint / ClipBoost 21.7.0 — Full visual redesign
+Mint 21.7.1 — UI polish only
 
-VISIBLE BRAND
-- App display name: Mint
-- New ribbon-V logo inspired by the approved VividCut direction
-- Technical updater/app identifiers remain ClipBoost for compatibility
+This patch keeps the 21.7.0 backend and all existing handlers intact.
 
-STRUCTURE
-- Horizontal top navigation
-- Home: real project/campaign overview and real tracked campaign KPIs
-- AI Studio: general long/short video editing workspace
-- Campaign Studio: campaign sources, rules, generation and results
-- Library: creator/content discovery and Send to AI Studio workflow
-- Projects: unified AI Studio + Campaign Studio project list
-- Results: rebuilt from real campaign tracking only; no fabricated analytics
+Changes:
+- Home: replaces the empty hero placeholder with a creator/media composition.
+- AI Studio: wider inspector, readable AI Director, better editor/preview/tools hierarchy.
+- Campaign Studio: removes remaining dark legacy panels and reduces empty space.
+- Library: styles content discovery as a more visual media grid where supported by current markup.
+- Projects: converts project rows into visual cards.
+- Results: adds a factual empty state without inventing metrics.
+- Top navigation and Mint branding preserved.
 
-IMPORTANT
-- No backend/API rewrite
-- Smart Import, Canto, updater, Eco AI, project recovery and existing handlers remain in place
-- Campaign-linked editor is visually identified as Campaign Editor
+No .env or secrets are included.

@@ -1,0 +1,251 @@
+/* Mint 21.7.1 — layout refinement based on the approved light creator-workspace direction. */
+
+/* Global density and typography */
+:root{
+  --mint-ink-2:#171a31;
+  --mint-soft:#f7f5fb;
+  --mint-soft-2:#fcfbfe;
+  --mint-border:#e8e4ee;
+  --mint-purple-3:#7546ff;
+}
+body{background:#f7f6fb!important}
+.content.mint-content{width:min(1420px,calc(100% - 72px))!important;padding-top:28px!important}
+.card{box-shadow:0 10px 30px rgba(55,42,91,.055)!important}
+.page-title h1{font-weight:850!important}
+.btn{min-height:36px!important}
+
+/* Header: closer to approved mockup */
+.topbar.simplified-topbar{
+  height:68px!important;
+  max-width:none!important;
+  padding:0 30px!important;
+  border-bottom:1px solid #ece8f1!important;
+  box-shadow:0 3px 18px rgba(59,43,92,.035)!important;
+}
+.mint-brand strong{font-size:17px!important}
+.mint-nav{gap:7px!important}
+.mint-nav button{height:34px!important;padding:0 13px!important;border-radius:10px!important;font-size:10.5px!important}
+.mint-nav button.active{box-shadow:inset 0 -2px 0 #7445ff!important}
+.mint-top-actions .search{width:285px!important}
+
+/* HOME — replace the empty placeholder feel with a real visual hero */
+.simple-home-head.mint-home-hero{
+  min-height:285px!important;
+  padding:42px 44px!important;
+  display:block!important;
+  background:
+    radial-gradient(circle at 78% 25%,rgba(115,140,255,.21),transparent 25%),
+    radial-gradient(circle at 65% 70%,rgba(236,102,187,.15),transparent 30%),
+    linear-gradient(115deg,#fff 0%,#fff9fb 43%,#f3edff 73%,#ebf5ff 100%)!important;
+}
+.simple-home-head.mint-home-hero:after{display:none!important}
+.simple-home-head.mint-home-hero>div:first-child{position:relative;z-index:3;max-width:700px}
+.simple-home-head h1{font-size:50px!important;max-width:640px!important}
+.simple-home-head p{max-width:620px!important;font-size:13.5px!important}
+.simple-home-actions{
+  position:absolute!important;left:44px!important;bottom:36px!important;align-self:auto!important;
+  display:flex!important;gap:9px!important
+}
+.mint-hero-art{
+  position:absolute;right:56px;top:28px;width:430px;height:225px;z-index:1;
+  perspective:900px;pointer-events:none
+}
+.mint-media-card{
+  position:absolute;width:170px;height:118px;border-radius:18px;
+  border:1px solid rgba(255,255,255,.8);box-shadow:0 24px 44px rgba(69,48,128,.18);
+  overflow:hidden
+}
+.mint-media-card:before{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(circle at 55% 35%,rgba(255,255,255,.32),transparent 18%),linear-gradient(135deg,#171d47,#6336d8 58%,#ec66b3)
+}
+.mint-media-card:after{
+  content:"";position:absolute;left:50%;top:24%;width:42px;height:42px;border-radius:50%;
+  background:#f4b184;box-shadow:0 32px 0 8px #182a53;transform:translateX(-50%)
+}
+.mint-media-card span{position:absolute;z-index:2;right:9px;top:8px;background:rgba(11,15,37,.7);color:#fff;border-radius:8px;padding:4px 6px;font-size:8px;font-weight:800}
+.mint-media-card i,.mint-media-card b{position:absolute;z-index:2;bottom:11px;height:5px;border-radius:99px;background:#fff}
+.mint-media-card i{left:11px;width:46px}.mint-media-card b{left:63px;width:28px;background:#ff79c7}
+.mint-media-card.card-a{right:165px;top:65px;transform:rotateY(12deg) rotateZ(-6deg)}
+.mint-media-card.card-b{right:18px;top:26px;transform:rotateY(-14deg) rotateZ(6deg);scale:.9}
+.mint-media-card.card-c{right:40px;top:126px;transform:rotateY(-8deg) rotateZ(4deg);scale:.72}
+.mint-play-orb{position:absolute;z-index:4;right:188px;top:83px;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#6f35ff,#ed5fb0);box-shadow:0 12px 24px rgba(111,53,255,.28)}
+.mint-spark{position:absolute;color:#ff8dbd;font-size:24px}.mint-spark.one{right:4px;top:12px}.mint-spark.two{right:350px;top:40px;color:#7f5bff;font-size:16px}
+.mint-home-kpis{gap:14px!important}
+.mint-home-kpis article{min-height:108px!important;border-radius:17px!important}
+.simple-home-grid{gap:16px!important}
+.simple-home-card{min-height:230px!important}
+.simple-recent-list button{min-height:86px!important}
+
+/* AI STUDIO — fix cramped inspector and create clear editor / preview / tools columns */
+.mint-studio{width:min(1460px,calc(100% - 54px))!important}
+.mint-studio .page-title{padding:18px 22px!important}
+.mint-studio .studio-layout{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.75fr) 260px 320px!important;
+  align-items:start!important;gap:14px!important
+}
+.mint-studio .studio-main,.mint-studio .short-panel,.mint-studio .controls{position:relative!important;overflow:hidden!important}
+.mint-studio .studio-main:before,.mint-studio .short-panel:before,.mint-studio .controls:before{
+  content:attr(data-mint-label);display:block;margin:-2px 0 10px;color:#9d87d6;font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase
+}
+.mint-studio .short-panel,.mint-studio .controls{padding:16px!important}
+.mint-studio .controls{min-width:0!important}
+.mint-studio .controls .section-head{align-items:flex-start!important;margin-bottom:12px!important}
+.mint-studio .controls .auto-director-card{
+  padding:14px!important;border-radius:13px!important;margin-bottom:12px!important;
+}
+.mint-studio .auto-director-status{display:grid!important;grid-template-columns:auto 1fr!important;gap:9px!important;align-items:start!important}
+.mint-studio .auto-director-status strong,.mint-studio .auto-director-status small{display:block!important}
+.mint-studio .auto-director-status small{line-height:1.45!important;margin-top:3px!important}
+.mint-studio .auto-director-tags{display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-top:10px!important}
+.mint-studio .auto-director-tags span{padding:5px 7px!important;border-radius:8px!important;background:#f4efff!important;color:#6547a9!important;font-size:8px!important}
+.mint-studio .selectrow{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;padding:12px 0!important}
+.mint-studio .selectrow select{width:100%!important}
+.mint-studio .caption-color-control{padding:12px 0!important}
+.mint-studio .caption-color-palette{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
+.mint-studio .caption-color-chip{min-width:0!important;padding:6px 4px!important}
+.mint-studio .quality-explainer{padding:11px!important;line-height:1.45!important}
+.mint-studio .generate{margin-top:14px!important}
+.mint-studio .phone.tall{min-height:455px!important}
+.mint-studio .video{min-height:410px!important}
+.mint-studio .timeline{margin-top:12px!important}
+.mint-studio .moments{margin-top:12px!important}
+.mint-studio .studio-empty-moments{border-radius:13px!important;background:#f7f5fb!important;color:#777f93!important;border:1px dashed #ded7eb!important}
+.mint-studio .short-panel .preview-note{background:#f7f5fb!important;color:#7b8295!important;border-radius:9px!important}
+.mint-studio .controls hr{border-color:#eeeaf3!important}
+
+/* CAMPAIGN STUDIO — remove the old dark blocks and excess whitespace */
+.mint-campaigns{width:min(1440px,calc(100% - 64px))!important}
+.mint-campaigns .campaign-page-title{min-height:auto!important;padding:22px 26px!important}
+.mint-campaigns .campaign-import-compact{margin:14px 0!important;padding:14px!important;border-radius:16px!important}
+.mint-campaigns .campaign-layout-real{gap:16px!important;align-items:start!important}
+.mint-campaigns .campaign-list-real{align-self:start!important}
+.mint-campaigns .campaign-detail-compact .campaign-hero.compact{min-height:150px!important;padding:24px 28px!important}
+.mint-campaigns .campaign-detail-head h2{font-size:31px!important}
+.mint-campaigns .campaign-primary-kpis{gap:10px!important}
+.mint-campaigns .campaign-primary-kpis>div{min-height:76px!important}
+.mint-campaigns .campaign-studio-v2-grid{
+  display:grid!important;grid-template-columns:1fr 1.15fr .8fr!important;gap:12px!important;padding:14px 18px 18px!important
+}
+.mint-campaigns .campaign-studio-v2-grid>*,
+.mint-campaigns .mint-campaign-light-panel{
+  background:#fff!important;color:#171b30!important;border:1px solid #ece8f1!important;border-radius:16px!important;box-shadow:0 8px 24px rgba(54,39,104,.045)!important
+}
+.mint-campaigns .campaign-studio-v2-grid h3,
+.mint-campaigns .campaign-studio-v2-grid h4,
+.mint-campaigns .campaign-studio-v2-grid strong{color:#171b30!important}
+.mint-campaigns .campaign-studio-v2-grid p,
+.mint-campaigns .campaign-studio-v2-grid small{color:#777e93!important}
+.mint-campaigns .campaign-source-row,.mint-campaigns .campaign-resource-row{
+  background:#faf9fd!important;color:#22263b!important;border-color:#ece8f1!important
+}
+.mint-campaigns .campaign-results-kpis,.mint-campaigns .campaign-results-card{background:#fff!important}
+.mint-campaigns .campaign-readiness-strip,.mint-campaigns .campaign-progress{
+  background:#f4f1f8!important;border-color:#e9e4ef!important
+}
+.mint-campaigns .campaign-progress i,.mint-campaigns .campaign-readiness-strip i{background:linear-gradient(90deg,#7546ff,#a96aff,#40c9a4)!important}
+.mint-campaigns .campaign-payment-summary,
+.mint-campaigns .campaign-setup-banner{background:#fff9e8!important;color:#5c4a12!important;border-color:#f0dfac!important}
+
+/* LIBRARY — transform rows into a content discovery grid */
+.mint-library{width:min(1420px,calc(100% - 70px))!important}
+.mint-library .page-title{padding:22px 26px!important}
+.mint-library .library-shell{padding:16px!important}
+.mint-library .library-media-list,
+.mint-library .library-list,
+.mint-library .media-list{
+  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:14px!important
+}
+.mint-library .library-media-row,
+.mint-library .media-row,
+.mint-library [data-preview-id].library-item{
+  display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;
+  padding:0!important;border:1px solid var(--mint-border)!important;border-radius:15px!important;overflow:hidden!important;
+  background:#fff!important;box-shadow:0 8px 22px rgba(55,42,91,.04)!important
+}
+.mint-library .library-media-row img,
+.mint-library .media-row img,
+.mint-library .library-media-thumb img{width:100%!important;aspect-ratio:16/9!important;object-fit:cover!important}
+.mint-library .library-media-row .library-media-actions,
+.mint-library .media-row .actions{padding:10px!important}
+.mint-library .library-media-row:hover,.mint-library .media-row:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(55,42,91,.08)!important}
+.mint-library .library-media-row button,.mint-library .media-row button{font-size:9px!important}
+.mint-library .creator-list,.mint-library .creators{gap:12px!important}
+.mint-library .creator-card{border-radius:14px!important}
+
+/* Current concrete library markup from 21.7.0: make horizontal result rows more visual even if class names differ */
+.mint-library .library-results>div,
+.mint-library .library-results>article{border-radius:15px!important}
+.mint-library .library-video-row{display:grid!important;grid-template-columns:190px minmax(0,1fr) auto!important;gap:14px!important;padding:14px!important;border:1px solid var(--mint-border)!important;border-radius:15px!important;margin-bottom:12px!important;background:#fff!important}
+.mint-library .library-video-row img{width:190px!important;height:108px!important;object-fit:cover!important;border-radius:11px!important}
+
+/* PROJECTS — visual cards, not an administrative table */
+.mint-projects .page-title{
+  padding:20px 4px!important;
+  margin-bottom:10px!important;
+}
+.mint-projects .projects{
+  display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:14px!important;padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important
+}
+.mint-projects .project-row.mint-project-card{
+  display:grid!important;grid-template-columns:1fr!important;gap:11px!important;
+  align-content:start!important;padding:0 0 14px!important;border:1px solid var(--mint-border)!important;border-radius:16px!important;
+  background:#fff!important;overflow:hidden!important;box-shadow:0 10px 26px rgba(55,42,91,.055)!important
+}
+.mint-projects .project-source-thumb{
+  width:100%!important;height:160px!important;border-radius:0!important;overflow:hidden!important;background:#20164d!important
+}
+.mint-projects .project-source-thumb>*,.mint-projects .project-source-thumb img{width:100%!important;height:100%!important;object-fit:cover!important}
+.mint-projects .project-row>div:nth-child(2){padding:0 15px!important;min-width:0!important}
+.mint-projects .project-row>div:nth-child(2)>strong{display:block!important;font-size:14px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.mint-project-badge{
+  display:inline-flex!important;margin-bottom:7px!important;padding:4px 7px!important;border-radius:99px!important;
+  background:#eee8ff!important;color:#6945c8!important;font-size:8px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.06em!important
+}
+.mint-projects .project-progress{padding:0 15px!important}
+.mint-projects .project-row-actions{padding:0 15px!important;display:flex!important;align-items:center!important;gap:7px!important}
+.mint-projects .project-row-actions .status{margin-right:auto!important}
+.mint-projects .projects-empty{grid-column:1/-1!important}
+
+/* RESULTS — stronger empty-state without fake metrics */
+.mint-analytics{width:min(1420px,calc(100% - 70px))!important}
+.mint-results-title{padding:22px 26px!important}
+.mint-results-kpis{gap:14px!important}
+.mint-results-kpis article{min-height:112px!important;padding:18px 20px!important}
+.mint-results-context{
+  display:flex;gap:14px;align-items:center;margin:2px 0 14px;padding:16px 18px;border:1px dashed #dcd3ed;border-radius:15px;
+  background:linear-gradient(110deg,#faf8ff,#fff);color:#34384d
+}
+.mint-results-context b{display:block;font-size:13px;margin-bottom:4px}
+.mint-results-context small{display:block;line-height:1.5}
+.mint-results-orb{width:36px;height:36px;display:grid;place-items:center;border-radius:12px;background:#eee7ff;color:#7040ff;font-weight:900}
+.mint-results-table{padding:20px!important}
+.mint-result-row{min-height:66px!important}
+
+/* polish old dark campaign components that survived from the legacy stylesheet */
+.mint-campaigns .campaign-studio-v2-grid [style*="background"],
+.mint-campaigns .campaign-detail-compact [class*="panel"]{
+  color:inherit!important
+}
+
+/* responsive */
+@media(max-width:1280px){
+  .mint-hero-art{opacity:.72;right:24px;scale:.88;transform-origin:right center}
+  .mint-studio .studio-layout{grid-template-columns:minmax(0,1.5fr) 240px 290px!important}
+  .mint-library .library-media-list,.mint-library .library-list,.mint-library .media-list{grid-template-columns:repeat(3,1fr)!important}
+  .mint-projects .projects{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(max-width:1020px){
+  .mint-hero-art{display:none}
+  .simple-home-head.mint-home-hero{padding-bottom:92px!important}
+  .mint-studio .studio-layout{grid-template-columns:1fr 280px!important}
+  .mint-studio .controls{grid-column:1/-1!important}
+  .mint-campaigns .campaign-studio-v2-grid{grid-template-columns:1fr!important}
+  .mint-library .library-media-list,.mint-library .library-list,.mint-library .media-list{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(max-width:760px){
+  .content.mint-content{width:calc(100% - 24px)!important}
+  .mint-projects .projects,.mint-library .library-media-list,.mint-library .library-list,.mint-library .media-list{grid-template-columns:1fr!important}
+}
