@@ -1,13 +1,15 @@
-Mint 21.15.5 — Updater Race Fix
+Mint 21.15.6 — Campaign Page Fix
 
-Problem:
-v21.15.4 was published before latest.yml finished uploading. A running Mint client
-checked the release during that short window and received a 404.
+Fixes the broken Campaign Studio card introduced by 21.15.2.
+
+Cause:
+The previous UI enhancer searched every descendant element and could select a large
+ancestor whose textContent contained the entire Campaign Studio page. That full page
+text was then inserted into Rate / summary fields.
 
 Fix:
-- create the GitHub release as a draft
-- upload installer, blockmap and latest.yml
-- verify latest.yml + installer are present
-- only then publish the release
-
-No UI or backend behavior changes.
+- removes global text scraping from Campaign Studio
+- reads each campaign only from its native structured campaign card
+- analytics popup reads only the selected campaign detail
+- preserves real campaign values and avoids concatenated page text
+- keeps Results and AI Studio 21.15.2 enhancements

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.5",
-  "description": "Mint updater release publication race fix",
+  "version": "21.15.6",
+  "description": "Mint Campaign page structured data fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

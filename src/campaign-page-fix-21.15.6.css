@@ -1,0 +1,42 @@
+
+/* Campaign page hotfix 21.15.6 */
+
+.mint-campaign-overhauled .mint-original-campaign-layout{
+  display:none!important;
+}
+
+.mint-campaign-card-fixed-v156 p{
+  display:none!important;
+}
+
+.mint-campaign-card-fixed-v156 .mint-campaign-stat-strip{
+  margin-top:20px!important;
+}
+
+.mint-campaign-card-fixed-v156 .mint-campaign-stat-strip b{
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+
+.mint-campaign-analytics-dialog .mint-modal-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+
+.mint-campaign-analytics-dialog .mint-modal-grid>div{
+  min-height:88px!important;
+}
+
+.mint-campaign-analytics-dialog .mint-modal-grid b{
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+
+.mint-modal-note-wide{
+  grid-column:1/-1!important;
+}
+
+@media(max-width:850px){
+  .mint-campaign-analytics-dialog .mint-modal-grid{
+    grid-template-columns:1fr 1fr!important;
+  }
+}

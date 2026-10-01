@@ -7,22 +7,19 @@
     };
   };
 
-  const text = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
   const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-  const hasText = (el, rx) => rx.test(text(el));
-  const firstTextMatch = (root, rx) => qsa('*', root).map(text).find((t) => rx.test(t)) || '';
-  const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
+  const txt = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
 
   function findTopNav() {
     return qsa('div,nav,header').find((el) => {
-      const t = text(el);
+      const t = txt(el);
       const r = el.getBoundingClientRect();
       return r.top < 120 && r.width > 420 && /Campaign Studio/.test(t) && /AI Studio/.test(t);
     });
   }
 
   function findButtonByText(root, rx) {
-    return qsa('button,a,[role="button"]', root).find((el) => rx.test(text(el)));
+    return qsa('button,a,[role="button"]', root).find((el) => rx.test(txt(el)));
   }
 
   function enhanceNav() {
@@ -36,10 +33,11 @@
     }
 
     const brand = qsa('div,span,strong,h1,a', document).find((el) => {
-      const t = text(el);
+      const t = txt(el);
       const r = el.getBoundingClientRect();
       return t === 'Mint' && r.left < 180 && r.top < 120 && r.width < 220;
     });
+
     if (brand && !brand.dataset.mintHomeBound) {
       brand.dataset.mintHomeBound = '1';
       brand.classList.add('mint-home-brand');
@@ -47,95 +45,139 @@
     }
   }
 
-  function scrapeCampaignData(root) {
-    const allText = uniq(qsa('*', root).map(text));
-    const joined = allText.join(' | ');
-    const find = (rx, fallback = '') => allText.find((t) => rx.test(t)) || fallback;
-
-    let title = find(/^Lionsgate$/i);
-    if (!title) {
-      const titles = qsa('h2,h3,strong,b', root).map(text).filter((t) => t && !/Campaign Studio|Smart Import|Setup|Manage|Generate|Open page|Edit/i.test(t));
-      title = titles.find((t) => /^[A-Z]/.test(t) && t.length < 40) || 'Campaign';
-    }
-
-    const provider = find(/clipping\.net/i, 'Campaign workspace');
-    const rate = find(/[\d.,]+\s*\$US\s*\/\s*100K views/i, 'Rate unavailable');
-    const minimum = find(/^(?:\d+[.,]?\d*K|\d+)$/i, '100K');
-    const tracked = find(/^0$/i, '0');
-    const setup = find(/\d+%\s*setup/i, '80% setup');
-    const deadline = find(/No deadline/i, 'No deadline');
-    const status = find(/^ACTIVE$/i, 'ACTIVE');
-    const brief = find(/No brief saved yet\.|Objective needed/i, 'Add a campaign objective before generating clips.');
-    const access = find(/OPEN ACCESS/i, 'OPEN ACCESS');
-    const confirmed = find(/0,00\s*\$US/i, '0,00 $US');
-
-    return { title, provider, rate, minimum, tracked, setup, deadline, status, brief, access, confirmed, raw: joined };
+  function metricFromCard(card, label) {
+    const row = qsa('.campaign-card-metrics span', card).find((el) =>
+      txt(el).toLowerCase().includes(label.toLowerCase())
+    );
+    if (!row) return '—';
+    const b = row.querySelector('b');
+    return txt(b) || '—';
   }
 
-  function buildCampaignModal(card, data, root) {
+  function campaignDataFromCard(card) {
+    return {
+      id: card.getAttribute('data-campaign-select') || '',
+      title: txt(card.querySelector(':scope > strong')) || 'Campaign',
+      provider: txt(card.querySelector('.campaign-provider')) || 'Campaign',
+      status: txt(card.querySelector('.campaign-state')) || 'Active',
+      rate: txt(card.querySelector('.campaign-real-payment b')) || '—',
+      views: metricFromCard(card, 'views'),
+      minimum: metricFromCard(card, 'minimum'),
+      confirmed: metricFromCard(card, 'confirmed'),
+      deadline: txt(card.querySelector('.campaign-card-footer small')) || '—',
+      setup: txt(card.querySelector('.campaign-ready-dot')) || '—'
+    };
+  }
+
+  function selectedDetailData(root, fallback) {
+    const detail = root.querySelector('.campaign-detail');
+    if (!detail) return fallback;
+
+    const kpis = qsa('.campaign-primary-kpis > div', detail);
+    const earnings = qsa('.campaign-earnings-card > div', detail);
+
+    const readLabeled = (nodes, label, fallbackValue='—') => {
+      const node = nodes.find((el) => {
+        const span = txt(el.querySelector('span,small'));
+        return span.toLowerCase().includes(label.toLowerCase());
+      });
+      return txt(node?.querySelector('b')) || fallbackValue;
+    };
+
+    return {
+      ...fallback,
+      title: txt(detail.querySelector('.campaign-hero-copy h2')) || fallback.title,
+      brief: txt(detail.querySelector('.campaign-brief-preview')) || 'No campaign brief saved yet.',
+      payment: readLabeled(kpis, 'Payment', fallback.rate),
+      minimum: readLabeled(kpis, 'Minimum', fallback.minimum),
+      tracked: readLabeled(kpis, 'Tracked views', fallback.views),
+      deadline: readLabeled(kpis, 'Deadline', fallback.deadline),
+      estimated: readLabeled(earnings, 'Estimated payout', '—'),
+      confirmed: readLabeled(earnings, 'Confirmed payout', fallback.confirmed),
+      best: readLabeled(earnings, 'Best clip', '—'),
+      average: readLabeled(earnings, 'Average', '—'),
+      readiness: txt(detail.querySelector('.campaign-readiness-compact strong')) || fallback.setup
+    };
+  }
+
+  function ensureModal(root) {
     let modal = root.querySelector('.mint-campaign-analytics-modal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.className = 'mint-campaign-analytics-modal';
-      modal.innerHTML = `
-        <div class="mint-campaign-analytics-dialog" role="dialog" aria-modal="true" aria-label="Campaign analytics">
-          <button type="button" class="mint-modal-close" aria-label="Close">×</button>
-          <div class="mint-modal-header"></div>
-          <div class="mint-modal-grid"></div>
-          <div class="mint-modal-notes"></div>
-          <div class="mint-modal-actions">
-            <button type="button" class="btn secondary mint-modal-generate">Generate clips</button>
-            <button type="button" class="btn secondary mint-modal-open-page">Open page</button>
-            <button type="button" class="btn primary mint-modal-close-action">Close</button>
-          </div>
-        </div>`;
-      root.appendChild(modal);
+    if (modal) return modal;
 
-      const close = () => modal.classList.remove('show');
-      modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-      modal.querySelector('.mint-modal-close').onclick = close;
-      modal.querySelector('.mint-modal-close-action').onclick = close;
-      modal.querySelector('.mint-modal-generate').onclick = () => findButtonByText(document, /Generate clips/i)?.click();
-      modal.querySelector('.mint-modal-open-page').onclick = () => findButtonByText(document, /Open page/i)?.click();
-    }
-
-    modal.querySelector('.mint-modal-header').innerHTML = `
-      <div>
-        <div class="mint-modal-eyebrow">Campaign analytics</div>
-        <h3>${data.title}</h3>
-        <p>${data.provider} · ${data.status} · ${data.access}</p>
-      </div>
-      <span class="mint-modal-badge">${data.setup}</span>`;
-
-    modal.querySelector('.mint-modal-grid').innerHTML = `
-      <div><span>Rate</span><b>${data.rate}</b></div>
-      <div><span>Minimum</span><b>${data.minimum}</b></div>
-      <div><span>Tracked views</span><b>${data.tracked}</b></div>
-      <div><span>Confirmed</span><b>${data.confirmed}</b></div>
-      <div><span>Deadline</span><b>${data.deadline}</b></div>
-      <div><span>Status</span><b>${data.status}</b></div>`;
-
-    modal.querySelector('.mint-modal-notes').innerHTML = `
-      <div class="mint-modal-note-card">
-        <span>Campaign brief</span>
-        <p>${data.brief}</p>
-      </div>
-      <div class="mint-modal-note-card">
-        <span>Usage</span>
-        <p>Review analytics here, then open the editor when you are ready to create campaign-specific clips.</p>
+    modal = document.createElement('div');
+    modal.className = 'mint-campaign-analytics-modal';
+    modal.innerHTML = `
+      <div class="mint-campaign-analytics-dialog" role="dialog" aria-modal="true" aria-label="Campaign analytics">
+        <button type="button" class="mint-modal-close" aria-label="Close">×</button>
+        <div class="mint-modal-header"></div>
+        <div class="mint-modal-grid"></div>
+        <div class="mint-modal-notes"></div>
+        <div class="mint-modal-actions">
+          <button type="button" class="btn secondary mint-modal-generate">Generate clips</button>
+          <button type="button" class="btn secondary mint-modal-open-page">Open page</button>
+          <button type="button" class="btn primary mint-modal-close-action">Close</button>
+        </div>
       </div>`;
 
-    modal.classList.add('show');
+    root.appendChild(modal);
+
+    const close = () => modal.classList.remove('show');
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('.mint-modal-close').onclick = close;
+    modal.querySelector('.mint-modal-close-action').onclick = close;
+    modal.querySelector('.mint-modal-generate').onclick = () => findButtonByText(document, /Generate clips/i)?.click();
+    modal.querySelector('.mint-modal-open-page').onclick = () => findButtonByText(document, /^Open page/i)?.click();
+
+    return modal;
+  }
+
+  function openCampaignAnalytics(root, originalCard, fallback) {
+    originalCard?.click();
+
+    setTimeout(() => {
+      const data = selectedDetailData(root, fallback);
+      const modal = ensureModal(root);
+
+      modal.querySelector('.mint-modal-header').innerHTML = `
+        <div>
+          <div class="mint-modal-eyebrow">Campaign analytics</div>
+          <h3>${data.title}</h3>
+          <p>${data.provider} · ${data.status}</p>
+        </div>
+        <span class="mint-modal-badge">${data.readiness || data.setup}</span>`;
+
+      modal.querySelector('.mint-modal-grid').innerHTML = `
+        <div><span>Payment</span><b>${data.payment || data.rate}</b></div>
+        <div><span>Minimum</span><b>${data.minimum}</b></div>
+        <div><span>Tracked views</span><b>${data.tracked || data.views}</b></div>
+        <div><span>Estimated payout</span><b>${data.estimated || '—'}</b></div>
+        <div><span>Confirmed payout</span><b>${data.confirmed}</b></div>
+        <div><span>Deadline</span><b>${data.deadline}</b></div>
+        <div><span>Best clip</span><b>${data.best || '—'}</b></div>
+        <div><span>Average views</span><b>${data.average || '—'}</b></div>
+        <div><span>Setup</span><b>${data.readiness || data.setup}</b></div>`;
+
+      modal.querySelector('.mint-modal-notes').innerHTML = `
+        <div class="mint-modal-note-card mint-modal-note-wide">
+          <span>Campaign brief</span>
+          <p>${data.brief || 'No campaign brief saved yet.'}</p>
+        </div>`;
+
+      modal.classList.add('show');
+    }, 40);
   }
 
   function enhanceCampaignStudio() {
     const root = document.querySelector('.campaigns-page');
     if (!root) return;
+
     root.classList.add('mint-campaign-overhauled');
 
-    const importSection = root.querySelector('.campaign-import') || qsa('section,div', root).find((el) => /Smart Import/i.test(text(el)) && /Paste campaign URL/i.test(text(el)));
-    const largeLayout = root.querySelector('.campaign-layout-real');
-    if (largeLayout) largeLayout.classList.add('mint-original-campaign-layout');
+    const nativeLayout = root.querySelector('.campaign-layout-real');
+    if (!nativeLayout) return;
+
+    const nativeCards = qsa('.real-campaign-card', nativeLayout);
+    if (!nativeCards.length) return;
 
     let section = root.querySelector('.mint-campaign-card-section');
     if (!section) {
@@ -144,40 +186,46 @@
       section.innerHTML = `
         <div class="mint-campaign-cards-head">
           <div>
-            <div class="eyebrow">Campaign manager</div>
-            <h2>Campaign cards</h2>
-            <p>Each campaign becomes one clear card. Click a card to open centered analytics.</p>
+            <div class="eyebrow">CAMPAIGNS</div>
+            <h2>Your campaigns</h2>
+            <p>Select a campaign to view its analytics or continue into the campaign editor.</p>
           </div>
         </div>
         <div class="mint-campaign-card-grid"></div>`;
-      (importSection?.parentNode || root).insertBefore(section, (largeLayout || importSection)?.nextSibling || root.lastChild);
+
+      nativeLayout.parentNode.insertBefore(section, nativeLayout);
     }
 
     const grid = section.querySelector('.mint-campaign-card-grid');
     grid.innerHTML = '';
 
-    const data = scrapeCampaignData(root);
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'mint-campaign-card-v152';
-    card.innerHTML = `
-      <div class="mint-campaign-card-top">
-        <span class="state">${data.status}</span>
-        <span class="provider">${data.provider}</span>
-      </div>
-      <h3>${data.title}</h3>
-      <p>${data.brief}</p>
-      <div class="mint-campaign-stat-strip">
-        <div><span>Rate</span><b>${data.rate}</b></div>
-        <div><span>Minimum</span><b>${data.minimum}</b></div>
-        <div><span>Tracked</span><b>${data.tracked}</b></div>
-      </div>
-      <div class="mint-campaign-card-foot">
-        <span>${data.setup}</span>
-        <strong>Open analytics →</strong>
-      </div>`;
-    card.onclick = () => buildCampaignModal(card, data, root);
-    grid.appendChild(card);
+    nativeCards.forEach((originalCard) => {
+      const data = campaignDataFromCard(originalCard);
+
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'mint-campaign-card-v152 mint-campaign-card-fixed-v156';
+      card.innerHTML = `
+        <div class="mint-campaign-card-top">
+          <span class="state">${data.status}</span>
+          <span class="provider">${data.provider}</span>
+        </div>
+        <h3>${data.title}</h3>
+        <div class="mint-campaign-stat-strip">
+          <div><span>Rate</span><b>${data.rate}</b></div>
+          <div><span>Minimum</span><b>${data.minimum}</b></div>
+          <div><span>Tracked</span><b>${data.views}</b></div>
+        </div>
+        <div class="mint-campaign-card-foot">
+          <span>${data.setup}</span>
+          <strong>Open analytics →</strong>
+        </div>`;
+
+      card.onclick = () => openCampaignAnalytics(root, originalCard, data);
+      grid.appendChild(card);
+    });
+
+    nativeLayout.classList.add('mint-original-campaign-layout');
   }
 
   function enhanceResults() {
@@ -186,9 +234,7 @@
     root.classList.add('mint-results-overhauled');
 
     const summary = root.querySelector('.mint-results-summary-v1418');
-    if (summary) {
-      Array.from(summary.children).forEach((item) => item.classList.add('mint-result-summary-card'));
-    }
+    if (summary) Array.from(summary.children).forEach((item) => item.classList.add('mint-result-summary-card'));
 
     const list = root.querySelector('.mint-results-list-v1418');
     if (list) {
@@ -221,8 +267,7 @@
       side.appendChild(stack);
     }
 
-    const uploadCard = root.querySelector('.upload-card');
-    if (uploadCard) uploadCard.classList.add('mint-upload-strip-v152');
+    root.querySelector('.upload-card')?.classList.add('mint-upload-strip-v152');
 
     const source = main.querySelector('.mint-studio-source-v142');
     const timeline = main.querySelector('.mint-studio-timeline-card-v142');
@@ -234,16 +279,15 @@
   }
 
   const run = debounce(() => {
-    try { enhanceNav(); } catch (e) {}
-    try { enhanceCampaignStudio(); } catch (e) {}
-    try { enhanceResults(); } catch (e) {}
-    try { enhanceAIStudio(); } catch (e) {}
+    try { enhanceNav(); } catch {}
+    try { enhanceCampaignStudio(); } catch {}
+    try { enhanceResults(); } catch {}
+    try { enhanceAIStudio(); } catch {}
   }, 80);
 
   const boot = () => {
     run();
-    const observer = new MutationObserver(run);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener('resize', run);
   };
 
