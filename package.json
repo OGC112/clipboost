@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.6",
-  "description": "Mint Red Noir Home art direction",
+  "version": "21.14.7",
+  "description": "Mint Red Noir visual match correction",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

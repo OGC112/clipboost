@@ -1,21 +1,17 @@
-Mint 21.14.6 — Red Noir Home
+Mint 21.14.7 — Red Noir Match Correction
 
-Implements the approved red/black visual direction:
-- removes the old icon/logo and keeps the Mint wordmark only
-- black/red ambient background
-- red active navigation indicator
-- red CTA buttons, no blue/violet theme
-- "workspace" accent in the Home headline
-- darker cinematic cards
-- red media accents and progress
-- refined active campaign panel
-- recent projects/imports aligned with the existing Home layout
+This patch compares the coded Home with the validated Red Noir reference and corrects the mismatches.
 
-Scope:
-- Home visual redesign
-- shared top navigation shell
-- light red accent harmonization for Campaign Discover / AI Studio buttons
+Corrected:
+- stronger red ambient background, especially right/top-right and lower-left
+- no flat-black page feel
+- Home blocks use warm red/black translucent surfaces
+- Home block borders are red, not neutral gray
+- Home active navigation returns to the red outlined treatment
+- Active Campaign stats return to the three boxed layout from the validated design
+- Recent Projects become proper dark/red cards instead of floating thumbnails
+- Recent Imports become individual warm dark panels
+- buttons and progress bar better match the approved red treatment
 
-No backend changes.
-No AI engine, Smart Import, Canto, updater or Auto Publisher changes.
+No page logic or backend functionality changed.
 No .env or secrets included.

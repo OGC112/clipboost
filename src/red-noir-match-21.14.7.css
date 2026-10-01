@@ -1,0 +1,235 @@
+/* 21.14.7 — match the validated Red Noir mockup more closely.
+   Fixes background atmosphere + card surfaces + campaign stat blocks.
+*/
+
+/* Background: stronger red ambience, less flat black */
+html,
+body{
+  background:#120708!important;
+}
+.main{
+  position:relative!important;
+  isolation:isolate!important;
+  background:
+    radial-gradient(80% 95% at 108% 18%, rgba(173,18,25,.46) 0%, rgba(110,8,13,.20) 30%, transparent 62%),
+    radial-gradient(62% 78% at -12% 78%, rgba(135,10,15,.31) 0%, rgba(83,7,11,.14) 35%, transparent 67%),
+    radial-gradient(40% 48% at 66% 108%, rgba(98,4,9,.18) 0%, transparent 72%),
+    linear-gradient(135deg,#090708 0%,#0c0909 44%,#14090a 72%,#1b080a 100%)!important;
+}
+.main::before{
+  content:""!important;
+  position:fixed!important;
+  inset:0!important;
+  pointer-events:none!important;
+  z-index:-2!important;
+  background:
+    linear-gradient(116deg,transparent 0 72%,rgba(255,35,42,.035) 83%,transparent 100%),
+    radial-gradient(circle at 93% 5%,rgba(255,41,47,.11),transparent 24%),
+    radial-gradient(circle at 4% 93%,rgba(255,36,42,.06),transparent 25%)!important;
+}
+.main::after{
+  content:""!important;
+  position:fixed!important;
+  inset:0!important;
+  pointer-events:none!important;
+  z-index:-1!important;
+  opacity:.34!important;
+  background-image:
+    linear-gradient(rgba(255,255,255,.007) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.005) 1px,transparent 1px)!important;
+  background-size:54px 54px!important;
+  mask-image:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 76%)!important;
+}
+
+/* Header should sit on the same background, not a separate black strip */
+.mint-red-topbar,
+.mint-clean-topbar,
+.mint-home-topbar{
+  background:transparent!important;
+}
+.mint-nav-home.active{
+  background:rgba(35,10,12,.58)!important;
+  border:1px solid rgba(255,46,54,.82)!important;
+  color:#fff!important;
+  box-shadow:0 0 22px rgba(255,37,45,.10)!important;
+}
+.mint-nav-home.active::after{
+  display:none!important;
+}
+
+/* Main home blocks: red-warm translucent surface and red outlines */
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  position:relative!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(90% 100% at 105% 108%,rgba(102,11,15,.20),transparent 58%),
+    linear-gradient(145deg,rgba(24,16,17,.965),rgba(13,12,12,.975))!important;
+  border:1px solid rgba(196,31,36,.54)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.018),
+    0 18px 50px rgba(0,0,0,.24)!important;
+}
+.mint-home-continue::before,
+.mint-home-campaign::before,
+.mint-home-recent::before,
+.mint-home-imports::before{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  inset:auto -14% -72% 38%;
+  height:180px;
+  background:radial-gradient(ellipse,rgba(139,13,18,.15),transparent 66%);
+}
+.mint-home-continue:hover,
+.mint-home-campaign:hover,
+.mint-home-recent:hover,
+.mint-home-imports:hover{
+  border-color:rgba(236,42,48,.62)!important;
+}
+
+/* Restore the target's boxed campaign stats instead of flat rows */
+.mint-home-campaign-stats{
+  display:grid!important;
+  grid-template-columns:1.35fr .78fr .78fr!important;
+  gap:9px!important;
+  margin:13px 0 16px!important;
+}
+.mint-home-campaign-stats div{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  grid-template-rows:auto auto!important;
+  gap:4px!important;
+  padding:11px 12px!important;
+  background:rgba(8,8,8,.40)!important;
+  border:1px solid rgba(255,255,255,.11)!important;
+  border-radius:10px!important;
+}
+.mint-home-campaign-stats div>span{
+  display:none!important;
+}
+.mint-home-campaign-stats small{
+  font-size:8.5px!important;
+  color:#9d9294!important;
+  text-transform:none!important;
+  letter-spacing:0!important;
+}
+.mint-home-campaign-stats b{
+  font-size:10.5px!important;
+  color:#fff!important;
+  text-align:left!important;
+  font-weight:620!important;
+}
+
+/* Campaign brand panel closer to the mockup */
+.mint-home-campaign-brand{
+  background:rgba(13,11,11,.42)!important;
+  border:0!important;
+  padding:13px 0 8px!important;
+  border-radius:0!important;
+}
+.mint-home-campaign-brand>span{
+  width:62px!important;
+  height:62px!important;
+  border-radius:10px!important;
+  background:
+    radial-gradient(circle at 50% 45%,rgba(255,65,72,.18),transparent 44%),
+    linear-gradient(145deg,#391012,#170b0c)!important;
+  color:#ff4b54!important;
+}
+
+/* Primary buttons: less flat, closer to validated red */
+.btn.primary{
+  background:linear-gradient(180deg,#ff3039 0%,#e71e28 100%)!important;
+  border:1px solid rgba(255,76,82,.58)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.09),
+    0 10px 26px rgba(224,22,31,.17)!important;
+}
+.mint-home-heading-actions .btn.secondary{
+  border-color:rgba(176,35,39,.48)!important;
+  background:rgba(13,9,10,.30)!important;
+}
+
+/* Recent project tiles should be real dark cards, not floating thumbnails */
+.mint-home-project-card{
+  overflow:hidden!important;
+  background:linear-gradient(180deg,rgba(20,16,17,.92),rgba(10,10,10,.97))!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  border-radius:11px!important;
+}
+.mint-home-project-card:first-child{
+  border-color:rgba(232,39,45,.68)!important;
+  box-shadow:0 0 20px rgba(222,23,31,.07)!important;
+}
+.mint-home-project-thumb{
+  border:0!important;
+  border-radius:0!important;
+}
+.mint-home-project-card:first-child .mint-home-project-thumb{
+  border:0!important;
+  box-shadow:none!important;
+}
+.mint-home-project-meta{
+  padding:10px 12px 11px!important;
+}
+
+/* Recent import rows: subtle individual warm panels */
+.mint-home-import-list{
+  gap:10px!important;
+  margin-top:14px!important;
+}
+.mint-home-import-row{
+  padding:9px 10px!important;
+  border:1px solid rgba(255,255,255,.075)!important;
+  border-radius:10px!important;
+  background:rgba(15,11,12,.34)!important;
+}
+.mint-home-import-row:hover{
+  background:rgba(39,12,14,.34)!important;
+  border-color:rgba(216,40,45,.28)!important;
+}
+
+/* Media + red framing */
+.mint-home-continue-media{
+  border-color:rgba(230,41,47,.78)!important;
+  box-shadow:
+    0 0 0 1px rgba(255,47,55,.035),
+    0 15px 40px rgba(0,0,0,.27)!important;
+}
+.mint-home-progress{
+  background:#2a2526!important;
+}
+.mint-home-progress i{
+  background:linear-gradient(90deg,#fb2f39 0%,#fb5b65 74%,#7a7476 100%)!important;
+}
+
+/* Slightly warmer text */
+.mint-home-heading p,
+.mint-home-continue-copy p,
+.mint-home-campaign-brand p,
+.mint-home-project-meta small,
+.mint-home-import-row small{
+  color:#a89fa1!important;
+}
+
+/* The validated mockup has a more generous hero top spacing */
+.mint-home-page{
+  padding-top:34px!important;
+}
+.mint-home-heading{
+  padding-bottom:28px!important;
+}
+
+@media(max-width:1250px){
+  .mint-home-campaign-stats{
+    grid-template-columns:1.25fr .8fr .8fr!important;
+  }
+}
+@media(max-width:900px){
+  .mint-home-campaign-stats{
+    grid-template-columns:1fr!important;
+  }
+}
