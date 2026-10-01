@@ -1,0 +1,187 @@
+/* Mint 21.14.13 — Home editorial refinement */
+
+/* Slightly tighter hero */
+.mint-editorial-feature-media{
+  height:380px!important;
+}
+.mint-editorial-feature-overlay{
+  left:20px!important;
+  right:20px!important;
+  bottom:18px!important;
+}
+.mint-editorial-feature-overlay h2{
+  font-size:25px!important;
+  max-width:720px!important;
+}
+.mint-editorial-feature-overlay>span{
+  padding:11px 15px!important;
+  font-size:11px!important;
+  background:linear-gradient(180deg,#df2a33,#b81720)!important;
+  border-color:rgba(255,255,255,.10)!important;
+}
+.mint-editorial-progress-row{
+  padding-top:10px!important;
+}
+.mint-editorial-progress-row .mint-home-progress{
+  height:4px!important;
+}
+
+/* Campaign panel: significantly shorter and denser */
+.mint-editorial-campaign{
+  min-height:0!important;
+  height:auto!important;
+  padding:14px!important;
+}
+.mint-editorial-campaign-head{
+  padding-bottom:12px!important;
+}
+.mint-editorial-campaign-head>span{
+  width:46px!important;
+  height:46px!important;
+}
+.mint-editorial-campaign-head h2{
+  font-size:18px!important;
+}
+.mint-editorial-campaign dl{
+  display:grid!important;
+  grid-template-columns:1.4fr .8fr .8fr!important;
+  gap:8px!important;
+  margin:12px 0 13px!important;
+}
+.mint-editorial-campaign dl>div{
+  display:block!important;
+  padding:10px 11px!important;
+  border:1px solid rgba(255,255,255,.065)!important;
+  border-radius:9px!important;
+  background:rgba(8,8,8,.24)!important;
+}
+.mint-editorial-campaign dt{
+  margin-bottom:4px!important;
+}
+.mint-editorial-campaign dd{
+  text-align:left!important;
+  font-size:9.5px!important;
+}
+.mint-editorial-campaign .btn{
+  margin-top:0!important;
+  height:36px!important;
+  min-height:36px!important;
+}
+
+/* main grid now aligns by content instead of stretching campaign */
+.mint-editorial-main{
+  align-items:start!important;
+}
+
+/* lower content moves up */
+.mint-editorial-work{
+  margin-top:22px!important;
+  gap:22px!important;
+}
+
+/* Recent projects: 3 compact landscape cards */
+.mint-editorial-projects-row{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+.mint-editorial-project-media{
+  height:128px!important;
+  border-radius:11px!important;
+}
+.mint-editorial-project-copy{
+  padding-top:7px!important;
+}
+.mint-editorial-project-copy strong{
+  font-size:10px!important;
+  line-height:1.25!important;
+  display:-webkit-box!important;
+  -webkit-line-clamp:2!important;
+  -webkit-box-orient:vertical!important;
+  white-space:normal!important;
+}
+.mint-editorial-project-copy small{
+  font-size:8px!important;
+}
+
+/* Recent imports: denser + bigger thumbs, no dead vertical area */
+.mint-editorial-imports-list{
+  gap:3px!important;
+}
+.mint-editorial-import{
+  grid-template-columns:82px minmax(0,1fr) 18px!important;
+  gap:9px!important;
+  padding:8px 0!important;
+}
+.mint-editorial-import-thumb{
+  width:82px!important;
+  height:50px!important;
+}
+.mint-editorial-import-copy strong{
+  font-size:9.5px!important;
+  line-height:1.2!important;
+  display:-webkit-box!important;
+  -webkit-line-clamp:2!important;
+  -webkit-box-orient:vertical!important;
+  white-space:normal!important;
+}
+
+/* Better section typography */
+.mint-editorial-work-head b,
+.mint-editorial-section-label>b{
+  letter-spacing:-.01em!important;
+}
+.mint-editorial-work-head small,
+.mint-editorial-section-label,
+.mint-editorial-import-copy small,
+.mint-editorial-project-copy small{
+  color:#878082!important;
+}
+
+/* background: preserve black separation between red light zones */
+.main{
+  background:
+    radial-gradient(36% 30% at 92% 9%,rgba(178,17,24,.12),transparent 72%),
+    radial-gradient(28% 26% at 4% 86%,rgba(133,10,16,.065),transparent 74%),
+    radial-gradient(20% 18% at 81% 96%,rgba(118,8,13,.035),transparent 76%),
+    linear-gradient(135deg,#080707 0%,#090808 48%,#0c0808 76%,#0f0708 100%)!important;
+}
+.main::before{
+  opacity:.70!important;
+  filter:blur(15px)!important;
+}
+
+/* less red framing around content */
+.mint-editorial-feature-media,
+.mint-editorial-campaign{
+  border-color:rgba(154,31,36,.18)!important;
+}
+.mint-editorial-project-media{
+  border-color:rgba(255,255,255,.055)!important;
+}
+
+/* slightly more legible secondary text */
+.mint-editorial-heading p{
+  color:#b5adaf!important;
+}
+.mint-editorial-campaign-head p,
+.mint-editorial-project-copy small,
+.mint-editorial-import-copy small{
+  color:#8d8587!important;
+}
+
+@media(max-width:1150px){
+  .mint-editorial-projects-row{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+@media(max-width:760px){
+  .mint-editorial-feature-media{
+    height:320px!important;
+  }
+  .mint-editorial-campaign dl{
+    grid-template-columns:1fr!important;
+  }
+  .mint-editorial-projects-row{
+    grid-template-columns:1fr!important;
+  }
+}

@@ -145,7 +145,7 @@
     const current=projects.find(p=>['ingesting','analyzing'].includes(p.status))||projects[0]||null;
     const activeCampaign=campaignsList.find(c=>String(c.status||'active')==='active')||campaignsList[0]||null;
     const currentState=current?projectDisplayState(current):null;
-    const recent=projects.slice(0,4);
+    const recent=projects.slice(0,3);
     const imports=projects.filter(p=>p.externalSource).slice(0,4);
 
     const recentCards=recent.length ? recent.map((p,i)=>{

@@ -1,17 +1,16 @@
-Mint 21.14.12 — Home Media-First Editorial Redesign
-
-This version changes the actual Home hierarchy, not just colors.
+Mint 21.14.13 — Home Editorial Refinement
 
 Changes:
-- Continue Working becomes the dominant large media feature
-- project title/details are overlaid on the media
-- Active Campaign becomes a compact editorial side panel
-- Recent Projects becomes a horizontal media-first gallery
-- Recent Imports becomes a lightweight activity list
-- removes the four-heavy-dashboard-box feeling
-- preserves current red/noir theme and lighting
-- keeps all existing project/campaign navigation hooks
+- Continue Working hero reduced by ~12%
+- Continue CTA made more visible
+- Active Campaign made much shorter and denser
+- campaign stats moved into a compact horizontal row
+- Recent Projects now uses 3 smaller landscape cards
+- Recent Imports is denser with larger thumbnails
+- lower content pulled upward
+- secondary typography made more readable
+- red background wash reduced further
+- red framing around content made subtler
 
-No backend changes.
-No AI engine changes.
+No backend or feature logic changes.
 No .env or secrets included.
