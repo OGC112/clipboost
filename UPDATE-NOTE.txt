@@ -1,14 +1,21 @@
-Mint 21.14.5 — Header Cleanup
+Mint 21.14.6 — Red Noir Home
 
-Changes:
-- removes the search bar from the top header
-- removes the visible header/page divider
-- removes header shadow
-- centers the Campaigns/Create workflow navigation physically in the window
-- keeps Settings as a gear at the top right
-- keeps update status at the top right when needed
-- blends header and page background into one continuous graphite surface
+Implements the approved red/black visual direction:
+- removes the old icon/logo and keeps the Mint wordmark only
+- black/red ambient background
+- red active navigation indicator
+- red CTA buttons, no blue/violet theme
+- "workspace" accent in the Home headline
+- darker cinematic cards
+- red media accents and progress
+- refined active campaign panel
+- recent projects/imports aligned with the existing Home layout
 
-No content page hierarchy changed.
-No backend, AI engine, Smart Import, Canto, updater or Auto Publisher changes.
+Scope:
+- Home visual redesign
+- shared top navigation shell
+- light red accent harmonization for Campaign Discover / AI Studio buttons
+
+No backend changes.
+No AI engine, Smart Import, Canto, updater or Auto Publisher changes.
 No .env or secrets included.

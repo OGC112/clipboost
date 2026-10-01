@@ -1,3 +1,4 @@
+/* MINT-RED-NOIR-21.14.6 */
 /* MINT-HEADER-21.14.5 */
 /* MINT-NAVIGATION-21.14.3 */
 /* MINT-AI-STUDIO-21.14.2 */
@@ -104,10 +105,8 @@
     const updatePill=['checking','downloading','ready','error'].includes(u.status)
       ? `<button class="update-pill ${u.status}" id="updateCenterBtn" type="button"><span>${u.status==='ready'?'✓':u.status==='error'?'!':'↻'}</span>${u.status==='downloading'?`Update ${Math.round(u.percent||0)}%`:u.status==='checking'?'Checking update…':u.status==='ready'?`Update ${escapeHtml(u.version||'')} ready`:'Update issue'}</button>`
       : '';
-    return `<header class="topbar mint-home-topbar mint-split-topbar mint-clean-topbar">
-      <button class="mint-home-brand" data-page="home" type="button">
-        <span class="mint-home-logo"><i></i><b></b></span><strong>Mint</strong>
-      </button>
+    return `<header class="topbar mint-home-topbar mint-split-topbar mint-clean-topbar mint-red-topbar">
+      <button class="mint-home-brand mint-wordmark-only" data-page="home" type="button"><strong>Mint</strong></button>
 
       <nav class="mint-split-nav mint-centered-nav">
         <button data-page="home" class="mint-nav-home ${state.page==='home'?'active':''}" type="button">Home</button>
@@ -173,7 +172,7 @@
       <section class="mint-home-heading">
         <div>
           <div class="eyebrow">MINT WORKSPACE</div>
-          <h1>Your Mint workspace</h1>
+          <h1>Your Mint <span class="mint-red-word">workspace</span></h1>
           <p>Create, manage and grow your content with AI. General clipping stays in AI Studio. Paid campaign work stays in Campaign Studio.</p>
         </div>
         <div class="mint-home-heading-actions">

@@ -1,0 +1,369 @@
+/* Mint 21.14.6 — approved Red Noir direction
+   Home + shared shell only. Existing product logic is untouched.
+*/
+
+:root{
+  --rn-bg:#080708;
+  --rn-bg-2:#0d090a;
+  --rn-surface:#111011;
+  --rn-surface-2:#171314;
+  --rn-surface-3:#1b1516;
+  --rn-line:rgba(255,255,255,.09);
+  --rn-line-red:rgba(255,47,55,.34);
+  --rn-text:#f8f6f6;
+  --rn-muted:#a7a0a1;
+  --rn-red:#ff2f37;
+  --rn-red-2:#d91420;
+  --rn-red-soft:rgba(255,47,55,.12);
+  --rn-green:#3fd68b;
+  --rn-amber:#e3ad43;
+}
+
+/* Shell */
+html,body{background:#090708!important}
+.main{
+  min-height:100vh!important;
+  background:
+    radial-gradient(circle at 100% 14%,rgba(255,34,39,.17),transparent 25%),
+    radial-gradient(circle at 0% 78%,rgba(132,0,0,.13),transparent 30%),
+    linear-gradient(135deg,#090708 0%,#0d090a 58%,#170708 100%)!important;
+  color:var(--rn-text)!important;
+}
+.main:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  background:
+    radial-gradient(ellipse at 78% 13%,rgba(255,58,46,.08),transparent 22%),
+    radial-gradient(ellipse at 84% 83%,rgba(255,25,25,.07),transparent 27%);
+}
+.main>*{position:relative;z-index:1}
+body{
+  font-family:"Segoe UI Variable Text","Segoe UI",Arial,sans-serif!important;
+  color:var(--rn-text)!important;
+}
+
+/* Header */
+.mint-red-topbar{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.mint-wordmark-only{
+  gap:0!important;
+}
+.mint-wordmark-only strong{
+  font-family:"Segoe UI Variable Display","Segoe UI",Arial,sans-serif!important;
+  font-size:29px!important;
+  font-weight:760!important;
+  letter-spacing:-.045em!important;
+  color:#fff!important;
+}
+.mint-home-logo{display:none!important}
+.mint-nav-label{
+  color:#71696b!important;
+}
+.mint-nav-separator{
+  background:rgba(255,255,255,.14)!important;
+}
+.mint-nav-home,
+.mint-nav-group button{
+  color:#c0b9bb!important;
+}
+.mint-nav-home.active,
+.mint-nav-group button.active,
+.mint-nav-group.campaign-group button.active,
+.mint-nav-group.create-group button.active{
+  background:transparent!important;
+  color:#fff!important;
+  box-shadow:none!important;
+  position:relative;
+}
+.mint-nav-home.active:after,
+.mint-nav-group button.active:after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:1px;
+  transform:translateX(-50%);
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:var(--rn-red);
+  box-shadow:0 0 11px rgba(255,47,55,.95);
+}
+.mint-settings-gear{
+  background:rgba(255,255,255,.025)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  color:#e2dddd!important;
+}
+.mint-settings-gear:hover{
+  border-color:rgba(255,47,55,.35)!important;
+  color:#fff!important;
+}
+
+/* Home hero */
+.mint-home-page{
+  width:min(1480px,calc(100% - 60px))!important;
+  padding-top:28px!important;
+}
+.mint-home-heading{
+  padding:12px 12px 24px!important;
+}
+.mint-home-heading .eyebrow{
+  color:#a69b9d!important;
+  font-size:9px!important;
+  letter-spacing:.22em!important;
+  font-weight:650!important;
+}
+.mint-home-heading h1{
+  margin:7px 0 8px!important;
+  font-size:50px!important;
+  line-height:.98!important;
+  letter-spacing:-.055em!important;
+  font-weight:760!important;
+  color:#fff!important;
+}
+.mint-red-word{
+  color:var(--rn-red)!important;
+}
+.mint-home-heading p{
+  color:#b5acad!important;
+  font-size:13px!important;
+  line-height:1.55!important;
+  max-width:780px!important;
+}
+.mint-home-heading-actions{
+  align-items:center!important;
+  gap:12px!important;
+}
+.btn{
+  border-radius:12px!important;
+  font-weight:650!important;
+  box-shadow:none!important;
+}
+.btn.primary{
+  background:linear-gradient(180deg,#ff343c,#ed1f29)!important;
+  border:1px solid rgba(255,91,91,.35)!important;
+  color:#fff!important;
+  box-shadow:0 12px 30px rgba(255,29,38,.16)!important;
+}
+.btn.primary:hover{
+  background:#ff3a42!important;
+  box-shadow:0 14px 34px rgba(255,29,38,.22)!important;
+}
+.btn.secondary{
+  background:rgba(10,9,9,.48)!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  color:#f3eeee!important;
+}
+.btn.secondary:hover{
+  border-color:rgba(255,47,55,.34)!important;
+  background:rgba(255,47,55,.045)!important;
+}
+
+/* Cards */
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  background:
+    linear-gradient(180deg,rgba(22,17,18,.96),rgba(14,13,14,.96))!important;
+  border:1px solid rgba(255,255,255,.085)!important;
+  box-shadow:0 18px 46px rgba(0,0,0,.22)!important;
+  border-radius:17px!important;
+}
+.mint-home-continue:hover,
+.mint-home-campaign:hover,
+.mint-home-recent:hover,
+.mint-home-imports:hover{
+  border-color:rgba(255,47,55,.26)!important;
+}
+.mint-home-continue,
+.mint-home-campaign{padding:22px!important}
+.mint-home-recent,
+.mint-home-imports{padding:18px!important}
+
+/* Section titles */
+.mint-home-continue>header b,
+.mint-home-campaign>header b,
+.mint-home-recent>header b,
+.mint-home-imports>header b{
+  color:#f5eeee!important;
+  font-size:15px!important;
+  letter-spacing:-.01em!important;
+  text-transform:none!important;
+  font-weight:650!important;
+}
+.mint-home-continue>header span,
+.mint-home-campaign>header span,
+.mint-home-recent>header>div>span,
+.mint-home-imports>header>div>span{
+  color:var(--rn-red)!important;
+}
+.mint-home-continue>header em{
+  background:rgba(227,173,67,.09)!important;
+  color:#e8b953!important;
+  border:1px solid rgba(227,173,67,.2)!important;
+}
+.mint-home-campaign>header em{
+  background:rgba(63,214,139,.09)!important;
+  color:var(--rn-green)!important;
+}
+
+/* Continue working */
+.mint-home-continue-body{
+  grid-template-columns:minmax(360px,.9fr) minmax(380px,1.1fr)!important;
+  gap:26px!important;
+  align-items:center!important;
+}
+.mint-home-continue-media{
+  height:250px!important;
+  border:1px solid rgba(255,47,55,.55)!important;
+  border-radius:14px!important;
+  overflow:hidden!important;
+  background:#100d0e!important;
+  box-shadow:0 0 0 1px rgba(255,47,55,.04),0 14px 35px rgba(0,0,0,.24)!important;
+}
+.mint-home-continue-media:after{
+  content:"";
+  position:absolute;
+  inset:auto 0 0 0;
+  height:35%;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.48));
+}
+.mint-home-continue-media>i{
+  width:55px!important;height:55px!important;
+  background:rgba(13,10,11,.76)!important;
+  border:1px solid rgba(255,255,255,.33)!important;
+  color:#fff!important;
+  box-shadow:0 10px 25px rgba(0,0,0,.35)!important;
+}
+.mint-home-continue-copy h2{
+  font-size:24px!important;
+  line-height:1.15!important;
+  font-weight:680!important;
+  letter-spacing:-.025em!important;
+}
+.mint-home-continue-copy p{
+  color:#9e9698!important;
+  font-size:11.5px!important;
+}
+.mint-home-progress{
+  height:7px!important;
+  background:#2a2526!important;
+}
+.mint-home-progress i{
+  background:linear-gradient(90deg,#ff2530,#ff646c)!important;
+}
+.mint-home-progress-label span,
+.mint-home-progress-label b{
+  color:#9d9698!important;
+}
+.mint-home-more{
+  background:#171415!important;
+  border:1px solid rgba(255,255,255,.1)!important;
+  color:#a49c9e!important;
+}
+
+/* Campaign */
+.mint-home-campaign-brand{
+  background:#171314!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  padding:13px!important;
+}
+.mint-home-campaign-brand>span{
+  background:linear-gradient(145deg,#441214,#1a0d0e)!important;
+  color:#ff555c!important;
+}
+.mint-home-campaign-brand h2{
+  font-size:20px!important;
+  font-weight:660!important;
+}
+.mint-home-campaign-brand p{color:#978f91!important}
+.mint-home-campaign-stats div{
+  border-bottom:1px solid rgba(255,255,255,.07)!important;
+}
+.mint-home-campaign-stats div>span{
+  color:var(--rn-red)!important;
+}
+.mint-home-campaign-stats small{
+  color:#8d8486!important;
+}
+.mint-home-campaign-stats b{
+  color:#f7f3f3!important;
+}
+
+/* Recent project cards */
+.mint-home-project-card{
+  background:transparent!important;
+}
+.mint-home-project-thumb{
+  background:#130f10!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-home-project-card:first-child .mint-home-project-thumb{
+  border-color:rgba(255,47,55,.5)!important;
+  box-shadow:0 0 24px rgba(255,47,55,.08)!important;
+}
+.mint-home-project-meta strong{
+  color:#f2eded!important;
+  font-size:11px!important;
+}
+.mint-home-project-meta small{
+  color:#8f8789!important;
+}
+
+/* Imports */
+.mint-home-import-row{
+  border-bottom:1px solid rgba(255,255,255,.075)!important;
+}
+.mint-home-import-row strong{
+  color:#f1ecec!important;
+  font-size:10.5px!important;
+}
+.mint-home-import-row small{
+  color:#8e8587!important;
+}
+.mint-home-import-row>span{
+  color:#9a9294!important;
+}
+.mint-home-import-thumb{
+  border:1px solid rgba(255,255,255,.06)!important;
+}
+
+/* Home card alignment retained */
+.mint-home-primary-grid,
+.mint-home-lower-grid{
+  grid-template-columns:minmax(0,1.65fr) minmax(350px,.92fr)!important;
+  gap:16px!important;
+  align-items:stretch!important;
+}
+
+/* Campaign Discover shared shell accents */
+.campaign-discover-v143 .btn.primary,
+.mint-studio-page-v142 .btn.primary{
+  background:linear-gradient(180deg,#ff343c,#ed1f29)!important;
+  border-color:rgba(255,91,91,.35)!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143,
+.campaign-discover-v143 .campaign-discover-import-v143,
+.campaign-discover-v143 .campaign-discover-summary-v143 article{
+  background:#141011!important;
+  border-color:rgba(255,255,255,.08)!important;
+}
+.campaign-discover-v143 .campaign-discover-score-v143{
+  background:var(--rn-red-soft)!important;
+  color:#ff7379!important;
+}
+
+@media(max-width:1250px){
+  .mint-home-heading h1{font-size:43px!important}
+}
+@media(max-width:900px){
+  .mint-home-heading h1{font-size:36px!important}
+  .mint-home-primary-grid,.mint-home-lower-grid{grid-template-columns:1fr!important}
+  .mint-home-continue-body{grid-template-columns:1fr!important}
+}

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.5",
-  "description": "Mint header cleanup and centered workflow navigation",
+  "version": "21.14.6",
+  "description": "Mint Red Noir Home art direction",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
