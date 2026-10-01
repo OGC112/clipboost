@@ -1,0 +1,352 @@
+/* 21.14.19 — Auto Publisher safe unified visual pass.
+   No runtime/postinstall patching. Pure CSS only.
+*/
+
+/* THICKER MENU */
+.mint-red-topbar{
+  min-height:116px!important;
+  padding:0 40px!important;
+}
+.mint-wordmark-only strong{
+  font-size:40px!important;
+  font-weight:780!important;
+  letter-spacing:-.05em!important;
+}
+.mint-centered-nav{gap:30px!important}
+.mint-nav-home,
+.mint-nav-group button{
+  font-size:16px!important;
+  font-weight:680!important;
+  padding:16px 19px!important;
+  border-radius:11px!important;
+}
+.mint-nav-label{
+  font-size:10px!important;
+  font-weight:720!important;
+  letter-spacing:.19em!important;
+  margin-bottom:8px!important;
+}
+.mint-nav-group>div{gap:10px!important}
+.mint-nav-separator{height:46px!important}
+.mint-settings-gear{
+  width:52px!important;
+  height:52px!important;
+  font-size:17px!important;
+}
+
+/* SHARED PAGE RHYTHM */
+.content{
+  width:min(1490px,calc(100% - 72px))!important;
+  padding-top:34px!important;
+  padding-bottom:58px!important;
+}
+.page-title,
+.mint-studio-header-v142,
+.campaign-discover-header-v143{
+  margin-bottom:28px!important;
+  padding-bottom:24px!important;
+  border-bottom:1px solid rgba(255,255,255,.07)!important;
+}
+.page-title h1,
+.mint-studio-header-v142 h1,
+.campaign-discover-header-v143 h1{
+  font-size:46px!important;
+  line-height:1!important;
+  letter-spacing:-.045em!important;
+}
+.page-title p,
+.mint-studio-header-v142 p,
+.campaign-discover-header-v143 p{
+  color:#aaa3a4!important;
+  font-size:12.5px!important;
+}
+
+/* FLATTEN GENERIC CARDS */
+.mint-studio-page-v142 .card,
+.campaigns-page .card,
+.settings-page .card,
+.library-card,
+.projects.card{
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+
+/* AI STUDIO */
+.mint-studio-toolstrip-v142{
+  display:flex!important;
+  gap:0!important;
+  padding:12px 0!important;
+  margin-bottom:24px!important;
+  border-top:1px solid rgba(255,255,255,.065)!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+  background:transparent!important;
+}
+.mint-studio-toolstrip-v142 article{
+  flex:1!important;
+  padding:5px 20px!important;
+  border:0!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+.mint-studio-toolstrip-v142 article:first-child{padding-left:0!important}
+.mint-studio-toolstrip-v142 article:last-child{border-right:0!important}
+
+.mint-studio-page-v142 .upload-card{
+  padding:18px 0!important;
+  margin-bottom:24px!important;
+  border-top:1px solid rgba(255,255,255,.065)!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-studio-workspace-v142{gap:28px!important}
+.mint-studio-side-v142{
+  padding-left:26px!important;
+  border-left:1px solid rgba(255,255,255,.07)!important;
+}
+.mint-studio-source-v142{
+  padding:0 0 24px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-studio-timeline-card-v142{padding:0!important}
+.mint-preview-card-v142{
+  padding:0 0 24px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-ai-tools-v142{padding:0!important}
+.auto-director-card,
+.quality-explainer,
+.edit-plan-card,
+.selectrow,
+.caption-color-control{
+  background:transparent!important;
+  border:0!important;
+  border-top:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  padding:14px 0!important;
+}
+
+/* CAMPAIGN DISCOVER */
+.campaign-discover-import-v143{
+  display:grid!important;
+  grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr)!important;
+  gap:30px!important;
+  padding:20px 0!important;
+  margin-bottom:24px!important;
+  border-top:1px solid rgba(255,255,255,.065)!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+  background:transparent!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+.campaign-discover-summary-v143{
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:0!important;
+  padding:14px 0 24px!important;
+  margin-bottom:22px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.campaign-discover-summary-v143 article{
+  padding:0 20px!important;
+  border:0!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.campaign-discover-summary-v143 article:first-child{padding-left:0!important}
+.campaign-discover-summary-v143 article:last-child{border-right:0!important}
+.campaign-discover-card-v143{
+  padding:18px 0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.06)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+/* CAMPAIGN STUDIO */
+.campaign-import{
+  display:grid!important;
+  grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr)!important;
+  gap:28px!important;
+  padding:18px 0!important;
+  margin-bottom:26px!important;
+  border-top:1px solid rgba(255,255,255,.065)!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.campaign-layout-real{
+  grid-template-columns:270px minmax(0,1fr)!important;
+  gap:30px!important;
+}
+.campaign-grid-list{
+  display:block!important;
+  padding-right:24px!important;
+  border-right:1px solid rgba(255,255,255,.065)!important;
+}
+.real-campaign-card{
+  width:100%!important;
+  padding:15px 0!important;
+  margin:0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  text-align:left!important;
+}
+.real-campaign-card.active{
+  background:linear-gradient(90deg,rgba(161,18,26,.10),transparent 74%)!important;
+}
+.campaign-detail{padding:0!important}
+.campaign-tabs{
+  border-top:1px solid rgba(255,255,255,.06)!important;
+  border-bottom:1px solid rgba(255,255,255,.06)!important;
+  background:transparent!important;
+}
+
+/* LIBRARY */
+.library-platform-tabs{
+  padding-bottom:12px!important;
+  margin-bottom:18px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.creator-row{
+  padding:12px 0 22px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.library-toolbar{
+  padding:18px 0!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.yt-vod-list{padding:0!important}
+.library-media-row{
+  display:grid!important;
+  grid-template-columns:240px minmax(0,1fr) auto!important;
+  gap:20px!important;
+  align-items:center!important;
+  padding:16px 0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.library-media-row .yt-thumb{
+  height:138px!important;
+  border-radius:10px!important;
+  overflow:hidden!important;
+}
+
+/* PROJECTS */
+.projects{padding:0!important}
+.project-row{
+  display:grid!important;
+  grid-template-columns:150px minmax(0,1fr) minmax(160px,.45fr) auto!important;
+  gap:18px!important;
+  align-items:center!important;
+  padding:15px 0!important;
+  border-bottom:1px solid rgba(255,255,255,.06)!important;
+  background:transparent!important;
+}
+.project-source-thumb{
+  width:150px!important;
+  height:84px!important;
+  border-radius:9px!important;
+  overflow:hidden!important;
+}
+
+/* SETTINGS */
+.settings-grid{
+  grid-template-columns:1fr 1fr!important;
+  gap:0 36px!important;
+}
+.settings-card{
+  padding:20px 0!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.settings-grid .settings-card:nth-child(odd){
+  padding-right:22px!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+}
+.settings-page input,
+.settings-page select{
+  background:rgba(8,8,8,.34)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:9px!important;
+}
+.switch-row{
+  padding:14px 0!important;
+  border-top:1px solid rgba(255,255,255,.05)!important;
+}
+
+/* GENERIC ANALYTICS PAGE: visually flatten old mock analytics until JS is replaced safely */
+.kpis{
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:0!important;
+  padding:8px 0 24px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.kpis .kpi{
+  padding:0 20px!important;
+  border:0!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.kpis .kpi:first-child{padding-left:0!important}
+.kpis .kpi:last-child{border-right:0!important}
+.analytics-grid .card{
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  border-bottom:1px solid rgba(255,255,255,.06)!important;
+}
+
+/* BUTTONS / BACKGROUND */
+.btn{
+  border-radius:10px!important;
+}
+.btn.primary{
+  background:linear-gradient(180deg,#df2b34,#b71820)!important;
+  border:1px solid rgba(255,75,82,.25)!important;
+  box-shadow:0 8px 18px rgba(151,10,16,.10)!important;
+}
+.btn.secondary{
+  background:rgba(9,8,8,.26)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+}
+.main{
+  background:
+    radial-gradient(28% 24% at 94% 7%,rgba(150,14,20,.075),transparent 72%),
+    radial-gradient(18% 16% at 5% 88%,rgba(103,8,12,.025),transparent 76%),
+    linear-gradient(135deg,#080707 0%,#090808 52%,#0a0808 80%,#0c0708 100%)!important;
+}
+.main::before{
+  opacity:.32!important;
+  filter:blur(24px)!important;
+}
+
+@media(max-width:1100px){
+  .settings-grid{grid-template-columns:1fr!important}
+  .settings-grid .settings-card:nth-child(odd){
+    padding-right:0!important;
+    border-right:0!important;
+  }
+  .campaign-layout-real{grid-template-columns:1fr!important}
+  .campaign-grid-list{
+    padding-right:0!important;
+    border-right:0!important;
+    border-bottom:1px solid rgba(255,255,255,.065)!important;
+  }
+}
+@media(max-width:820px){
+  .library-media-row{grid-template-columns:1fr!important}
+  .project-row{grid-template-columns:100px minmax(0,1fr)!important}
+  .kpis{grid-template-columns:1fr 1fr!important}
+}

@@ -1,18 +1,15 @@
-Mint 21.14.17 — Home No-Blocks Redesign
+Mint 21.14.19 — Auto Publisher Safe Fix
 
-This removes the card/block-heavy design entirely.
+Reason for this build:
+21.14.18 used an npm postinstall patch script. Auto Publisher correctly detected the ZIP,
+but npm install failed while executing that postinstall script.
 
-Changes:
-- larger navigation again
-- no dashboard boxes for the Home content
-- sections are separated with spacing and thin rules
-- Continue Working is media + copy, not a card
-- campaign metrics are shown as a clean data list, not 6 mini-cards
-- Recent Projects becomes a table-like media list
-- Recent Imports becomes a clean activity feed
-- factual views/likes/clips/payout/performance remain
-- missing values show as an em dash instead of fabricated numbers
-- background is darker and less red
-
-No backend or feature logic changes.
-No .env or secrets included.
+21.14.19:
+- removes postinstall completely
+- contains only ready-to-copy files
+- keeps the larger/thicker navigation
+- applies the unified no-block visual style via CSS to:
+  AI Studio, Campaign Discover, Campaign Studio, Library, Projects, Settings and analytics surfaces
+- no runtime patching during npm install
+- no backend changes
+- no .env or secrets
