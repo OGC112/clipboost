@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.11",
-  "description": "Mint Discover hero harmonized with Results Campaign Studio and Library",
+  "version": "21.15.12",
+  "description": "Mint Discover compact import and campaign counters",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -1,12 +1,11 @@
-Mint 21.15.11 — Discover Hero Harmonization
+Mint 21.15.12 — Discover Compact Control Row
 
-Discover now uses the same hero language as Results, Campaign Studio and Library:
-- same top spacing below navigation
-- same hero minimum height
-- same centered eyebrow, title and description geometry
-- same title scale and typography
-- same bottom divider and spacing
-- centered Discover CTA preserved
-- Smart Import starts on the same content rhythm below the hero
-
-No Discover campaign logic or import behavior changed.
+Discover is simplified to keep campaign discovery focused:
+- removed Tracked views from Discover summary
+- removed Confirmed payout from Discover summary
+- these performance metrics remain available in Results
+- kept Total campaigns and Active
+- Smart Import is shorter and more compact
+- Total campaigns + Active are attached directly to the import module
+- reduced vertical space before campaign cards
+- no campaign import behavior changed

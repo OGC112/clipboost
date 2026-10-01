@@ -1,0 +1,135 @@
+/* Mint 21.15.12 — Discover compact control row
+   Smart Import + Total campaigns + Active on one compact horizontal row.
+   Results-only metrics are intentionally removed from Discover. */
+
+.campaign-discover-v143{
+  --discover-control-gap:10px;
+}
+
+/* Collapse Smart Import + counters into one horizontal dashboard row */
+.campaign-discover-import-v143{
+  display:grid!important;
+  grid-template-columns:minmax(260px,.9fr) minmax(440px,1.45fr)!important;
+  gap:22px!important;
+  min-height:88px!important;
+  padding:18px 20px!important;
+  margin-bottom:0!important;
+  border-radius:16px 16px 0 0!important;
+}
+
+.campaign-discover-import-v143::after{
+  top:14px!important;
+  bottom:14px!important;
+}
+
+.campaign-discover-import-v143 h3{
+  margin:4px 0 4px!important;
+  font-size:17px!important;
+}
+
+.campaign-discover-import-v143 p{
+  max-width:500px!important;
+  font-size:10.5px!important;
+  line-height:1.4!important;
+  opacity:.55!important;
+}
+
+.campaign-discover-import-v143 .eyebrow{
+  font-size:9px!important;
+}
+
+.campaign-discover-import-controls-v143{
+  grid-template-columns:minmax(0,1fr) 120px 144px!important;
+  gap:8px!important;
+}
+
+.campaign-discover-import-controls-v143 input,
+.campaign-discover-import-controls-v143 .btn{
+  height:40px!important;
+  min-height:40px!important;
+  border-radius:10px!important;
+}
+
+/* Two compact counters directly attached below the import bar */
+.campaign-discover-summary-v143{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:0!important;
+  width:100%!important;
+  margin:0 0 24px!important;
+  border:1px solid rgba(255,255,255,.065)!important;
+  border-top:0!important;
+  border-radius:0 0 16px 16px!important;
+  overflow:hidden!important;
+  background:rgba(11,10,12,.82)!important;
+}
+
+.campaign-discover-summary-v143 article{
+  min-height:54px!important;
+  padding:10px 20px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:16px!important;
+}
+
+.campaign-discover-summary-v143 article + article{
+  border-left:1px solid rgba(255,255,255,.055)!important;
+}
+
+.campaign-discover-summary-v143 article::before{
+  display:none!important;
+}
+
+.campaign-discover-summary-v143 article small{
+  font-size:9.5px!important;
+  letter-spacing:.10em!important;
+}
+
+.campaign-discover-summary-v143 article b{
+  font-size:20px!important;
+  line-height:1!important;
+}
+
+/* Bring campaign cards upward now that the metrics area is compact */
+.campaign-discover-grid-v143{
+  padding-top:24px!important;
+}
+
+/* Desktop: visually treat import + counters as one single compact module */
+@media(min-width:1201px){
+  .campaign-discover-import-v143,
+  .campaign-discover-summary-v143{
+    box-shadow:none!important;
+  }
+}
+
+@media(max-width:1200px){
+  .campaign-discover-import-v143{
+    grid-template-columns:1fr!important;
+    gap:14px!important;
+  }
+
+  .campaign-discover-import-controls-v143{
+    grid-template-columns:minmax(0,1fr) 120px 144px!important;
+  }
+}
+
+@media(max-width:760px){
+  .campaign-discover-import-controls-v143{
+    grid-template-columns:1fr!important;
+  }
+
+  .campaign-discover-summary-v143{
+    grid-template-columns:1fr 1fr!important;
+  }
+
+  .campaign-discover-summary-v143 article{
+    padding:10px 12px!important;
+  }
+}

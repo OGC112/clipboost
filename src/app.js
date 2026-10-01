@@ -834,8 +834,6 @@
       <section class="campaign-discover-summary-v143">
         <article><small>Total campaigns</small><b>${list.length}</b></article>
         <article><small>Active</small><b>${active.length}</b></article>
-        <article><small>Tracked views</small><b>${formatCount(list.reduce((n,c)=>n+Number(c.totals?.totalViews||0),0))}</b></article>
-        <article><small>Confirmed payout</small><b>${formatMoney(list.reduce((n,c)=>n+Number(c.totals?.confirmedRevenue||0),0),list[0]?.currency||'USD')}</b></article>
       </section>
 
       <section class="campaign-discover-grid-v143">
