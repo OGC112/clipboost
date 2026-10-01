@@ -1,0 +1,328 @@
+/* 21.14.10 — stronger lighting + depth pass
+   Goal: move from flat black/red dashboard to the validated cinematic red/noir composition.
+*/
+
+/* ------------------------------------------------------------------ */
+/* BACKGROUND                                                         */
+/* ------------------------------------------------------------------ */
+html,body{
+  background:#080606!important;
+}
+
+.main{
+  position:relative!important;
+  min-height:100vh!important;
+  overflow:hidden!important;
+  isolation:isolate!important;
+
+  /* Keep the base relatively dark. The visible lighting is provided
+     by ::before / ::after ABOVE the base and BELOW content. */
+  background:
+    radial-gradient(70% 62% at 96% 16%, rgba(115,8,13,.14), transparent 68%),
+    radial-gradient(62% 60% at -6% 90%, rgba(100,7,11,.10), transparent 70%),
+    linear-gradient(135deg,#080606 0%,#0a0707 44%,#110708 78%,#150708 100%)!important;
+}
+
+/* Broad cinematic red light shapes */
+.main::before{
+  content:""!important;
+  position:absolute!important;
+  inset:-10% -8% -8% -8%!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  opacity:1!important;
+  background:
+    /* top-right large red wash */
+    radial-gradient(44% 42% at 91% 9%,
+      rgba(255,37,45,.31) 0%,
+      rgba(216,19,28,.20) 24%,
+      rgba(128,8,14,.10) 48%,
+      transparent 72%
+    ),
+
+    /* left/lower red wash */
+    radial-gradient(38% 42% at 5% 82%,
+      rgba(230,22,31,.18) 0%,
+      rgba(132,9,15,.09) 42%,
+      transparent 72%
+    ),
+
+    /* strong diagonal streak from upper right */
+    linear-gradient(
+      126deg,
+      transparent 0%,
+      transparent 60%,
+      rgba(255,39,46,.00) 62%,
+      rgba(255,39,46,.07) 65%,
+      rgba(255,39,46,.20) 68%,
+      rgba(255,39,46,.08) 72%,
+      transparent 78%
+    ),
+
+    /* second diagonal streak */
+    linear-gradient(
+      138deg,
+      transparent 0%,
+      transparent 9%,
+      rgba(255,35,43,.00) 12%,
+      rgba(255,35,43,.07) 16%,
+      rgba(255,35,43,.14) 18%,
+      rgba(255,35,43,.04) 23%,
+      transparent 31%
+    ),
+
+    /* broad dark red vignette */
+    radial-gradient(70% 75% at 72% 58%, rgba(82,4,8,.08), transparent 75%)!important;
+
+  filter:blur(8px)!important;
+  transform:scale(1.06)!important;
+}
+
+/* Fine glows + highlights */
+.main::after{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  background:
+    radial-gradient(24% 20% at 84% 16%, rgba(255,76,81,.10), transparent 74%),
+    radial-gradient(28% 20% at 89% 88%, rgba(255,40,48,.07), transparent 76%),
+    radial-gradient(20% 18% at 9% 69%, rgba(255,40,48,.05), transparent 78%),
+    linear-gradient(180deg, rgba(255,255,255,.012), transparent 16%, transparent 86%, rgba(255,25,31,.02))!important;
+  mix-blend-mode:screen!important;
+}
+
+/* All real page content must sit above lighting layers */
+.main > *{
+  position:relative!important;
+  z-index:2!important;
+}
+
+/* Header remains part of the same continuous visual field */
+.mint-red-topbar,
+.mint-clean-topbar,
+.mint-home-topbar{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* HOME BLOCKS: warmer / more translucent / less outlined             */
+/* ------------------------------------------------------------------ */
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  position:relative!important;
+  overflow:hidden!important;
+
+  background:
+    radial-gradient(76% 110% at 100% 100%, rgba(118,12,17,.16), transparent 62%),
+    linear-gradient(145deg,
+      rgba(30,19,20,.86) 0%,
+      rgba(20,14,15,.91) 45%,
+      rgba(12,11,11,.94) 100%
+    )!important;
+
+  border:1px solid rgba(185,29,35,.38)!important;
+  border-radius:17px!important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.016),
+    0 16px 42px rgba(0,0,0,.25),
+    0 0 44px rgba(92,5,9,.025)!important;
+}
+
+/* soft inner light, like the validated design */
+.mint-home-continue::before,
+.mint-home-campaign::before,
+.mint-home-recent::before,
+.mint-home-imports::before{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  pointer-events:none!important;
+  z-index:0!important;
+  background:
+    linear-gradient(110deg,rgba(255,255,255,.012),transparent 22%),
+    radial-gradient(52% 74% at 102% 112%,rgba(171,19,25,.12),transparent 68%)!important;
+}
+.mint-home-continue > *,
+.mint-home-campaign > *,
+.mint-home-recent > *,
+.mint-home-imports > *{
+  position:relative!important;
+  z-index:1!important;
+}
+
+/* outlines should not dominate */
+.mint-home-continue:hover,
+.mint-home-campaign:hover,
+.mint-home-recent:hover,
+.mint-home-imports:hover{
+  border-color:rgba(222,40,46,.48)!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* HERO / TOP                                                         */
+/* ------------------------------------------------------------------ */
+.mint-home-page{
+  padding-top:34px!important;
+}
+.mint-home-heading{
+  padding-bottom:31px!important;
+}
+.mint-home-heading h1{
+  font-size:50px!important;
+  line-height:.98!important;
+  letter-spacing:-.055em!important;
+}
+.mint-home-heading p{
+  color:#b5acad!important;
+  max-width:760px!important;
+}
+
+/* nav active more subtle, not a solid red box */
+.mint-nav-home.active{
+  background:rgba(22,7,9,.32)!important;
+  border:1px solid rgba(234,40,47,.52)!important;
+  box-shadow:0 0 25px rgba(235,26,34,.075)!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* CONTINUE WORKING                                                   */
+/* ------------------------------------------------------------------ */
+.mint-home-continue-media{
+  border:1px solid rgba(207,34,41,.56)!important;
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.27),
+    0 0 28px rgba(182,17,24,.03)!important;
+}
+
+.mint-home-progress{
+  background:#2a2526!important;
+}
+.mint-home-progress i{
+  background:
+    linear-gradient(
+      90deg,
+      #ec2b35 0%,
+      #f2535c 62%,
+      #ad4e53 80%,
+      #716a6c 100%
+    )!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* ACTIVE CAMPAIGN                                                    */
+/* ------------------------------------------------------------------ */
+.mint-home-campaign-brand{
+  background:
+    radial-gradient(90% 100% at 100% 100%,rgba(87,10,14,.12),transparent 65%),
+    linear-gradient(145deg,rgba(25,16,17,.74),rgba(13,11,12,.52))!important;
+  border:1px solid rgba(255,255,255,.05)!important;
+  border-radius:12px!important;
+  padding:13px!important;
+}
+
+.mint-home-campaign-brand>span{
+  width:60px!important;
+  height:60px!important;
+  background:
+    radial-gradient(circle at 50% 45%,rgba(255,72,78,.18),transparent 40%),
+    linear-gradient(145deg,#391012,#160a0b)!important;
+  box-shadow:inset 0 0 18px rgba(255,47,54,.03)!important;
+}
+
+.mint-home-campaign-stats{
+  display:grid!important;
+  grid-template-columns:1.35fr .8fr .8fr!important;
+  gap:9px!important;
+  margin:13px 0 16px!important;
+}
+.mint-home-campaign-stats div{
+  background:linear-gradient(180deg,rgba(13,11,12,.65),rgba(8,8,8,.55))!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  border-radius:9px!important;
+  padding:11px 12px!important;
+}
+.mint-home-campaign-stats div>span{
+  display:none!important;
+}
+.mint-home-campaign-stats small{
+  color:#988e90!important;
+  font-size:8.5px!important;
+  text-transform:none!important;
+  letter-spacing:0!important;
+}
+.mint-home-campaign-stats b{
+  color:#fff!important;
+  font-size:10.5px!important;
+  text-align:left!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* RECENT PROJECTS / IMPORTS                                          */
+/* ------------------------------------------------------------------ */
+.mint-home-project-card{
+  background:
+    linear-gradient(180deg,rgba(17,13,14,.88),rgba(8,8,8,.95))!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:10px!important;
+  overflow:hidden!important;
+  box-shadow:none!important;
+}
+.mint-home-project-card:first-child{
+  border-color:rgba(204,35,42,.45)!important;
+}
+.mint-home-project-thumb{
+  border:0!important;
+  border-radius:0!important;
+}
+.mint-home-project-meta{
+  background:rgba(8,8,8,.60)!important;
+  padding:10px 12px 11px!important;
+}
+
+.mint-home-import-list{
+  gap:10px!important;
+}
+.mint-home-import-row{
+  background:
+    linear-gradient(180deg,rgba(16,12,13,.58),rgba(8,8,8,.48))!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+  border-radius:10px!important;
+  padding:9px 10px!important;
+}
+.mint-home-import-row:hover{
+  background:
+    linear-gradient(180deg,rgba(37,12,14,.54),rgba(10,9,9,.52))!important;
+  border-color:rgba(205,36,42,.20)!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* BUTTONS                                                            */
+/* ------------------------------------------------------------------ */
+.btn.primary{
+  background:
+    linear-gradient(180deg,#f02e37 0%,#c91822 100%)!important;
+  border:1px solid rgba(255,78,84,.40)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.075),
+    0 10px 24px rgba(178,11,18,.14)!important;
+}
+.btn.secondary{
+  background:rgba(12,9,10,.28)!important;
+  border:1px solid rgba(159,31,36,.28)!important;
+}
+
+/* ------------------------------------------------------------------ */
+/* RESPONSIVE                                                         */
+/* ------------------------------------------------------------------ */
+@media(max-width:900px){
+  .mint-home-campaign-stats{
+    grid-template-columns:1fr!important;
+  }
+}

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.9",
-  "description": "Mint visible red light background fix",
+  "version": "21.14.10",
+  "description": "Mint red lighting and depth correction",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

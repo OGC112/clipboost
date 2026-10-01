@@ -1,17 +1,17 @@
-Mint 21.14.9 — Visible Red Light Fix
+Mint 21.14.10 — Red Lighting & Depth
 
-Why 21.14.8 looked unchanged:
-- the red-light pseudo-elements were placed behind .main's painted background
-- with the stacking/isolation setup, those layers were effectively hidden
+This is a stronger correction pass for the validated red/noir Home design.
 
-21.14.9 fixes that in code:
-- red beams/bloom are painted directly into .main's background
-- previous hidden pseudo-elements are disabled
-- Home cards get visible warm-red translucent surfaces
-- Active Campaign inner panel/stats are closer to the validated mockup
-- project cards/import rows are more distinct
-- red buttons are darker and less flat
-- media/progress treatment is toned closer to the reference
+Changes:
+- actual visible red light layers now sit ABOVE the base page background and BELOW content
+- stronger top-right cinematic red bloom
+- visible diagonal red light streaks
+- softer lower-left red ambience
+- blocks are warmer, more translucent and less outline-heavy
+- campaign block gets more depth
+- project/import blocks are less dashboard-like
+- red buttons are darker and less saturated
+- hero spacing stays aligned with the validated composition
 
-No backend or feature logic changed.
+No backend, routing or feature logic changed.
 No .env or secrets included.
