@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.14",
-  "description": "Mint Home compact creative OS redesign",
+  "version": "21.14.15",
+  "description": "Mint integrated workspace home and larger navigation",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

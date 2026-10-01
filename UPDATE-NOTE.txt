@@ -1,15 +1,13 @@
-Mint 21.14.14 — Compact Creative OS Home
+Mint 21.14.15 — Integrated Workspace Home
 
-Real Home hierarchy redesign:
-- removes giant hero image layout
-- introduces a compact three-column workspace
-- left: Continue Working
-- center: Recent Projects
-- right rail: Active Campaign + Recent Imports
-- much less empty space
-- fewer red outlines
-- darker neutral panels with restrained red lighting
-- keeps all existing project/campaign navigation hooks
+Changes:
+- increases the top menu size and spacing
+- replaces floating 3-column cards with one integrated workspace surface
+- Continue Working, Recent Projects and Active Campaign share one coherent shell
+- Recent Imports becomes a horizontal activity strip underneath
+- reduces empty space and visual fragmentation
+- further reduces red background intensity
+- preserves current project/campaign navigation hooks
 
-No backend or feature logic changes.
+No backend or feature changes.
 No .env or secrets included.

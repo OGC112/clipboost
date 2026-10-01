@@ -145,25 +145,26 @@
     const current=projects.find(p=>['ingesting','analyzing'].includes(p.status))||projects[0]||null;
     const activeCampaign=campaignsList.find(c=>String(c.status||'active')==='active')||campaignsList[0]||null;
     const currentState=current?projectDisplayState(current):null;
-    const recent=projects.filter(p=>!current||p.id!==current.id).slice(0,2);
+    const recent=projects.filter(p=>!current||p.id!==current.id).slice(0,3);
     const imports=projects.filter(p=>p.externalSource).slice(0,3);
 
-    const recentCards=recent.length ? recent.map((p,i)=>{
+    const recentRows=recent.length?recent.map((p,i)=>{
       const ps=projectDisplayState(p);
-      return `<button class="mint-os-project" data-home-project="${escapeHtml(p.id)}" type="button">
-        <div class="mint-os-project-media">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i+1)}<span>${Number(p.candidateCount||0)} clips</span></div>
-        <div class="mint-os-project-copy"><strong>${escapeHtml(p.originalName||'Project')}</strong><small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small></div>
-      </button>`;
-    }).join('') : `<div class="mint-os-empty">No recent projects yet.</div>`;
+      return `<button class="mint-integrated-project" data-home-project="${escapeHtml(p.id)}" type="button">
+        <div class="mint-integrated-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i+1)}</div>
+        <div class="mint-integrated-project-copy"><strong>${escapeHtml(p.originalName||'Project')}</strong><small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small></div>
+        <span>${Number(p.candidateCount||0)} clips</span>
+      </button>`
+    }).join(''):`<div class="mint-integrated-empty">No recent projects yet.</div>`;
 
-    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-os-import" data-home-project="${escapeHtml(p.id)}" type="button">
-      <div class="mint-os-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
+    const importRows=imports.length?imports.map((p,i)=>`<button class="mint-integrated-import" data-home-project="${escapeHtml(p.id)}" type="button">
+      <div class="mint-integrated-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
       <div><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
       <span>•••</span>
-    </button>`).join('') : `<div class="mint-os-empty">No recent imports.</div>`;
+    </button>`).join(''):`<div class="mint-integrated-empty">No recent imports.</div>`;
 
-    return `<div class="content mint-home-page mint-home-os-v1414">
-      <section class="mint-os-heading">
+    return `<div class="content mint-home-page mint-home-integrated-v1415">
+      <section class="mint-integrated-heading">
         <div>
           <div class="eyebrow">MINT WORKSPACE</div>
           <h1>Your Mint <span class="mint-red-word">workspace</span></h1>
@@ -175,48 +176,48 @@
         </div>
       </section>
 
-      <section class="mint-os-grid">
-        <article class="mint-os-panel mint-os-current">
-          <header><div><span>ϟ</span><div><b>Continue working</b><small>Current creative project</small></div></div>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</header>
+      <section class="mint-integrated-shell">
+        <article class="mint-integrated-current">
+          <div class="mint-integrated-title"><span>ϟ</span><div><b>Continue working</b><small>Current project</small></div>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</div>
           ${current?`
-            <button class="mint-os-current-media" data-home-project="${escapeHtml(current.id)}" type="button">
+          <div class="mint-integrated-current-body">
+            <button class="mint-integrated-current-media" data-home-project="${escapeHtml(current.id)}" type="button">
               ${current.externalSource?.thumbnail?`<img src="${escapeHtml(current.externalSource.thumbnail)}" alt="">`:mediaThumb(0)}
               <i>▶</i>
             </button>
-            <div class="mint-os-current-copy">
+            <div class="mint-integrated-current-copy">
               <h2>${escapeHtml(current.originalName||'Project')}</h2>
               <p>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</p>
               <div class="mint-home-progress"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div>
-              <div class="mint-os-progress-meta"><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
+              <div class="mint-integrated-progress"><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
               <button class="btn primary" data-home-project="${escapeHtml(current.id)}">Continue project →</button>
-            </div>`
-          : `<div class="mint-os-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
+            </div>
+          </div>`
+          :`<div class="mint-integrated-empty large">Nothing in progress.</div>`}
         </article>
 
-        <article class="mint-os-panel mint-os-projects">
-          <header><div><span>▣</span><div><b>Recent projects</b><small>Your latest creative work</small></div></div><button class="mint-os-link" data-page="projects" type="button">View all →</button></header>
-          <div class="mint-os-project-list">${recentCards}</div>
-        </article>
+        <section class="mint-integrated-projects">
+          <div class="mint-integrated-title"><span>▣</span><div><b>Recent projects</b><small>Latest creative work</small></div><button class="mint-integrated-link" data-page="projects" type="button">View all →</button></div>
+          <div class="mint-integrated-project-list">${recentRows}</div>
+        </section>
 
-        <aside class="mint-os-rail">
-          <section class="mint-os-panel mint-os-campaign">
-            <header><div><span>◎</span><div><b>Active campaign</b><small>Paid campaign workspace</small></div></div>${activeCampaign?'<em>Active</em>':''}</header>
-            ${activeCampaign?`
-              <div class="mint-os-campaign-name"><span>◎</span><div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')}</p></div></div>
-              <div class="mint-os-campaign-stats">
-                <div><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></div>
-                <div><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></div>
-                <div><small>Views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></div>
-              </div>
-              <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`
-            : `<div class="mint-os-empty"><b>No active campaign</b><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
-          </section>
-
-          <section class="mint-os-panel mint-os-imports">
-            <header><div><span>⇧</span><div><b>Recent imports</b><small>Latest media added</small></div></div><button class="mint-os-link" data-page="library" type="button">View all →</button></header>
-            <div class="mint-os-import-list">${importRows}</div>
-          </section>
+        <aside class="mint-integrated-campaign">
+          <div class="mint-integrated-title"><span>◎</span><div><b>Active campaign</b><small>Paid campaign workspace</small></div>${activeCampaign?'<em>Active</em>':''}</div>
+          ${activeCampaign?`
+          <div class="mint-integrated-campaign-head"><span>◎</span><div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')}</p></div></div>
+          <div class="mint-integrated-campaign-stats">
+            <div><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></div>
+            <div><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></div>
+            <div><small>Views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></div>
+          </div>
+          <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`
+          :`<div class="mint-integrated-empty">No active campaign.</div>`}
         </aside>
+      </section>
+
+      <section class="mint-integrated-activity">
+        <div class="mint-integrated-activity-head"><div><span>⇧</span><div><b>Recent imports</b><small>Latest media added to Mint</small></div></div><button class="mint-integrated-link" data-page="library" type="button">View all →</button></div>
+        <div class="mint-integrated-imports">${importRows}</div>
       </section>
     </div>`
   }
