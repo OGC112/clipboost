@@ -1,16 +1,15 @@
-Mint 21.14.13 — Home Editorial Refinement
+Mint 21.14.14 — Compact Creative OS Home
 
-Changes:
-- Continue Working hero reduced by ~12%
-- Continue CTA made more visible
-- Active Campaign made much shorter and denser
-- campaign stats moved into a compact horizontal row
-- Recent Projects now uses 3 smaller landscape cards
-- Recent Imports is denser with larger thumbnails
-- lower content pulled upward
-- secondary typography made more readable
-- red background wash reduced further
-- red framing around content made subtler
+Real Home hierarchy redesign:
+- removes giant hero image layout
+- introduces a compact three-column workspace
+- left: Continue Working
+- center: Recent Projects
+- right rail: Active Campaign + Recent Imports
+- much less empty space
+- fewer red outlines
+- darker neutral panels with restrained red lighting
+- keeps all existing project/campaign navigation hooks
 
 No backend or feature logic changes.
 No .env or secrets included.

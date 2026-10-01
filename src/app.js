@@ -145,31 +145,25 @@
     const current=projects.find(p=>['ingesting','analyzing'].includes(p.status))||projects[0]||null;
     const activeCampaign=campaignsList.find(c=>String(c.status||'active')==='active')||campaignsList[0]||null;
     const currentState=current?projectDisplayState(current):null;
-    const recent=projects.slice(0,3);
-    const imports=projects.filter(p=>p.externalSource).slice(0,4);
+    const recent=projects.filter(p=>!current||p.id!==current.id).slice(0,2);
+    const imports=projects.filter(p=>p.externalSource).slice(0,3);
 
     const recentCards=recent.length ? recent.map((p,i)=>{
       const ps=projectDisplayState(p);
-      return `<button class="mint-editorial-project" data-home-project="${escapeHtml(p.id)}" type="button">
-        <div class="mint-editorial-project-media">
-          ${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}
-          <span>${Number(p.candidateCount||0)} clips</span>
-        </div>
-        <div class="mint-editorial-project-copy">
-          <strong>${escapeHtml(p.originalName||'Project')}</strong>
-          <small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small>
-        </div>
+      return `<button class="mint-os-project" data-home-project="${escapeHtml(p.id)}" type="button">
+        <div class="mint-os-project-media">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i+1)}<span>${Number(p.candidateCount||0)} clips</span></div>
+        <div class="mint-os-project-copy"><strong>${escapeHtml(p.originalName||'Project')}</strong><small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small></div>
       </button>`;
-    }).join('') : `<div class="mint-editorial-empty">No recent projects yet.</div>`;
+    }).join('') : `<div class="mint-os-empty">No recent projects yet.</div>`;
 
-    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-editorial-import" data-home-project="${escapeHtml(p.id)}" type="button">
-      <div class="mint-editorial-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
-      <div class="mint-editorial-import-copy"><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
+    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-os-import" data-home-project="${escapeHtml(p.id)}" type="button">
+      <div class="mint-os-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
+      <div><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
       <span>•••</span>
-    </button>`).join('') : `<div class="mint-editorial-empty">No recent imports.</div>`;
+    </button>`).join('') : `<div class="mint-os-empty">No recent imports.</div>`;
 
-    return `<div class="content mint-home-page mint-home-editorial-v1412">
-      <section class="mint-editorial-heading">
+    return `<div class="content mint-home-page mint-home-os-v1414">
+      <section class="mint-os-heading">
         <div>
           <div class="eyebrow">MINT WORKSPACE</div>
           <h1>Your Mint <span class="mint-red-word">workspace</span></h1>
@@ -181,62 +175,47 @@
         </div>
       </section>
 
-      <section class="mint-editorial-main">
-        <article class="mint-editorial-feature">
-          <div class="mint-editorial-section-label"><span>ϟ</span><b>Continue working</b>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</div>
+      <section class="mint-os-grid">
+        <article class="mint-os-panel mint-os-current">
+          <header><div><span>ϟ</span><div><b>Continue working</b><small>Current creative project</small></div></div>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</header>
           ${current?`
-            <button class="mint-editorial-feature-media" data-home-project="${escapeHtml(current.id)}" type="button">
+            <button class="mint-os-current-media" data-home-project="${escapeHtml(current.id)}" type="button">
               ${current.externalSource?.thumbnail?`<img src="${escapeHtml(current.externalSource.thumbnail)}" alt="">`:mediaThumb(0)}
-              <span class="mint-editorial-play">▶</span>
-              <div class="mint-editorial-feature-overlay">
-                <div>
-                  <small>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</small>
-                  <h2>${escapeHtml(current.originalName||'Project')}</h2>
-                </div>
-                <span>Continue →</span>
-              </div>
+              <i>▶</i>
             </button>
-            <div class="mint-editorial-progress-row">
+            <div class="mint-os-current-copy">
+              <h2>${escapeHtml(current.originalName||'Project')}</h2>
+              <p>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</p>
               <div class="mint-home-progress"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div>
-              <div><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
+              <div class="mint-os-progress-meta"><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
+              <button class="btn primary" data-home-project="${escapeHtml(current.id)}">Continue project →</button>
             </div>`
-          : `<div class="mint-editorial-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
+          : `<div class="mint-os-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
         </article>
 
-        <aside class="mint-editorial-side">
-          <div class="mint-editorial-section-label"><span>◎</span><b>Active campaign</b>${activeCampaign?'<em>Active</em>':''}</div>
-          ${activeCampaign?`
-            <div class="mint-editorial-campaign">
-              <div class="mint-editorial-campaign-head">
-                <span>◎</span>
-                <div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')} · Creator campaign</p></div>
+        <article class="mint-os-panel mint-os-projects">
+          <header><div><span>▣</span><div><b>Recent projects</b><small>Your latest creative work</small></div></div><button class="mint-os-link" data-page="projects" type="button">View all →</button></header>
+          <div class="mint-os-project-list">${recentCards}</div>
+        </article>
+
+        <aside class="mint-os-rail">
+          <section class="mint-os-panel mint-os-campaign">
+            <header><div><span>◎</span><div><b>Active campaign</b><small>Paid campaign workspace</small></div></div>${activeCampaign?'<em>Active</em>':''}</header>
+            ${activeCampaign?`
+              <div class="mint-os-campaign-name"><span>◎</span><div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')}</p></div></div>
+              <div class="mint-os-campaign-stats">
+                <div><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></div>
+                <div><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></div>
+                <div><small>Views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></div>
               </div>
-              <dl>
-                <div><dt>Payment</dt><dd>${escapeHtml(campaignPaymentSummary(activeCampaign))}</dd></div>
-                <div><dt>Minimum</dt><dd>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</dd></div>
-                <div><dt>Tracked views</dt><dd>${formatCount(activeCampaign.totals?.totalViews||0)}</dd></div>
-              </dl>
-              <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>
-            </div>`
-          : `<div class="mint-editorial-empty large"><b>No active campaign</b><span>Import or create a campaign to see it here.</span><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
-        </aside>
-      </section>
+              <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`
+            : `<div class="mint-os-empty"><b>No active campaign</b><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
+          </section>
 
-      <section class="mint-editorial-work">
-        <div class="mint-editorial-projects-wrap">
-          <div class="mint-editorial-work-head">
-            <div><span>▣</span><div><b>Recent projects</b><small>Your latest creative work.</small></div></div>
-            <button class="mint-editorial-link" data-page="projects" type="button">View all →</button>
-          </div>
-          <div class="mint-editorial-projects-row">${recentCards}</div>
-        </div>
-
-        <aside class="mint-editorial-imports-wrap">
-          <div class="mint-editorial-work-head">
-            <div><span>⇧</span><div><b>Recent imports</b><small>Latest media added to Mint.</small></div></div>
-            <button class="mint-editorial-link" data-page="library" type="button">View all →</button>
-          </div>
-          <div class="mint-editorial-imports-list">${importRows}</div>
+          <section class="mint-os-panel mint-os-imports">
+            <header><div><span>⇧</span><div><b>Recent imports</b><small>Latest media added</small></div></div><button class="mint-os-link" data-page="library" type="button">View all →</button></header>
+            <div class="mint-os-import-list">${importRows}</div>
+          </section>
         </aside>
       </section>
     </div>`
