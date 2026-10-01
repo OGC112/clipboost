@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.2",
-  "description": "Mint structured workspace overhaul",
+  "version": "21.15.4",
+  "description": "Mint release config repair and window chrome alignment",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -28,6 +28,47 @@
   "devDependencies": {
     "electron": "latest",
     "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.clipboost.desktop",
+    "productName": "ClipBoost",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "scripts/**/*",
+      "desktop/**/*",
+      "requirements-local-ai.txt",
+      ".env.example",
+      "package.json",
+      "index.html",
+      "src/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "ClipBoost-Setup-${version}.${ext}",
+      "icon": "desktop/assets/clipboost.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClipBoost",
+      "perMachine": false,
+      "allowElevation": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "desktop/assets/clipboost.ico",
+      "uninstallerIcon": "desktop/assets/clipboost.ico",
+      "installerHeaderIcon": "desktop/assets/clipboost.ico"
+    }
   },
   "author": "ClipBoost"
 }

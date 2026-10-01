@@ -1,11 +1,11 @@
-Mint 21.15.2 — Structured Workspaces
+Mint 21.15.4 — Release Fix
 
-Changes in this patch:
-- Campaign Studio now surfaces a clean campaign-card view.
-- Clicking a campaign card opens a centered analytics popup.
-- Results page metrics are converted into darker, clearer cards.
-- AI Studio is reorganized with a clearer source area, redesigned timeline, improved preview placement and structured control rail.
-- Home is hidden from the top navigation; Mint wordmark acts as Home.
-- Menu typography is larger.
+Fixes:
+- restores electron-builder build configuration removed in 21.15.2
+- restores release output directory: release/
+- restores ClipBoost-Setup-${version}.exe artifact naming
+- restores NSIS updater configuration
+- keeps the requested top-right window control alignment
+- places Settings gear below the Windows controls
 
-This patch avoids heavy source rewrites and instead layers a safer UI transform on top of the current app shell.
+This release is specifically intended to repair the failed GitHub Actions Windows build.
