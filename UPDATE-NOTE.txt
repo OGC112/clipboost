@@ -1,15 +1,15 @@
-Mint 21.15.6 — Campaign Page Fix
+Mint 21.15.7 — Startup + Graphics Fix
 
-Fixes the broken Campaign Studio card introduced by 21.15.2.
+Fix 1: intermittent black rectangle / shell flash on Windows
+- disables Electron hardware acceleration on Windows
+- keeps the frameless BrowserWindow hidden until ready-to-show
+- removes eager mainWindow.show() before Chromium paints
 
-Cause:
-The previous UI enhancer searched every descendant element and could select a large
-ancestor whose textContent contained the entire Campaign Studio page. That full page
-text was then inserted into Rate / summary fields.
+Fix 2: "ClipBoost backend did not start in time"
+- startup timeout increased from 30s to 90s
+- immediate detection if backend exits early
+- captures backend stdout/stderr
+- retries once on a fresh port
+- error dialog includes useful backend diagnostics after both attempts fail
 
-Fix:
-- removes global text scraping from Campaign Studio
-- reads each campaign only from its native structured campaign card
-- analytics popup reads only the selected campaign detail
-- preserves real campaign values and avoids concatenated page text
-- keeps Results and AI Studio 21.15.2 enhancements
+No AI Studio, Campaign Studio, campaign data or project logic changed.

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.6",
-  "description": "Mint Campaign page structured data fix",
+  "version": "21.15.7",
+  "description": "Mint startup resilience and graphics artifact fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

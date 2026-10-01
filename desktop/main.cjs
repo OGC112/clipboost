@@ -5,6 +5,11 @@ const path = require('path');
 const net = require('net');
 const dotenv = require('dotenv');
 
+// Stabilize Chromium rendering for Mint's frameless window on Windows.
+if (process.platform === 'win32') {
+  try { app.disableHardwareAcceleration(); } catch {}
+}
+
 let mainWindow = null;
 let serverProcess = null;
 let serverPort = null;
@@ -69,42 +74,49 @@ function freePort() {
     s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
   });
 }
-async function waitForServer(url, timeoutMs = 30000) {
+function backendLogTail(buffer, maxLines=28) {
+  const lines=String(buffer||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  return lines.slice(-maxLines).join('\n');
+}
+async function waitForServer(url, proc, timeoutMs = 90000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    if (!proc || proc.killed || proc.exitCode !== null) throw new Error(`ClipBoost backend exited before it became ready (exit code ${proc?.exitCode ?? 'unknown'}).`);
     try {
-      const res = await fetch(url, { redirect: 'manual' });
+      const res = await fetch(url, { redirect:'manual', signal:AbortSignal.timeout(1500) });
       if (res.ok || (res.status >= 300 && res.status < 500)) return;
     } catch {}
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 350));
   }
-  throw new Error('ClipBoost backend did not start in time.');
+  throw new Error(`ClipBoost backend did not start within ${Math.round(timeoutMs/1000)} seconds.`);
 }
-async function startBackend() {
-  const paths = ensureUserFiles();
+async function launchBackendOnce(paths, attempt=1) {
   serverPort = await freePort();
   const serverEntry = path.join(appRoot(), 'server', 'index.js');
-  const env = {
-    ...process.env,
-    ELECTRON_RUN_AS_NODE: '1',
-    NODE_ENV: 'production',
-    PORT: String(serverPort),
-    CLIPBOOST_DATA_DIR: paths.dataDir,
-    DOTENV_CONFIG_PATH: paths.envPath
-  };
-  serverProcess = spawn(process.execPath, [serverEntry], {
-    cwd: appRoot(), env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
-  });
-  serverProcess.stdout.on('data', d => process.stdout.write(`[ClipBoost] ${d}`));
-  serverProcess.stderr.on('data', d => process.stderr.write(`[ClipBoost] ${d}`));
-  serverProcess.on('exit', code => {
-    if (code && !isQuitting && mainWindow && !mainWindow.isDestroyed()) {
-      dialog.showErrorBox('ClipBoost backend stopped', `The local backend exited with code ${code}.`);
-    }
-  });
-  const baseUrl = `http://127.0.0.1:${serverPort}`;
-  await waitForServer(baseUrl);
-  return baseUrl;
+  const env = { ...process.env, ELECTRON_RUN_AS_NODE:'1', NODE_ENV:'production', PORT:String(serverPort), CLIPBOOST_DATA_DIR:paths.dataDir, DOTENV_CONFIG_PATH:paths.envPath };
+  let stdoutBuffer='', stderrBuffer='';
+  const proc = spawn(process.execPath,[serverEntry],{cwd:appRoot(),env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+  serverProcess=proc;
+  proc.stdout.on('data',d=>{const s=String(d||'');stdoutBuffer=(stdoutBuffer+s).slice(-24000);process.stdout.write(`[ClipBoost] ${s}`);});
+  proc.stderr.on('data',d=>{const s=String(d||'');stderrBuffer=(stderrBuffer+s).slice(-24000);process.stderr.write(`[ClipBoost] ${s}`);});
+  proc.on('exit',code=>{if(serverProcess===proc&&code&&!isQuitting&&mainWindow&&!mainWindow.isDestroyed())dialog.showErrorBox('ClipBoost backend stopped',`The local backend exited with code ${code}.`);});
+  const baseUrl=`http://127.0.0.1:${serverPort}`;
+  try { await waitForServer(baseUrl,proc,90000); return baseUrl; }
+  catch(err){
+    const details=[err?.message||String(err),`Attempt: ${attempt}/2`,`Port: ${serverPort}`,stderrBuffer?`\nBackend errors:\n${backendLogTail(stderrBuffer)}`:'',stdoutBuffer?`\nBackend output:\n${backendLogTail(stdoutBuffer)}`:''].filter(Boolean).join('\n');
+    try{if(proc&&!proc.killed){if(process.platform==='win32'&&proc.pid)spawn('taskkill',['/PID',String(proc.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else proc.kill('SIGKILL');}}catch{}
+    if(serverProcess===proc)serverProcess=null;
+    throw new Error(details);
+  }
+}
+async function startBackend() {
+  const paths=ensureUserFiles();
+  let firstError=null;
+  for(let attempt=1;attempt<=2;attempt++){
+    try{return await launchBackendOnce(paths,attempt);}
+    catch(err){if(!firstError)firstError=err;console.error(`[ClipBoost Desktop] Backend start attempt ${attempt} failed:`,err);if(attempt<2)await new Promise(r=>setTimeout(r,1200));}
+  }
+  throw new Error(`ClipBoost backend could not start after 2 attempts.\n\n${firstError?.message||'Unknown backend startup error.'}`);
 }
 
 function backendRuntimeUrl(pathname='') {
@@ -756,6 +768,9 @@ async function createWindow() {
   mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     if (level >= 2) console.error(`[ClipBoost UI] ${message} (${sourceId}:${line})`);
   });
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  });
   await mainWindow.loadURL(baseUrl);
   createTray();
   mainWindow.on('close', (event) => {
@@ -770,7 +785,7 @@ async function createWindow() {
   mainWindow.on('show', markRendererActivity);
   mainWindow.on('restore', markRendererActivity);
   mainWindow.on('minimize', () => { /* Eco mode will release idle AI after the configured timeout. */ });
-  mainWindow.show();
+  // Visibility is handled by ready-to-show to avoid a black frameless shell flash.
   markRendererActivity();
   startEcoMonitor();
 
