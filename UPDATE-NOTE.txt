@@ -1,13 +1,20 @@
-Mint 21.14.15 — Integrated Workspace Home
+Mint 21.14.16 — Home Workspace + Metrics
+
+Based on the latest approved visual direction.
 
 Changes:
-- increases the top menu size and spacing
-- replaces floating 3-column cards with one integrated workspace surface
-- Continue Working, Recent Projects and Active Campaign share one coherent shell
-- Recent Imports becomes a horizontal activity strip underneath
-- reduces empty space and visual fragmentation
-- further reduces red background intensity
-- preserves current project/campaign navigation hooks
+- larger top navigation
+- two-column Home hierarchy (~60/40)
+- left: Continue Working + Recent Projects
+- right: Active Campaign + Recent Imports
+- adds factual project metrics when data exists:
+  source views, clips created, source likes
+- adds factual campaign metrics:
+  confirmed payout, estimated payout, target views,
+  tracked views, qualification performance, published clips
+- missing source metrics display as an em dash instead of invented values
+- no fabricated campaign numbers
+- red/noir background remains restrained and localized
 
-No backend or feature changes.
+No backend or feature logic changes.
 No .env or secrets included.

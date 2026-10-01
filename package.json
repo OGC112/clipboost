@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.15",
-  "description": "Mint integrated workspace home and larger navigation",
+  "version": "21.14.16",
+  "description": "Mint Home two-column workspace with factual metrics",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
