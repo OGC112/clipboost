@@ -1,0 +1,251 @@
+/* 21.14.8 — closer match to the validated Red Noir reference.
+   Focus: visible red light beams/bloom in the background + warmer translucent blocks.
+*/
+
+/* PAGE BACKGROUND ------------------------------------------------------- */
+html,body{
+  background:#0b0708!important;
+}
+.main{
+  position:relative!important;
+  isolation:isolate!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(65% 54% at 91% 10%, rgba(186,19,27,.23) 0%, rgba(105,10,14,.10) 34%, transparent 67%),
+    radial-gradient(58% 58% at 7% 94%, rgba(150,13,20,.17) 0%, rgba(82,7,11,.08) 36%, transparent 68%),
+    linear-gradient(135deg,#0a0808 0%,#0b0909 45%,#13090a 77%,#170809 100%)!important;
+}
+
+/* broad red "light streaks" like the validated mockup */
+.main::before{
+  content:""!important;
+  position:fixed!important;
+  inset:-18vh -12vw!important;
+  pointer-events:none!important;
+  z-index:-3!important;
+  opacity:1!important;
+  background:
+    linear-gradient(
+      132deg,
+      transparent 0 9%,
+      rgba(255,40,47,.08) 10% 12%,
+      rgba(255,40,47,.018) 16% 20%,
+      transparent 26% 57%,
+      rgba(255,42,48,.025) 61% 65%,
+      rgba(255,37,44,.095) 69% 72%,
+      rgba(255,44,50,.018) 77% 79%,
+      transparent 84% 100%
+    ),
+    radial-gradient(ellipse at 93% 19%,rgba(255,45,51,.19),transparent 23%),
+    radial-gradient(ellipse at 9% 78%,rgba(231,28,35,.115),transparent 22%)!important;
+  filter:blur(1px)!important;
+  transform:scale(1.04)!important;
+}
+
+/* soft glows behind cards; not a flat red wash */
+.main::after{
+  content:""!important;
+  position:fixed!important;
+  inset:0!important;
+  pointer-events:none!important;
+  z-index:-2!important;
+  background:
+    radial-gradient(36% 30% at 99% 46%,rgba(255,34,40,.09),transparent 72%),
+    radial-gradient(38% 26% at 3% 66%,rgba(255,29,36,.055),transparent 74%),
+    radial-gradient(28% 22% at 80% 98%,rgba(255,28,35,.055),transparent 76%)!important;
+}
+
+/* HEADER --------------------------------------------------------------- */
+.mint-red-topbar,
+.mint-clean-topbar,
+.mint-home-topbar{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.mint-nav-home.active{
+  background:rgba(34,8,10,.35)!important;
+  border:1px solid rgba(255,47,55,.62)!important;
+  color:#fff!important;
+  box-shadow:
+    0 0 0 1px rgba(255,47,55,.04),
+    0 0 24px rgba(255,27,36,.12)!important;
+}
+
+/* HOME BLOCKS ---------------------------------------------------------- */
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  position:relative!important;
+  overflow:hidden!important;
+  background:
+    radial-gradient(90% 130% at 100% 105%,rgba(91,11,14,.15),transparent 58%),
+    radial-gradient(70% 100% at 0% 0%,rgba(57,13,15,.08),transparent 60%),
+    linear-gradient(145deg,rgba(28,19,20,.90),rgba(13,12,12,.94))!important;
+  border:1px solid rgba(181,31,36,.48)!important;
+  border-radius:17px!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.018),
+    0 18px 44px rgba(0,0,0,.22)!important;
+}
+.mint-home-continue::after,
+.mint-home-campaign::after,
+.mint-home-recent::after,
+.mint-home-imports::after{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  width:54%;
+  height:70%;
+  right:-18%;
+  bottom:-40%;
+  background:radial-gradient(ellipse,rgba(163,19,24,.09),transparent 68%);
+  filter:blur(14px);
+}
+.mint-home-continue:hover,
+.mint-home-campaign:hover,
+.mint-home-recent:hover,
+.mint-home-imports:hover{
+  border-color:rgba(218,41,47,.56)!important;
+}
+
+/* give cards the warmer brown-red undertone visible in the reference */
+.mint-home-continue{
+  background:
+    radial-gradient(85% 120% at 95% 100%,rgba(104,13,17,.13),transparent 55%),
+    linear-gradient(145deg,rgba(27,18,19,.92),rgba(14,12,13,.96))!important;
+}
+.mint-home-campaign{
+  background:
+    radial-gradient(90% 120% at 92% 96%,rgba(120,16,20,.16),transparent 60%),
+    linear-gradient(145deg,rgba(27,18,19,.91),rgba(13,12,12,.96))!important;
+}
+.mint-home-recent,
+.mint-home-imports{
+  background:
+    radial-gradient(100% 100% at 100% 100%,rgba(102,12,16,.12),transparent 66%),
+    linear-gradient(145deg,rgba(25,17,18,.91),rgba(13,12,12,.95))!important;
+}
+
+/* reduce the "outlined dashboard" feel */
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  outline:0!important;
+}
+.mint-home-continue>header,
+.mint-home-campaign>header,
+.mint-home-recent>header,
+.mint-home-imports>header{
+  position:relative;
+  z-index:2;
+}
+
+/* CAMPAIGN ------------------------------------------------------------- */
+.mint-home-campaign-brand{
+  background:transparent!important;
+  border:0!important;
+  padding:15px 0 13px!important;
+}
+.mint-home-campaign-brand>span{
+  background:
+    radial-gradient(circle at 50% 45%,rgba(255,72,78,.16),transparent 42%),
+    linear-gradient(145deg,#3a1012,#170b0c)!important;
+  box-shadow:inset 0 0 20px rgba(255,38,45,.035)!important;
+}
+.mint-home-campaign-stats{
+  grid-template-columns:1.35fr .82fr .82fr!important;
+  gap:8px!important;
+  margin:0 0 16px!important;
+}
+.mint-home-campaign-stats div{
+  padding:11px 12px!important;
+  background:rgba(8,7,8,.26)!important;
+  border:1px solid rgba(255,255,255,.105)!important;
+  border-radius:9px!important;
+}
+.mint-home-campaign-stats small{
+  color:#9c9294!important;
+}
+.mint-home-campaign-stats b{
+  color:#fff!important;
+}
+
+/* PROJECT CARDS -------------------------------------------------------- */
+.mint-home-project-card{
+  background:rgba(10,9,9,.66)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  border-radius:11px!important;
+  box-shadow:none!important;
+}
+.mint-home-project-card:first-child{
+  border-color:rgba(218,40,46,.54)!important;
+}
+.mint-home-project-thumb{
+  background:#100c0d!important;
+}
+.mint-home-project-meta{
+  background:linear-gradient(180deg,rgba(10,9,9,.78),rgba(8,8,8,.92))!important;
+}
+
+/* IMPORT ROWS ---------------------------------------------------------- */
+.mint-home-import-row{
+  background:rgba(10,8,9,.34)!important;
+  border:1px solid rgba(255,255,255,.075)!important;
+  border-radius:10px!important;
+}
+.mint-home-import-row:hover{
+  background:rgba(41,11,13,.30)!important;
+  border-color:rgba(210,38,44,.23)!important;
+}
+
+/* BUTTONS -------------------------------------------------------------- */
+.btn.primary{
+  background:linear-gradient(180deg,#ff313a,#e5202a)!important;
+  border:1px solid rgba(255,84,89,.46)!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.08),
+    0 10px 26px rgba(212,17,25,.14)!important;
+}
+.btn.secondary{
+  background:rgba(12,9,10,.28)!important;
+  border:1px solid rgba(156,34,39,.34)!important;
+}
+
+/* TYPO / SPACING ------------------------------------------------------- */
+.mint-home-page{
+  padding-top:28px!important;
+}
+.mint-home-heading{
+  padding-bottom:26px!important;
+}
+.mint-home-heading h1{
+  font-size:49px!important;
+}
+.mint-home-primary-grid,
+.mint-home-lower-grid{
+  gap:16px!important;
+}
+.mint-home-continue-body{
+  gap:26px!important;
+}
+
+/* PROGRESS ------------------------------------------------------------- */
+.mint-home-progress{
+  background:#2b2728!important;
+}
+.mint-home-progress i{
+  background:linear-gradient(90deg,#f82e38 0%,#f95a63 76%,#656165 100%)!important;
+}
+
+/* media border in validated version is red but not fluorescent */
+.mint-home-continue-media{
+  border-color:rgba(215,39,45,.68)!important;
+  box-shadow:0 15px 36px rgba(0,0,0,.24)!important;
+}
+
+@media(max-width:900px){
+  .mint-home-heading h1{font-size:36px!important}
+}

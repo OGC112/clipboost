@@ -1,17 +1,17 @@
-Mint 21.14.7 — Red Noir Match Correction
+Mint 21.14.8 — Red Noir Light/Block Match
 
-This patch compares the coded Home with the validated Red Noir reference and corrects the mismatches.
+Compared directly against the validated Red Noir reference.
 
-Corrected:
-- stronger red ambient background, especially right/top-right and lower-left
-- no flat-black page feel
-- Home blocks use warm red/black translucent surfaces
-- Home block borders are red, not neutral gray
-- Home active navigation returns to the red outlined treatment
-- Active Campaign stats return to the three boxed layout from the validated design
-- Recent Projects become proper dark/red cards instead of floating thumbnails
-- Recent Imports become individual warm dark panels
-- buttons and progress bar better match the approved red treatment
+Corrected in code:
+- adds visible diagonal red light beams / streaks in the page background
+- adds controlled red bloom at top-right and lower edges
+- removes the flat red gradient look
+- warms all Home blocks toward translucent black/red-brown
+- reduces the outlined-dashboard feeling
+- campaign stats and brand panel are tuned closer to reference
+- project cards and imports use darker layered surfaces
+- red buttons and progress are less flat / less saturated
 
-No page logic or backend functionality changed.
+No image-generation assets are used in the UI.
+No backend or feature logic changed.
 No .env or secrets included.
