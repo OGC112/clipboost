@@ -1,15 +1,10 @@
-Mint 21.15.7 — Startup + Graphics Fix
+Mint 21.15.8 — Discover Refresh
 
-Fix 1: intermittent black rectangle / shell flash on Windows
-- disables Electron hardware acceleration on Windows
-- keeps the frameless BrowserWindow hidden until ready-to-show
-- removes eager mainWindow.show() before Chromium paints
-
-Fix 2: "ClipBoost backend did not start in time"
-- startup timeout increased from 30s to 90s
-- immediate detection if backend exits early
-- captures backend stdout/stderr
-- retries once on a fresh port
-- error dialog includes useful backend diagnostics after both attempts fail
-
-No AI Studio, Campaign Studio, campaign data or project logic changed.
+Changes:
+- centers "Find and manage campaigns"
+- adds more breathing room under the top navigation
+- redesigns Smart Import as a cleaner premium horizontal panel
+- redesigns Total campaigns / Active / Tracked views / Confirmed payout
+- makes campaign cards smaller and square
+- tightens card typography, stats and actions
+- keeps all existing Discover functionality unchanged
