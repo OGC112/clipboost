@@ -1,10 +1,9 @@
-Mint 21.15.13 — Discover Split Control Row
+Mint 21.15.14 — Discover Refinement
 
-Discover control area is now one horizontal line:
-- Smart Import on the left
-- Total campaigns + Active on the right
-- KPI cards are stacked vertically inside a compact right column
-- removed the detached KPI row beneath Smart Import
-- campaign cards continue full width below
-- responsive fallback stacks sections only on smaller windows
-- no campaign import or campaign data behavior changed
+- Reduced hero height while preserving the centered premium hierarchy.
+- Smart Import is flatter and denser, closer to a working toolbar.
+- Total campaigns / Active block is narrower and more focused.
+- Added a subtle ACTIVE CAMPAIGNS section label.
+- Campaign cards are larger (roughly 300–320 px) and have stronger hierarchy.
+- Reduced dead space between the control row and campaign collection.
+- No campaign/import behavior changed.

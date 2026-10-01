@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.13",
-  "description": "Mint Discover split import and campaign status row",
+  "version": "21.15.14",
+  "description": "Mint Discover refined hierarchy, compact controls and stronger campaign cards",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

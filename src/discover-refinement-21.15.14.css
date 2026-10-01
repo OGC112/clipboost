@@ -1,0 +1,227 @@
+/* Mint 21.15.14 — Discover refinement
+   Tighter hero, tool-like import row, denser stats, stronger campaign cards. */
+
+/* Hero: keep the cinematic hierarchy but reclaim vertical space */
+.campaign-discover-v143 > .campaign-discover-header-v143{
+  min-height:188px!important;
+  padding-top:0!important;
+  padding-bottom:18px!important;
+  margin-bottom:30px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-header-v143 h1{
+  font-size:clamp(40px,3.55vw,58px)!important;
+  line-height:.98!important;
+  letter-spacing:-.045em!important;
+  margin-top:12px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-header-v143 p{
+  margin-top:14px!important;
+  max-width:760px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-header-v143 .btn{
+  margin-top:18px!important;
+  min-height:42px!important;
+  padding-inline:20px!important;
+}
+
+/* Main control row: flatter, tighter, more like a working toolbar */
+.campaign-discover-v143{
+  grid-template-columns:minmax(0,1fr) 230px!important;
+  column-gap:12px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-import-v143{
+  min-height:94px!important;
+  border-radius:14px!important;
+  grid-template-columns:minmax(235px,.72fr) minmax(430px,1.28fr)!important;
+  gap:18px!important;
+  padding:16px 18px!important;
+  background:linear-gradient(180deg,rgba(18,13,16,.88),rgba(12,9,11,.92))!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-import-v143::before{
+  width:2px!important;
+  opacity:.85!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-import-v143 .eyebrow{
+  margin-bottom:4px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-import-v143 h3{
+  font-size:16px!important;
+  line-height:1.12!important;
+  margin:2px 0 4px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-import-v143 p{
+  font-size:10px!important;
+  line-height:1.35!important;
+  max-width:420px!important;
+  opacity:.76!important;
+}
+
+.campaign-discover-v143 .campaign-discover-import-controls-v143{
+  grid-template-columns:minmax(0,1fr) 112px 132px!important;
+  gap:7px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-import-controls-v143 input,
+.campaign-discover-v143 .campaign-discover-import-controls-v143 .btn{
+  height:38px!important;
+  min-height:38px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-import-controls-v143 input{
+  border-radius:10px!important;
+}
+
+/* Stats: tighter, numbers become the focal point */
+.campaign-discover-v143 > .campaign-discover-summary-v143{
+  border-radius:14px!important;
+  min-height:94px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-summary-v143 article{
+  padding:12px 14px!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-summary-v143 article small{
+  font-size:8px!important;
+  letter-spacing:.12em!important;
+  color:rgba(255,255,255,.36)!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-summary-v143 article b{
+  font-size:26px!important;
+  letter-spacing:-.04em!important;
+}
+
+/* Lower section: make it feel like a deliberate campaign collection */
+.campaign-discover-v143 > .campaign-discover-grid-v143{
+  position:relative!important;
+  margin-top:18px!important;
+  padding-top:48px!important;
+  border-top:1px solid rgba(255,255,255,.055)!important;
+  grid-template-columns:repeat(auto-fill,minmax(300px,320px))!important;
+  gap:16px!important;
+  justify-content:start!important;
+}
+
+.campaign-discover-v143 > .campaign-discover-grid-v143::before{
+  content:"ACTIVE CAMPAIGNS";
+  position:absolute;
+  top:18px;
+  left:0;
+  font-size:10px;
+  line-height:1;
+  font-weight:700;
+  letter-spacing:.16em;
+  color:rgba(255,255,255,.42);
+}
+
+/* Stronger cards without turning Discover into a dashboard */
+.campaign-discover-v143 .campaign-discover-card-v143{
+  width:100%!important;
+  min-width:0!important;
+  height:286px!important;
+  min-height:286px!important;
+  padding:18px!important;
+  border-radius:15px!important;
+  background:linear-gradient(160deg,rgba(19,14,17,.94),rgba(11,9,11,.98))!important;
+  border-color:rgba(255,255,255,.075)!important;
+  box-shadow:0 15px 34px rgba(0,0,0,.26)!important;
+}
+
+.campaign-discover-v143 .campaign-discover-card-v143:hover{
+  transform:translateY(-2px)!important;
+  border-color:rgba(255,58,65,.25)!important;
+  box-shadow:0 20px 42px rgba(0,0,0,.34)!important;
+}
+
+.campaign-discover-v143 .campaign-discover-card-v143 h3{
+  font-size:20px!important;
+  line-height:1.06!important;
+  margin-top:16px!important;
+  letter-spacing:-.025em!important;
+}
+
+.campaign-discover-v143 .campaign-discover-card-v143 > p{
+  font-size:11px!important;
+  line-height:1.45!important;
+  min-height:34px!important;
+  margin-top:7px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-facts-v143{
+  margin-top:auto!important;
+  gap:7px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-facts-v143 > div{
+  padding:10px 9px!important;
+  border-radius:10px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-facts-v143 small{
+  font-size:7px!important;
+  letter-spacing:.1em!important;
+}
+
+.campaign-discover-v143 .campaign-discover-facts-v143 b{
+  margin-top:4px!important;
+  font-size:11px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-actions-v143{
+  gap:8px!important;
+  margin-top:12px!important;
+}
+
+.campaign-discover-v143 .campaign-discover-actions-v143 .btn{
+  min-height:34px!important;
+  height:34px!important;
+  padding-inline:12px!important;
+  font-size:10px!important;
+}
+
+/* Empty/loading state should start under the collection label */
+.campaign-discover-v143 .campaign-discover-empty-v143{
+  grid-column:1 / -1!important;
+}
+
+@media(max-width:1180px){
+  .campaign-discover-v143{
+    grid-template-columns:1fr!important;
+  }
+
+  .campaign-discover-v143 > .campaign-discover-header-v143{
+    min-height:178px!important;
+  }
+
+  .campaign-discover-v143 > .campaign-discover-import-v143{
+    grid-template-columns:1fr!important;
+  }
+
+  .campaign-discover-v143 > .campaign-discover-grid-v143{
+    grid-template-columns:repeat(auto-fill,minmax(280px,1fr))!important;
+  }
+}
+
+@media(max-width:760px){
+  .campaign-discover-v143 > .campaign-discover-header-v143 h1{
+    font-size:38px!important;
+  }
+
+  .campaign-discover-v143 > .campaign-discover-grid-v143{
+    grid-template-columns:1fr!important;
+  }
+
+  .campaign-discover-v143 .campaign-discover-card-v143{
+    height:auto!important;
+    min-height:272px!important;
+  }
+}
