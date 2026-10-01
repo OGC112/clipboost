@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.9",
-  "description": "Mint Discover grid alignment refinement",
+  "version": "21.15.10",
+  "description": "Mint centered hero headers for Results, Campaign Studio and Library",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

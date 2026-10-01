@@ -1,10 +1,17 @@
-Mint 21.15.9 — Discover Grid Alignment
+Mint 21.15.10 — Section Hero Headers
 
-Refines the Discover page into one consistent structural grid:
-- Smart Import, KPI row and campaign cards now share the exact same left/right edges
-- one consistent 16px spacing rhythm
-- fixed KPI column alignment
-- campaign grid starts on the same axis as the sections above
-- campaign cards remain compact and square
-- hero stays centered and visually separated from the functional content
-- no Discover behavior or campaign logic changed
+Brings the large centered Discover title treatment to:
+- Results
+- Campaign Studio
+- Library
+
+Changes:
+- same large centered H1 scale as Discover
+- centered eyebrow + supporting copy
+- consistent vertical breathing room below the top navigation
+- subtle divider under each hero
+- Campaign Studio overview metrics stay visible beneath the title
+- Library connection/actions stay available beneath the title
+- no functional campaign, results or library logic changed
+
+Scope intentionally limited to these three pages.
