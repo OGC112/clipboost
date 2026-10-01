@@ -1,17 +1,17 @@
-Mint 21.14.10 — Red Lighting & Depth
+Mint 21.14.11 — Red Noir Refinement
 
-This is a stronger correction pass for the validated red/noir Home design.
+Refinement only; no structural redesign.
 
 Changes:
-- actual visible red light layers now sit ABOVE the base page background and BELOW content
-- stronger top-right cinematic red bloom
-- visible diagonal red light streaks
-- softer lower-left red ambience
-- blocks are warmer, more translucent and less outline-heavy
-- campaign block gets more depth
-- project/import blocks are less dashboard-like
-- red buttons are darker and less saturated
-- hero spacing stays aligned with the validated composition
+- reduces the overall red wash by roughly half
+- keeps only a few controlled red light zones
+- preserves two diagonal light streaks
+- cards move back toward charcoal/black
+- red borders become much more subtle
+- CTA red is darker and less saturated
+- Active Campaign inner surfaces are darker
+- Recent Projects / Imports are more neutral
+- media and progress accents are toned down
 
-No backend, routing or feature logic changed.
+No backend, routing or feature changes.
 No .env or secrets included.

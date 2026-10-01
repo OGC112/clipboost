@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.10",
-  "description": "Mint red lighting and depth correction",
+  "version": "21.14.11",
+  "description": "Mint red noir refinement pass",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
