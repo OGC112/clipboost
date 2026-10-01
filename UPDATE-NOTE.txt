@@ -1,20 +1,18 @@
-Mint 21.14.16 — Home Workspace + Metrics
+Mint 21.14.17 — Home No-Blocks Redesign
 
-Based on the latest approved visual direction.
+This removes the card/block-heavy design entirely.
 
 Changes:
-- larger top navigation
-- two-column Home hierarchy (~60/40)
-- left: Continue Working + Recent Projects
-- right: Active Campaign + Recent Imports
-- adds factual project metrics when data exists:
-  source views, clips created, source likes
-- adds factual campaign metrics:
-  confirmed payout, estimated payout, target views,
-  tracked views, qualification performance, published clips
-- missing source metrics display as an em dash instead of invented values
-- no fabricated campaign numbers
-- red/noir background remains restrained and localized
+- larger navigation again
+- no dashboard boxes for the Home content
+- sections are separated with spacing and thin rules
+- Continue Working is media + copy, not a card
+- campaign metrics are shown as a clean data list, not 6 mini-cards
+- Recent Projects becomes a table-like media list
+- Recent Imports becomes a clean activity feed
+- factual views/likes/clips/payout/performance remain
+- missing values show as an em dash instead of fabricated numbers
+- background is darker and less red
 
 No backend or feature logic changes.
 No .env or secrets included.
