@@ -1,0 +1,150 @@
+
+/* Mint 21.15.2 — Structured workspaces overhaul */
+html,body,#app,.app{background:#060506!important}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(55vw 55vw at 86% 18%, rgba(138,20,20,.32), transparent 62%),
+    radial-gradient(34vw 34vw at 18% 14%, rgba(102,16,16,.18), transparent 64%),
+    radial-gradient(42vw 42vw at 58% 78%, rgba(64,8,8,.18), transparent 66%);
+}
+
+/* top navigation */
+.mint-nav-xxl{gap:34px!important}
+.mint-nav-xxl button,.mint-nav-xxl a{font-size:17px!important;font-weight:650!important}
+.mint-nav-xxl .mint-nav-label{font-size:10px!important;letter-spacing:.18em!important}
+.mint-hidden-home-nav{display:none!important}
+.mint-home-brand{cursor:pointer!important;user-select:none!important}
+.mint-home-brand:hover{opacity:.88!important}
+
+/* generic dark cards */
+.mint-campaign-card-v152,
+.mint-result-summary-card,
+.mint-results-card-row,
+.mint-studio-overhauled-v152 .mint-studio-source-v142,
+.mint-studio-overhauled-v152 .mint-studio-timeline-card-v142,
+.mint-studio-overhauled-v152 .mint-preview-card-v142,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142,
+.mint-studio-overhauled-v152 .upload-card{
+  background:linear-gradient(180deg, rgba(16,12,14,.92), rgba(8,7,9,.96))!important;
+  border:1px solid rgba(255,62,62,.12)!important;
+  box-shadow:0 16px 44px rgba(0,0,0,.28)!important;
+}
+
+/* Campaign Studio */
+.mint-campaign-overhauled{width:min(1500px,calc(100% - 64px))!important;padding-top:28px!important}
+.mint-campaign-overhauled .campaign-page-title{padding-bottom:24px!important;margin-bottom:22px!important;border-bottom:1px solid rgba(255,255,255,.06)!important}
+.mint-campaign-overhauled .campaign-page-title h1{font-size:56px!important;line-height:.95!important;letter-spacing:-.04em!important}
+.mint-campaign-overhauled .campaign-page-title p{max-width:760px!important;color:#aaa1a3!important;font-size:16px!important}
+.mint-campaign-overhauled .campaign-import{margin-bottom:22px!important;padding:18px 0!important;border-top:1px solid rgba(255,255,255,.04)!important;border-bottom:1px solid rgba(255,255,255,.04)!important}
+.mint-campaign-overhauled .mint-original-campaign-layout{display:none!important}
+.mint-campaign-card-section{margin-top:12px!important}
+.mint-campaign-cards-head{display:flex!important;align-items:end!important;justify-content:space-between!important;margin-bottom:16px!important}
+.mint-campaign-cards-head h2{margin:4px 0!important;font-size:32px!important;letter-spacing:-.03em!important}
+.mint-campaign-cards-head p{margin:0!important;color:#9c9497!important;font-size:14px!important}
+.mint-campaign-card-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))!important;gap:18px!important}
+.mint-campaign-card-v152{appearance:none!important;width:100%!important;text-align:left!important;padding:22px!important;border-radius:20px!important;cursor:pointer!important;transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease!important}
+.mint-campaign-card-v152:hover{transform:translateY(-2px)!important;border-color:rgba(255,72,72,.28)!important;box-shadow:0 22px 54px rgba(0,0,0,.34)!important}
+.mint-campaign-card-top,.mint-campaign-card-foot{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important}
+.mint-campaign-card-top .state{padding:7px 10px!important;border-radius:999px!important;background:rgba(12,99,69,.18)!important;color:#5fe0a0!important;font-size:11px!important;font-weight:700!important;letter-spacing:.08em!important}
+.mint-campaign-card-top .provider{color:#8e868a!important;font-size:12px!important;text-transform:uppercase!important;letter-spacing:.14em!important}
+.mint-campaign-card-v152 h3{margin:18px 0 8px!important;font-size:30px!important;letter-spacing:-.04em!important}
+.mint-campaign-card-v152 p{margin:0 0 18px!important;color:#a69da0!important;font-size:14px!important;line-height:1.5!important;min-height:42px!important}
+.mint-campaign-stat-strip{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;margin-bottom:18px!important}
+.mint-campaign-stat-strip>div{padding:14px!important;border-radius:14px!important;background:rgba(255,255,255,.03)!important;border:1px solid rgba(255,255,255,.05)!important}
+.mint-campaign-stat-strip span{display:block!important;color:#7b7377!important;font-size:11px!important;text-transform:uppercase!important;letter-spacing:.14em!important}
+.mint-campaign-stat-strip b{display:block!important;margin-top:6px!important;color:#fff!important;font-size:18px!important;line-height:1.25!important}
+.mint-campaign-card-foot span{color:#d8a857!important;font-size:12px!important;font-weight:700!important}
+.mint-campaign-card-foot strong{color:#ff5353!important;font-size:14px!important}
+
+.mint-campaign-analytics-modal{position:fixed!important;inset:0!important;display:none!important;align-items:center!important;justify-content:center!important;padding:24px!important;background:rgba(3,2,3,.72)!important;backdrop-filter:blur(10px)!important;z-index:9999!important}
+.mint-campaign-analytics-modal.show{display:flex!important}
+.mint-campaign-analytics-dialog{position:relative!important;width:min(940px,calc(100vw - 48px))!important;max-height:calc(100vh - 48px)!important;overflow:auto!important;padding:28px!important;border-radius:24px!important;background:linear-gradient(180deg, rgba(15,12,14,.98), rgba(8,7,9,.98))!important;border:1px solid rgba(255,72,72,.18)!important;box-shadow:0 34px 90px rgba(0,0,0,.45)!important}
+.mint-modal-close{position:absolute!important;top:16px!important;right:16px!important;width:38px!important;height:38px!important;border-radius:12px!important;border:1px solid rgba(255,255,255,.08)!important;background:rgba(255,255,255,.03)!important;color:#fff!important;font-size:20px!important}
+.mint-modal-header{display:flex!important;align-items:start!important;justify-content:space-between!important;gap:16px!important;margin-bottom:20px!important}
+.mint-modal-eyebrow{font-size:11px!important;letter-spacing:.2em!important;text-transform:uppercase!important;color:#9b8f92!important}
+.mint-modal-header h3{margin:6px 0!important;font-size:38px!important;letter-spacing:-.04em!important}
+.mint-modal-header p{margin:0!important;color:#a49c9f!important;font-size:14px!important}
+.mint-modal-badge{padding:10px 12px!important;border-radius:999px!important;background:rgba(161,120,19,.12)!important;color:#e7bb58!important;font-size:12px!important;font-weight:700!important}
+.mint-modal-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:12px!important;margin-bottom:18px!important}
+.mint-modal-grid>div{padding:16px!important;border-radius:16px!important;background:rgba(255,255,255,.03)!important;border:1px solid rgba(255,255,255,.06)!important}
+.mint-modal-grid span{display:block!important;color:#7f7679!important;font-size:11px!important;text-transform:uppercase!important;letter-spacing:.14em!important}
+.mint-modal-grid b{display:block!important;color:#fff!important;font-size:20px!important;margin-top:6px!important}
+.mint-modal-notes{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;margin-bottom:18px!important}
+.mint-modal-note-card{padding:16px!important;border-radius:16px!important;background:rgba(255,255,255,.025)!important;border:1px solid rgba(255,255,255,.05)!important}
+.mint-modal-note-card span{display:block!important;color:#fff!important;font-weight:700!important;font-size:12px!important;margin-bottom:6px!important;text-transform:uppercase!important;letter-spacing:.12em!important}
+.mint-modal-note-card p{margin:0!important;color:#a59ea0!important;line-height:1.55!important}
+.mint-modal-actions{display:flex!important;justify-content:flex-end!important;gap:10px!important}
+
+/* Results page */
+.mint-results-overhauled{width:min(1490px,calc(100% - 70px))!important;padding-top:28px!important}
+.mint-results-overhauled .mint-page-heading-v1418 h1{font-size:54px!important;letter-spacing:-.04em!important}
+.mint-results-overhauled .mint-page-heading-v1418 p{max-width:760px!important;font-size:15px!important;color:#a89fa2!important}
+.mint-results-overhauled .mint-results-summary-v1418{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important;padding:0!important;border:0!important;margin:0 0 30px!important}
+.mint-results-overhauled .mint-result-summary-card{padding:22px!important;border-radius:20px!important;border-right:0!important}
+.mint-results-overhauled .mint-result-summary-card b{font-size:34px!important}
+.mint-results-overhauled .mint-result-summary-card small{font-size:11px!important;color:#8a8286!important;text-transform:uppercase!important;letter-spacing:.12em!important}
+.mint-results-overhauled .mint-results-list-v1418>header{padding:0 0 16px!important;margin-bottom:8px!important}
+.mint-results-overhauled .mint-results-list-v1418>header h2,
+.mint-results-overhauled .mint-results-list-v1418>header strong{font-size:28px!important;letter-spacing:-.03em!important}
+.mint-results-overhauled .mint-results-card-row{grid-template-columns:minmax(210px,1.8fr) repeat(5,minmax(96px,.55fr)) 26px!important;padding:18px 16px!important;margin-bottom:10px!important;border-radius:18px!important;border-bottom:0!important}
+.mint-results-overhauled .mint-results-card-row strong,.mint-results-overhauled .mint-results-card-row b{font-size:14px!important}
+.mint-results-overhauled .mint-results-card-row small{font-size:11px!important;color:#8c8487!important}
+
+/* AI Studio */
+.mint-studio-overhauled-v152{width:min(1520px,calc(100% - 56px))!important;padding-top:24px!important}
+.mint-studio-overhauled-v152 .mint-studio-header-v142{padding-bottom:18px!important;margin-bottom:18px!important;border-bottom:1px solid rgba(255,255,255,.055)!important}
+.mint-studio-overhauled-v152 .mint-studio-header-v142 h1{font-size:52px!important;letter-spacing:-.04em!important}
+.mint-studio-overhauled-v152 .mint-studio-header-v142 p{max-width:720px!important;font-size:15px!important;color:#a8a0a3!important}
+.mint-studio-overhauled-v152 .upload-card.mint-upload-strip-v152{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;gap:18px!important;padding:18px 20px!important;border-radius:18px!important;margin-bottom:18px!important}
+.mint-studio-overhauled-v152 .upload-copy strong{font-size:18px!important}
+.mint-studio-overhauled-v152 .upload-copy span{font-size:13px!important;color:#aba2a6!important}
+.mint-studio-overhauled-v152 .upload-copy small{display:block!important;margin-top:6px!important;font-size:11px!important;color:#81797d!important}
+.mint-studio-overhauled-v152 .upload-icon{width:52px!important;height:52px!important;border-radius:14px!important}
+.mint-studio-overhauled-v152 .mint-studio-workspace-v142{display:grid!important;grid-template-columns:minmax(0,1fr) 380px!important;gap:20px!important;align-items:start!important}
+.mint-studio-overhauled-v152 .mint-studio-main-organized-v152{display:grid!important;gap:20px!important}
+.mint-studio-overhauled-v152 .mint-studio-source-v142,
+.mint-studio-overhauled-v152 .mint-studio-timeline-card-v142,
+.mint-studio-overhauled-v152 .mint-preview-card-v142,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142{padding:18px!important;border-radius:22px!important}
+.mint-studio-overhauled-v152 .mint-studio-side-v142{padding-left:0!important}
+.mint-studio-overhauled-v152 .mint-studio-right-stack-v152{display:grid!important;gap:18px!important;position:sticky!important;top:22px!important}
+.mint-studio-overhauled-v152 .mint-studio-video-v142,.mint-studio-overhauled-v152 .mint-studio-video-v142 .real-video,.mint-studio-overhauled-v152 .mint-studio-video-v142 iframe{max-height:none!important}
+.mint-studio-overhauled-v152 .mint-studio-video-v142{height:430px!important;min-height:430px!important;border-radius:18px!important;overflow:hidden!important}
+.mint-studio-overhauled-v152 .mint-studio-source-head-v142{display:flex!important;align-items:end!important;justify-content:space-between!important;margin-bottom:14px!important}
+.mint-studio-overhauled-v152 .mint-studio-source-head-v142 h3{font-size:22px!important;letter-spacing:-.03em!important}
+.mint-studio-overhauled-v152 .mint-studio-source-head-v142 p,
+.mint-studio-overhauled-v152 .mint-studio-source-v142 .eyebrow,
+.mint-studio-overhauled-v152 .section-head small{font-size:11px!important;letter-spacing:.15em!important;color:#938a8d!important;text-transform:uppercase!important}
+.mint-studio-overhauled-v152 .mint-studio-timeline-card-v142{grid-template-columns:1fr!important;grid-template-rows:auto auto auto!important;row-gap:16px!important;padding-top:18px!important;border-top:1px solid rgba(255,255,255,.055)!important}
+.mint-studio-overhauled-v152 .mint-studio-timeline-v142{grid-column:1!important;grid-row:2!important;min-height:184px!important;border-radius:18px!important;background:linear-gradient(180deg, rgba(15,13,41,.88), rgba(11,10,28,.94))!important;padding:16px!important;border:1px solid rgba(111,71,255,.18)!important}
+.mint-studio-overhauled-v152 .mint-studio-moments-v142{grid-column:1!important;grid-row:3!important;max-height:none!important;overflow:visible!important;padding-left:0!important;border-left:0!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important}
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .clip{padding:12px!important;border:1px solid rgba(255,255,255,.05)!important;border-radius:16px!important;background:rgba(255,255,255,.025)!important}
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .clip-thumb{width:100%!important;min-width:0!important;height:120px!important;border-radius:12px!important;margin-bottom:8px!important}
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .clip-info strong{font-size:12px!important;display:block!important}
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .quality-mini,
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .clip-info p,
+.mint-studio-overhauled-v152 .mint-studio-moments-v142 .clip-info em{display:block!important;font-size:11px!important;color:#999195!important}
+.mint-studio-overhauled-v152 .mint-preview-card-v142 .phone.tall{width:min(100%,248px)!important;height:430px!important;min-height:430px!important;border-radius:26px!important;background:linear-gradient(180deg, rgba(15,20,45,.95), rgba(31,12,40,.95))!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)!important}
+.mint-studio-overhauled-v152 .mint-preview-card-v142 .section-head h3{font-size:24px!important;letter-spacing:-.03em!important}
+.mint-studio-overhauled-v152 .mint-preview-card-v142 .clip-range{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
+.mint-studio-overhauled-v152 .mint-preview-card-v142 .preview-note{font-size:11px!important;padding:10px!important;border-radius:12px!important;background:rgba(0,0,0,.22)!important}
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .section-head h3{font-size:28px!important;letter-spacing:-.03em!important}
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .auto-director-card,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .caption-color-control,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .selectrow,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .quality-explainer,
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .edit-plan-card{padding:14px!important;border-radius:16px!important;background:rgba(255,255,255,.025)!important;border:1px solid rgba(255,255,255,.05)!important}
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .auto-director-tags span{padding:6px 8px!important;font-size:10px!important}
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .caption-color-chip{min-height:34px!important;padding:6px 10px!important;font-size:10px!important}
+.mint-studio-overhauled-v152 .mint-ai-tools-v142 .generate{height:44px!important;min-height:44px!important;font-size:14px!important;margin-top:10px!important}
+
+@media (max-width: 1180px){
+  .mint-modal-grid,.mint-modal-notes{grid-template-columns:1fr 1fr!important}
+  .mint-studio-overhauled-v152 .mint-studio-workspace-v142{grid-template-columns:1fr!important}
+  .mint-studio-overhauled-v152 .mint-studio-right-stack-v152{position:static!important}
+}
+@media (max-width: 900px){
+  .mint-campaign-card-grid,.mint-results-overhauled .mint-results-summary-v1418,.mint-modal-grid,.mint-modal-notes,.mint-studio-overhauled-v152 .mint-studio-moments-v142{grid-template-columns:1fr!important}
+  .mint-results-overhauled .mint-results-card-row{grid-template-columns:1fr 1fr!important}
+}

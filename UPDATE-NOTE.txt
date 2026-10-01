@@ -1,7 +1,11 @@
-Mint 21.15.1 — Navigation Cleanup
+Mint 21.15.2 — Structured Workspaces
 
-- Removes the Home button from the top navigation.
-- Clicking the Mint wordmark remains the Home action.
-- Centers CAMPAIGNS above Campaign Studio.
-- Centers CREATE above Library.
-- Rebalances the navigation after removing Home.
+Changes in this patch:
+- Campaign Studio now surfaces a clean campaign-card view.
+- Clicking a campaign card opens a centered analytics popup.
+- Results page metrics are converted into darker, clearer cards.
+- AI Studio is reorganized with a clearer source area, redesigned timeline, improved preview placement and structured control rail.
+- Home is hidden from the top navigation; Mint wordmark acts as Home.
+- Menu typography is larger.
+
+This patch avoids heavy source rewrites and instead layers a safer UI transform on top of the current app shell.
