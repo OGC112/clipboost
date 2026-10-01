@@ -1,10 +1,10 @@
-Mint 21.15.8 — Discover Refresh
+Mint 21.15.9 — Discover Grid Alignment
 
-Changes:
-- centers "Find and manage campaigns"
-- adds more breathing room under the top navigation
-- redesigns Smart Import as a cleaner premium horizontal panel
-- redesigns Total campaigns / Active / Tracked views / Confirmed payout
-- makes campaign cards smaller and square
-- tightens card typography, stats and actions
-- keeps all existing Discover functionality unchanged
+Refines the Discover page into one consistent structural grid:
+- Smart Import, KPI row and campaign cards now share the exact same left/right edges
+- one consistent 16px spacing rhythm
+- fixed KPI column alignment
+- campaign grid starts on the same axis as the sections above
+- campaign cards remain compact and square
+- hero stays centered and visually separated from the functional content
+- no Discover behavior or campaign logic changed

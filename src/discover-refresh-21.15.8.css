@@ -1,35 +1,39 @@
 
-/* Mint Discover refresh 21.15.8 */
+/* Mint Discover refresh 21.15.9
+   One structural grid for import, KPI row and campaign cards. */
 
 .campaign-discover-v143{
-  max-width:1500px!important;
+  --discover-content-width:1320px;
+  --discover-gap:16px;
+  width:min(var(--discover-content-width),calc(100% - 88px))!important;
+  max-width:none!important;
   margin:0 auto!important;
-  padding-top:72px!important;
-  padding-left:44px!important;
-  padding-right:44px!important;
-  padding-bottom:72px!important;
+  padding:82px 0 76px!important;
+  box-sizing:border-box!important;
 }
 
-/* More air under the top navigation */
 .campaign-discover-v143::before{
-  content:"";
-  display:block;
-  height:10px;
+  content:none!important;
 }
 
-/* Centered hero */
+/* Hero remains centered but uses the same page axis */
 .campaign-discover-header-v143{
+  width:100%!important;
+  max-width:none!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:center!important;
   justify-content:center!important;
   text-align:center!important;
   gap:24px!important;
-  margin:0 auto 42px!important;
-  max-width:980px!important;
+  margin:0 auto 46px!important;
+  padding:0 80px 18px!important;
+  box-sizing:border-box!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
 }
 
 .campaign-discover-header-v143>div{
+  width:100%!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:center!important;
@@ -42,10 +46,10 @@
 
 .campaign-discover-header-v143 h1{
   margin:0!important;
+  max-width:900px!important;
   font-size:clamp(42px,4vw,68px)!important;
   line-height:.98!important;
   letter-spacing:-.045em!important;
-  max-width:900px!important;
 }
 
 .campaign-discover-header-v143 p{
@@ -61,21 +65,33 @@
   padding:0 20px!important;
 }
 
-/* Smart import: cleaner, wider, less boxy */
+/* All content sections below the hero share one exact width and left/right edge */
+.campaign-discover-import-v143,
+.campaign-discover-summary-v143,
+.campaign-discover-grid-v143{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  box-sizing:border-box!important;
+}
+
+/* Smart Import */
 .campaign-discover-import-v143{
   position:relative!important;
   display:grid!important;
-  grid-template-columns:minmax(0,1fr) minmax(520px,1.15fr)!important;
+  grid-template-columns:minmax(320px,.9fr) minmax(560px,1.1fr)!important;
   align-items:center!important;
-  gap:34px!important;
-  padding:28px 30px!important;
-  margin:0 0 22px!important;
+  gap:36px!important;
+  padding:26px 28px!important;
+  margin-bottom:var(--discover-gap)!important;
+  min-height:116px!important;
   border:1px solid rgba(255,255,255,.07)!important;
-  border-radius:20px!important;
+  border-radius:18px!important;
   background:
-    radial-gradient(circle at 12% 25%, rgba(210,32,32,.10), transparent 34%),
-    linear-gradient(180deg, rgba(19,16,18,.96), rgba(11,10,12,.98))!important;
-  box-shadow:0 16px 45px rgba(0,0,0,.28)!important;
+    radial-gradient(circle at 8% 28%,rgba(210,32,32,.09),transparent 31%),
+    linear-gradient(180deg,rgba(19,16,18,.96),rgba(11,10,12,.98))!important;
+  box-shadow:0 14px 38px rgba(0,0,0,.24)!important;
   overflow:hidden!important;
 }
 
@@ -83,11 +99,11 @@
   content:"";
   position:absolute;
   left:0;
-  top:20px;
-  bottom:20px;
+  top:18px;
+  bottom:18px;
   width:3px;
   border-radius:10px;
-  background:linear-gradient(180deg,#e33737,rgba(227,55,55,.18));
+  background:linear-gradient(180deg,#e33737,rgba(227,55,55,.14));
 }
 
 .campaign-discover-import-v143 h3{
@@ -98,19 +114,21 @@
 
 .campaign-discover-import-v143 p{
   margin:0!important;
-  max-width:600px!important;
+  max-width:560px!important;
   line-height:1.55!important;
   opacity:.66!important;
 }
 
 .campaign-discover-import-controls-v143{
+  width:100%!important;
   display:grid!important;
-  grid-template-columns:minmax(0,1fr) auto auto!important;
+  grid-template-columns:minmax(0,1fr) 132px 154px!important;
   gap:10px!important;
   align-items:center!important;
 }
 
 .campaign-discover-import-controls-v143 input{
+  width:100%!important;
   min-width:0!important;
   height:46px!important;
   border-radius:12px!important;
@@ -119,22 +137,24 @@
 }
 
 .campaign-discover-import-controls-v143 .btn{
+  width:100%!important;
   min-height:46px!important;
   white-space:nowrap!important;
   border-radius:12px!important;
 }
 
-/* Summary: compact premium stat tiles */
+/* KPI row — same width as Smart Import, with consistent internal grid */
 .campaign-discover-summary-v143{
   display:grid!important;
   grid-template-columns:repeat(4,minmax(0,1fr))!important;
-  gap:12px!important;
-  margin:0 0 34px!important;
+  gap:var(--discover-gap)!important;
+  margin-bottom:30px!important;
 }
 
 .campaign-discover-summary-v143 article{
   position:relative!important;
-  min-height:108px!important;
+  min-width:0!important;
+  min-height:104px!important;
   padding:18px 20px!important;
   display:flex!important;
   flex-direction:column!important;
@@ -150,41 +170,46 @@
 .campaign-discover-summary-v143 article::before{
   content:"";
   position:absolute;
-  left:0;
-  right:0;
+  left:18px;
+  right:18px;
   top:0;
   height:1px;
-  background:linear-gradient(90deg,transparent,rgba(225,48,48,.5),transparent);
-  opacity:.65;
+  background:linear-gradient(90deg,transparent,rgba(225,48,48,.48),transparent);
+  opacity:.7;
 }
 
 .campaign-discover-summary-v143 article small{
-  font-size:11px!important;
-  letter-spacing:.10em!important;
+  font-size:10px!important;
+  letter-spacing:.11em!important;
   text-transform:uppercase!important;
-  opacity:.52!important;
+  opacity:.50!important;
 }
 
 .campaign-discover-summary-v143 article b{
-  font-size:26px!important;
-  letter-spacing:-.035em!important;
+  font-size:27px!important;
+  line-height:1!important;
+  letter-spacing:-.04em!important;
 }
 
-/* Campaign cards: smaller square format */
+/* Campaign grid begins on the exact same left edge as import and KPI row */
 .campaign-discover-grid-v143{
   display:grid!important;
-  grid-template-columns:repeat(auto-fill,minmax(250px,270px))!important;
-  gap:18px!important;
+  grid-template-columns:repeat(auto-fill,256px)!important;
+  gap:var(--discover-gap)!important;
   justify-content:start!important;
   align-items:start!important;
+  padding-top:30px!important;
+  border-top:1px solid rgba(255,255,255,.05)!important;
 }
 
+/* Smaller square cards, now aligned to the same 16px grid rhythm */
 .campaign-discover-card-v143{
-  width:100%!important;
-  aspect-ratio:1 / 1!important;
+  width:256px!important;
+  height:256px!important;
+  aspect-ratio:auto!important;
   min-height:0!important;
-  padding:18px!important;
-  border-radius:18px!important;
+  padding:17px!important;
+  border-radius:17px!important;
   border:1px solid rgba(255,255,255,.07)!important;
   background:
     radial-gradient(circle at 84% 12%,rgba(197,32,32,.08),transparent 28%),
@@ -193,6 +218,7 @@
   display:flex!important;
   flex-direction:column!important;
   overflow:hidden!important;
+  box-sizing:border-box!important;
 }
 
 .campaign-discover-card-v143:hover{
@@ -202,43 +228,43 @@
 }
 
 .campaign-discover-card-top-v143{
-  margin-bottom:14px!important;
+  margin-bottom:12px!important;
 }
 
 .campaign-discover-card-v143 h3{
-  margin:0 0 8px!important;
-  font-size:20px!important;
+  margin:0 0 7px!important;
+  font-size:19px!important;
   line-height:1.1!important;
 }
 
 .campaign-discover-card-v143>p{
-  margin:0 0 12px!important;
-  font-size:12.5px!important;
-  line-height:1.45!important;
+  margin:0 0 10px!important;
+  font-size:12px!important;
+  line-height:1.4!important;
   display:-webkit-box!important;
-  -webkit-line-clamp:3!important;
+  -webkit-line-clamp:2!important;
   -webkit-box-orient:vertical!important;
   overflow:hidden!important;
-  opacity:.64!important;
+  opacity:.62!important;
 }
 
 .campaign-discover-facts-v143{
   display:grid!important;
   grid-template-columns:repeat(3,minmax(0,1fr))!important;
-  gap:7px!important;
+  gap:6px!important;
   margin-top:auto!important;
 }
 
 .campaign-discover-facts-v143>div{
   min-width:0!important;
-  padding:9px 8px!important;
-  border-radius:10px!important;
+  padding:8px 7px!important;
+  border-radius:9px!important;
   background:rgba(255,255,255,.027)!important;
   border:1px solid rgba(255,255,255,.05)!important;
 }
 
 .campaign-discover-facts-v143 small{
-  font-size:9px!important;
+  font-size:8px!important;
   letter-spacing:.06em!important;
   text-transform:uppercase!important;
   opacity:.48!important;
@@ -247,7 +273,7 @@
 .campaign-discover-facts-v143 b{
   display:block!important;
   margin-top:3px!important;
-  font-size:11px!important;
+  font-size:10.5px!important;
   overflow:hidden!important;
   text-overflow:ellipsis!important;
   white-space:nowrap!important;
@@ -255,30 +281,31 @@
 
 .campaign-discover-actions-v143{
   display:grid!important;
-  grid-template-columns:1fr 1.25fr!important;
-  gap:8px!important;
-  margin-top:12px!important;
+  grid-template-columns:.9fr 1.2fr!important;
+  gap:7px!important;
+  margin-top:10px!important;
 }
 
 .campaign-discover-actions-v143 .btn{
-  min-height:34px!important;
-  padding:0 9px!important;
-  border-radius:9px!important;
-  font-size:10.5px!important;
+  min-height:32px!important;
+  padding:0 8px!important;
+  border-radius:8px!important;
+  font-size:10px!important;
 }
 
-@media(max-width:1100px){
+/* Responsive structure stays aligned */
+@media(max-width:1200px){
   .campaign-discover-v143{
-    padding-left:24px!important;
-    padding-right:24px!important;
+    width:calc(100% - 48px)!important;
   }
 
   .campaign-discover-import-v143{
     grid-template-columns:1fr!important;
+    gap:20px!important;
   }
 
   .campaign-discover-import-controls-v143{
-    grid-template-columns:1fr auto auto!important;
+    grid-template-columns:minmax(0,1fr) 132px 154px!important;
   }
 
   .campaign-discover-summary-v143{
@@ -286,9 +313,15 @@
   }
 }
 
-@media(max-width:720px){
+@media(max-width:760px){
   .campaign-discover-v143{
-    padding-top:52px!important;
+    width:calc(100% - 28px)!important;
+    padding-top:58px!important;
+  }
+
+  .campaign-discover-header-v143{
+    padding-left:0!important;
+    padding-right:0!important;
   }
 
   .campaign-discover-import-controls-v143{
@@ -304,7 +337,8 @@
   }
 
   .campaign-discover-card-v143{
-    aspect-ratio:auto!important;
-    min-height:300px!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:280px!important;
   }
 }

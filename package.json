@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.8",
-  "description": "Mint Discover page visual refresh",
+  "version": "21.15.9",
+  "description": "Mint Discover grid alignment refinement",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
