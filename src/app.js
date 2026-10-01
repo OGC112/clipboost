@@ -145,31 +145,31 @@
     const current=projects.find(p=>['ingesting','analyzing'].includes(p.status))||projects[0]||null;
     const activeCampaign=campaignsList.find(c=>String(c.status||'active')==='active')||campaignsList[0]||null;
     const currentState=current?projectDisplayState(current):null;
-    const recent=projects.slice(0,3);
-    const imports=projects.filter(p=>p.externalSource).slice(0,3);
+    const recent=projects.slice(0,4);
+    const imports=projects.filter(p=>p.externalSource).slice(0,4);
 
     const recentCards=recent.length ? recent.map((p,i)=>{
       const ps=projectDisplayState(p);
-      return `<button class="mint-home-project-card" data-home-project="${escapeHtml(p.id)}" type="button">
-        <div class="mint-home-project-thumb">
+      return `<button class="mint-editorial-project" data-home-project="${escapeHtml(p.id)}" type="button">
+        <div class="mint-editorial-project-media">
           ${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}
           <span>${Number(p.candidateCount||0)} clips</span>
         </div>
-        <div class="mint-home-project-meta">
+        <div class="mint-editorial-project-copy">
           <strong>${escapeHtml(p.originalName||'Project')}</strong>
           <small>${escapeHtml(p.campaignName?'Campaign Studio':'AI Studio')} · ${escapeHtml(ps.badge||'Project')}</small>
         </div>
       </button>`;
-    }).join('') : `<div class="mint-home-empty"><b>No projects yet</b><span>Import content or upload a source to get started.</span><button class="btn primary" data-page="library">Browse Library</button></div>`;
+    }).join('') : `<div class="mint-editorial-empty">No recent projects yet.</div>`;
 
-    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-home-import-row" data-home-project="${escapeHtml(p.id)}" type="button">
-      <div class="mint-home-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
-      <div><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
+    const importRows=imports.length ? imports.map((p,i)=>`<button class="mint-editorial-import" data-home-project="${escapeHtml(p.id)}" type="button">
+      <div class="mint-editorial-import-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div>
+      <div class="mint-editorial-import-copy"><strong>${escapeHtml(p.originalName||'Imported media')}</strong><small>${escapeHtml(p.externalSource?.creatorName||p.externalSource?.platform||'Library source')}</small></div>
       <span>•••</span>
-    </button>`).join('') : `<div class="mint-home-small-empty">Recent imported media will appear here.</div>`;
+    </button>`).join('') : `<div class="mint-editorial-empty">No recent imports.</div>`;
 
-    return `<div class="content mint-home-page">
-      <section class="mint-home-heading">
+    return `<div class="content mint-home-page mint-home-editorial-v1412">
+      <section class="mint-editorial-heading">
         <div>
           <div class="eyebrow">MINT WORKSPACE</div>
           <h1>Your Mint <span class="mint-red-word">workspace</span></h1>
@@ -181,46 +181,62 @@
         </div>
       </section>
 
-      <section class="mint-home-primary-grid">
-        <article class="mint-home-continue">
-          <header><div><span>ϟ</span><b>Continue working</b></div>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</header>
+      <section class="mint-editorial-main">
+        <article class="mint-editorial-feature">
+          <div class="mint-editorial-section-label"><span>ϟ</span><b>Continue working</b>${current?`<em>${escapeHtml(currentState?.badge||'Project')}</em>`:''}</div>
           ${current?`
-            <div class="mint-home-continue-body">
-              <div class="mint-home-continue-media">${current.externalSource?.thumbnail?`<img src="${escapeHtml(current.externalSource.thumbnail)}" alt="">`:mediaThumb(0)}<i>▶</i></div>
-              <div class="mint-home-continue-copy">
-                <h2>${escapeHtml(current.originalName||'Project')}</h2>
-                <p>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</p>
-                <div class="mint-home-progress"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div>
-                <div class="mint-home-progress-label"><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
-                <div class="mint-home-continue-actions"><button class="btn primary" data-home-project="${escapeHtml(current.id)}">▶ Continue project →</button><button class="mint-home-more" type="button">•••</button></div>
+            <button class="mint-editorial-feature-media" data-home-project="${escapeHtml(current.id)}" type="button">
+              ${current.externalSource?.thumbnail?`<img src="${escapeHtml(current.externalSource.thumbnail)}" alt="">`:mediaThumb(0)}
+              <span class="mint-editorial-play">▶</span>
+              <div class="mint-editorial-feature-overlay">
+                <div>
+                  <small>${escapeHtml(current.campaignName?`Campaign · ${current.campaignName}`:'General AI Studio project')}</small>
+                  <h2>${escapeHtml(current.originalName||'Project')}</h2>
+                </div>
+                <span>Continue →</span>
               </div>
+            </button>
+            <div class="mint-editorial-progress-row">
+              <div class="mint-home-progress"><i style="width:${Math.max(4,Math.min(100,Number(currentState?.progress||0)))}%"></i></div>
+              <div><span>${escapeHtml(currentState?.progressLabel||currentState?.badge||'Project')}</span><b>${Math.round(Number(currentState?.progress||0))}%</b></div>
             </div>`
-          : `<div class="mint-home-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
+          : `<div class="mint-editorial-empty large"><b>Nothing in progress</b><span>Start from AI Studio or import content from your Library.</span><button class="btn primary" data-page="studio">Create a project</button></div>`}
         </article>
 
-        <aside class="mint-home-campaign">
-          <header><div><span>◎</span><b>Active campaign</b></div>${activeCampaign?'<em>Active</em>':''}</header>
+        <aside class="mint-editorial-side">
+          <div class="mint-editorial-section-label"><span>◎</span><b>Active campaign</b>${activeCampaign?'<em>Active</em>':''}</div>
           ${activeCampaign?`
-            <div class="mint-home-campaign-brand"><span>◎</span><div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')} · Creator campaign</p></div></div>
-            <div class="mint-home-campaign-stats">
-              <div><span>▣</span><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(activeCampaign))}</b></div>
-              <div><span>▥</span><small>Minimum</small><b>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</b></div>
-              <div><span>◉</span><small>Tracked views</small><b>${formatCount(activeCampaign.totals?.totalViews||0)}</b></div>
-            </div>
-            <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>`
-          : `<div class="mint-home-empty large"><b>No active campaign</b><span>Import or create a campaign to see it here.</span><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
+            <div class="mint-editorial-campaign">
+              <div class="mint-editorial-campaign-head">
+                <span>◎</span>
+                <div><h2>${escapeHtml(activeCampaign.name)}</h2><p>${escapeHtml(activeCampaign.provider||'Campaign')} · Creator campaign</p></div>
+              </div>
+              <dl>
+                <div><dt>Payment</dt><dd>${escapeHtml(campaignPaymentSummary(activeCampaign))}</dd></div>
+                <div><dt>Minimum</dt><dd>${campaignQualification(activeCampaign)?formatCount(campaignQualification(activeCampaign)):'—'}</dd></div>
+                <div><dt>Tracked views</dt><dd>${formatCount(activeCampaign.totals?.totalViews||0)}</dd></div>
+              </dl>
+              <button class="btn primary full" data-home-campaign="${escapeHtml(activeCampaign.id)}">Open Campaign Studio →</button>
+            </div>`
+          : `<div class="mint-editorial-empty large"><b>No active campaign</b><span>Import or create a campaign to see it here.</span><button class="btn primary" data-page="campaigns">Add campaign</button></div>`}
         </aside>
       </section>
 
-      <section class="mint-home-lower-grid">
-        <article class="mint-home-recent">
-          <header><div><span>▣</span><div><b>Recent projects</b><small>Pick up where you left off or explore your latest creations.</small></div></div><button class="btn secondary compact-btn" data-page="projects">View all →</button></header>
-          <div class="mint-home-project-grid">${recentCards}</div>
-        </article>
+      <section class="mint-editorial-work">
+        <div class="mint-editorial-projects-wrap">
+          <div class="mint-editorial-work-head">
+            <div><span>▣</span><div><b>Recent projects</b><small>Your latest creative work.</small></div></div>
+            <button class="mint-editorial-link" data-page="projects" type="button">View all →</button>
+          </div>
+          <div class="mint-editorial-projects-row">${recentCards}</div>
+        </div>
 
-        <aside class="mint-home-imports">
-          <header><div><span>⇧</span><div><b>Recent imports</b><small>Your latest media imports.</small></div></div><button class="btn secondary compact-btn" data-page="library">View all →</button></header>
-          <div class="mint-home-import-list">${importRows}</div>
+        <aside class="mint-editorial-imports-wrap">
+          <div class="mint-editorial-work-head">
+            <div><span>⇧</span><div><b>Recent imports</b><small>Latest media added to Mint.</small></div></div>
+            <button class="mint-editorial-link" data-page="library" type="button">View all →</button>
+          </div>
+          <div class="mint-editorial-imports-list">${importRows}</div>
         </aside>
       </section>
     </div>`

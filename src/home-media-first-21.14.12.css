@@ -1,0 +1,459 @@
+/* Mint 21.14.12 — Media-first editorial Home
+   Real hierarchy change: fewer dashboard boxes, more media, more whitespace.
+*/
+
+.mint-home-editorial-v1412{
+  width:min(1480px,calc(100% - 64px))!important;
+  padding-top:30px!important;
+  padding-bottom:48px!important;
+}
+
+.mint-editorial-heading{
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:space-between!important;
+  gap:32px!important;
+  padding:0 8px 28px!important;
+}
+.mint-editorial-heading h1{
+  margin:8px 0 8px!important;
+  font-size:50px!important;
+  line-height:.98!important;
+  letter-spacing:-.055em!important;
+}
+.mint-editorial-heading p{
+  max-width:760px!important;
+  margin:0!important;
+  color:#aaa3a4!important;
+  font-size:13px!important;
+  line-height:1.55!important;
+}
+
+/* Main editorial composition */
+.mint-editorial-main{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.9fr) minmax(320px,.82fr)!important;
+  gap:18px!important;
+  align-items:stretch!important;
+}
+
+.mint-editorial-feature,
+.mint-editorial-side{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  min-width:0!important;
+}
+
+.mint-editorial-section-label{
+  display:flex!important;
+  align-items:center!important;
+  gap:10px!important;
+  margin:0 0 12px!important;
+  color:#f7f2f2!important;
+}
+.mint-editorial-section-label>span{
+  color:#df2a33!important;
+  font-size:18px!important;
+}
+.mint-editorial-section-label>b{
+  font-size:14px!important;
+  font-weight:650!important;
+}
+.mint-editorial-section-label>em{
+  margin-left:auto!important;
+  font-style:normal!important;
+  font-size:8.5px!important;
+  color:#d8aa4e!important;
+  background:rgba(216,170,78,.08)!important;
+  border:1px solid rgba(216,170,78,.18)!important;
+  border-radius:999px!important;
+  padding:4px 8px!important;
+}
+
+/* Hero media card */
+.mint-editorial-feature-media{
+  position:relative!important;
+  width:100%!important;
+  height:430px!important;
+  padding:0!important;
+  border:1px solid rgba(186,37,43,.28)!important;
+  border-radius:18px!important;
+  overflow:hidden!important;
+  background:#0e0b0c!important;
+  text-align:left!important;
+  cursor:pointer!important;
+  box-shadow:0 18px 46px rgba(0,0,0,.28)!important;
+}
+.mint-editorial-feature-media img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  display:block!important;
+}
+.mint-editorial-feature-media::after{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  background:
+    linear-gradient(180deg,rgba(0,0,0,.02) 38%,rgba(0,0,0,.82) 100%),
+    linear-gradient(90deg,rgba(0,0,0,.12),transparent 42%)!important;
+}
+.mint-editorial-play{
+  position:absolute!important;
+  left:50%!important;
+  top:47%!important;
+  transform:translate(-50%,-50%)!important;
+  z-index:2!important;
+  width:60px!important;
+  height:60px!important;
+  border-radius:50%!important;
+  display:grid!important;
+  place-items:center!important;
+  color:#fff!important;
+  background:rgba(12,9,10,.72)!important;
+  border:1px solid rgba(255,255,255,.25)!important;
+  backdrop-filter:blur(12px)!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.35)!important;
+}
+.mint-editorial-feature-overlay{
+  position:absolute!important;
+  left:22px!important;
+  right:22px!important;
+  bottom:20px!important;
+  z-index:3!important;
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:space-between!important;
+  gap:22px!important;
+  color:#fff!important;
+}
+.mint-editorial-feature-overlay small{
+  display:block!important;
+  color:#c1b8ba!important;
+  font-size:10px!important;
+  margin-bottom:6px!important;
+}
+.mint-editorial-feature-overlay h2{
+  margin:0!important;
+  max-width:780px!important;
+  font-size:28px!important;
+  line-height:1.08!important;
+  font-weight:680!important;
+  letter-spacing:-.035em!important;
+}
+.mint-editorial-feature-overlay>span{
+  flex:0 0 auto!important;
+  color:#fff!important;
+  font-size:11px!important;
+  font-weight:650!important;
+  padding:10px 13px!important;
+  border-radius:10px!important;
+  background:rgba(202,23,32,.82)!important;
+  border:1px solid rgba(255,85,91,.28)!important;
+}
+
+.mint-editorial-progress-row{
+  padding:14px 2px 0!important;
+}
+.mint-editorial-progress-row .mint-home-progress{
+  height:5px!important;
+}
+.mint-editorial-progress-row>div:last-child{
+  display:flex!important;
+  justify-content:space-between!important;
+  padding-top:6px!important;
+  color:#8f888a!important;
+  font-size:9px!important;
+}
+
+/* Compact campaign panel */
+.mint-editorial-side{
+  padding-left:4px!important;
+}
+.mint-editorial-campaign{
+  background:
+    radial-gradient(90% 100% at 100% 100%,rgba(99,10,15,.08),transparent 66%),
+    linear-gradient(145deg,rgba(21,16,17,.88),rgba(10,10,10,.96))!important;
+  border:1px solid rgba(161,35,39,.22)!important;
+  border-radius:16px!important;
+  padding:16px!important;
+  min-height:430px!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+.mint-editorial-campaign-head{
+  display:flex!important;
+  align-items:center!important;
+  gap:12px!important;
+  padding-bottom:16px!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-editorial-campaign-head>span{
+  width:52px!important;
+  height:52px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:11px!important;
+  color:#f0444c!important;
+  background:linear-gradient(145deg,#351013,#160b0c)!important;
+}
+.mint-editorial-campaign-head h2{
+  margin:0 0 3px!important;
+  font-size:19px!important;
+  font-weight:660!important;
+}
+.mint-editorial-campaign-head p{
+  margin:0!important;
+  color:#8f8789!important;
+  font-size:9px!important;
+}
+.mint-editorial-campaign dl{
+  margin:14px 0 18px!important;
+}
+.mint-editorial-campaign dl>div{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:14px!important;
+  padding:13px 0!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-editorial-campaign dt{
+  color:#898184!important;
+  font-size:9px!important;
+}
+.mint-editorial-campaign dd{
+  margin:0!important;
+  color:#fff!important;
+  font-size:10.5px!important;
+  font-weight:620!important;
+  text-align:right!important;
+}
+.mint-editorial-campaign .btn{
+  margin-top:auto!important;
+}
+
+/* Lower section: not two big dashboard rectangles */
+.mint-editorial-work{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.9fr) minmax(320px,.82fr)!important;
+  gap:24px!important;
+  margin-top:30px!important;
+  align-items:start!important;
+}
+.mint-editorial-projects-wrap,
+.mint-editorial-imports-wrap{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  min-width:0!important;
+}
+.mint-editorial-work-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:18px!important;
+  margin-bottom:13px!important;
+}
+.mint-editorial-work-head>div{
+  display:flex!important;
+  align-items:center!important;
+  gap:10px!important;
+}
+.mint-editorial-work-head>div>span{
+  color:#df2a33!important;
+  font-size:15px!important;
+}
+.mint-editorial-work-head b{
+  display:block!important;
+  color:#f4efef!important;
+  font-size:13px!important;
+}
+.mint-editorial-work-head small{
+  display:block!important;
+  margin-top:2px!important;
+  color:#797274!important;
+  font-size:8.5px!important;
+}
+.mint-editorial-link{
+  appearance:none!important;
+  border:0!important;
+  background:transparent!important;
+  color:#aaa1a3!important;
+  font-size:9.5px!important;
+  cursor:pointer!important;
+}
+.mint-editorial-link:hover{color:#fff!important}
+
+/* Recent projects as horizontal media strip */
+.mint-editorial-projects-row{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:12px!important;
+}
+.mint-editorial-project{
+  appearance:none!important;
+  width:100%!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  text-align:left!important;
+  cursor:pointer!important;
+  min-width:0!important;
+}
+.mint-editorial-project-media{
+  position:relative!important;
+  height:180px!important;
+  border-radius:13px!important;
+  overflow:hidden!important;
+  background:#0f0c0d!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+}
+.mint-editorial-project-media img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  display:block!important;
+}
+.mint-editorial-project-media::after{
+  content:""!important;
+  position:absolute!important;
+  inset:auto 0 0 0!important;
+  height:38%!important;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.46))!important;
+}
+.mint-editorial-project-media>span{
+  position:absolute!important;
+  z-index:2!important;
+  right:8px!important;
+  bottom:8px!important;
+  padding:3px 6px!important;
+  border-radius:6px!important;
+  background:rgba(7,7,7,.80)!important;
+  color:#fff!important;
+  font-size:8px!important;
+}
+.mint-editorial-project-copy{
+  padding:8px 2px 0!important;
+}
+.mint-editorial-project-copy strong{
+  display:block!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  color:#f0ebec!important;
+  font-size:10.5px!important;
+  font-weight:600!important;
+}
+.mint-editorial-project-copy small{
+  display:block!important;
+  margin-top:3px!important;
+  color:#756f71!important;
+  font-size:8.5px!important;
+}
+
+/* Recent imports as compact activity list */
+.mint-editorial-imports-list{
+  display:grid!important;
+  gap:7px!important;
+}
+.mint-editorial-import{
+  appearance:none!important;
+  display:grid!important;
+  grid-template-columns:72px minmax(0,1fr) 22px!important;
+  align-items:center!important;
+  gap:10px!important;
+  width:100%!important;
+  padding:7px 0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+  background:transparent!important;
+  text-align:left!important;
+  cursor:pointer!important;
+}
+.mint-editorial-import:last-child{
+  border-bottom:0!important;
+}
+.mint-editorial-import-thumb{
+  width:72px!important;
+  height:44px!important;
+  overflow:hidden!important;
+  border-radius:8px!important;
+  background:#110d0e!important;
+}
+.mint-editorial-import-thumb img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+}
+.mint-editorial-import-copy strong{
+  display:block!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  color:#eee9ea!important;
+  font-size:9.5px!important;
+  font-weight:600!important;
+}
+.mint-editorial-import-copy small{
+  display:block!important;
+  margin-top:3px!important;
+  color:#736d6f!important;
+  font-size:8px!important;
+}
+.mint-editorial-import>span{
+  color:#70696b!important;
+  font-size:10px!important;
+}
+
+/* Empty states */
+.mint-editorial-empty{
+  color:#817a7c!important;
+  font-size:10px!important;
+  padding:18px 0!important;
+}
+.mint-editorial-empty.large{
+  min-height:260px!important;
+  display:grid!important;
+  place-items:center!important;
+  align-content:center!important;
+  gap:8px!important;
+  text-align:center!important;
+}
+.mint-editorial-empty b{
+  color:#eee9ea!important;
+  font-size:16px!important;
+}
+
+/* Kill the old Home card containers if residual styles match nested elements */
+.mint-home-primary-grid,
+.mint-home-lower-grid,
+.mint-home-continue,
+.mint-home-campaign,
+.mint-home-recent,
+.mint-home-imports{
+  all:unset;
+}
+
+@media(max-width:1100px){
+  .mint-editorial-main,
+  .mint-editorial-work{
+    grid-template-columns:1fr!important;
+  }
+  .mint-editorial-campaign{
+    min-height:auto!important;
+  }
+}
+@media(max-width:760px){
+  .mint-editorial-heading{
+    align-items:flex-start!important;
+    flex-direction:column!important;
+  }
+  .mint-editorial-feature-media{
+    height:340px!important;
+  }
+  .mint-editorial-projects-row{
+    grid-template-columns:1fr!important;
+  }
+}

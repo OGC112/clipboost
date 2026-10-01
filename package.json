@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.11",
-  "description": "Mint red noir refinement pass",
+  "version": "21.14.12",
+  "description": "Mint Home media-first editorial redesign",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

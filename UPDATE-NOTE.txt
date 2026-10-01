@@ -1,17 +1,17 @@
-Mint 21.14.11 — Red Noir Refinement
+Mint 21.14.12 — Home Media-First Editorial Redesign
 
-Refinement only; no structural redesign.
+This version changes the actual Home hierarchy, not just colors.
 
 Changes:
-- reduces the overall red wash by roughly half
-- keeps only a few controlled red light zones
-- preserves two diagonal light streaks
-- cards move back toward charcoal/black
-- red borders become much more subtle
-- CTA red is darker and less saturated
-- Active Campaign inner surfaces are darker
-- Recent Projects / Imports are more neutral
-- media and progress accents are toned down
+- Continue Working becomes the dominant large media feature
+- project title/details are overlaid on the media
+- Active Campaign becomes a compact editorial side panel
+- Recent Projects becomes a horizontal media-first gallery
+- Recent Imports becomes a lightweight activity list
+- removes the four-heavy-dashboard-box feeling
+- preserves current red/noir theme and lighting
+- keeps all existing project/campaign navigation hooks
 
-No backend, routing or feature changes.
+No backend changes.
+No AI engine changes.
 No .env or secrets included.
