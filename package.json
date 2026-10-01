@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.10",
-  "description": "Mint centered hero headers for Results, Campaign Studio and Library",
+  "version": "21.15.11",
+  "description": "Mint Discover hero harmonized with Results Campaign Studio and Library",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

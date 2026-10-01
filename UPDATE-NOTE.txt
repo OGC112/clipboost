@@ -1,17 +1,12 @@
-Mint 21.15.10 — Section Hero Headers
+Mint 21.15.11 — Discover Hero Harmonization
 
-Brings the large centered Discover title treatment to:
-- Results
-- Campaign Studio
-- Library
+Discover now uses the same hero language as Results, Campaign Studio and Library:
+- same top spacing below navigation
+- same hero minimum height
+- same centered eyebrow, title and description geometry
+- same title scale and typography
+- same bottom divider and spacing
+- centered Discover CTA preserved
+- Smart Import starts on the same content rhythm below the hero
 
-Changes:
-- same large centered H1 scale as Discover
-- centered eyebrow + supporting copy
-- consistent vertical breathing room below the top navigation
-- subtle divider under each hero
-- Campaign Studio overview metrics stay visible beneath the title
-- Library connection/actions stay available beneath the title
-- no functional campaign, results or library logic changed
-
-Scope intentionally limited to these three pages.
+No Discover campaign logic or import behavior changed.
