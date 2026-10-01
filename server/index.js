@@ -1399,6 +1399,7 @@ app.get('/api/system/health', async (req,res) => {
     node: { ok:false, detail:'Not found' },
     ytDlp: { ok:false, detail:'Not found' },
     python: { ok:false, detail:python },
+    whisper: { ok:false, detail:'faster-whisper not checked' },
     tracking: { ok:false, detail:'OpenCV face tracking' },
     ollama: { ok:false, detail:String(process.env.OLLAMA_MODEL || 'qwen2.5:3b') },
     youtube: { ok:Boolean(String(process.env.YOUTUBE_API_KEY || '').trim()), detail:'API key' },
@@ -1411,6 +1412,7 @@ app.get('/api/system/health', async (req,res) => {
     run(windowsTools.node || 'node',['--version'],{timeout:8000}).then(x=>{result.node={ok:true,detail:`Node ${(x.stdout||x.stderr).trim()} · EJS runtime`}}).catch(()=>{}),
     run(python,['-m','yt_dlp','--version'],{timeout:8000}).then(x=>{result.ytDlp={ok:true,detail:`yt-dlp ${(x.stdout||x.stderr).trim()} · auth ${String(process.env.YOUTUBE_AUTH_BROWSER||'firefox')}`}}).catch(()=>{}),
     run(python,['--version'],{timeout:8000}).then(x=>{result.python={ok:true,detail:(x.stdout||x.stderr).trim()||python}}).catch(()=>{}),
+    run(python,['-c','import faster_whisper; print(getattr(faster_whisper,"__version__","ready"))'],{timeout:8000}).then(x=>{result.whisper={ok:true,detail:`faster-whisper ${String(x.stdout||x.stderr).trim()} ready`}}).catch(()=>{}),
     run(python,['-c','import cv2; print(cv2.__version__)'],{timeout:8000}).then(x=>{result.tracking={ok:true,detail:`OpenCV ${String(x.stdout||x.stderr).trim()} ready`}}).catch(()=>{}),
     fetch(`${ollamaUrl}/api/tags`,{signal:AbortSignal.timeout(3500)}).then(r=>r.ok?r.json():Promise.reject(new Error('offline'))).then(data=>{
       const names=(data.models||[]).map(m=>m.name).filter(Boolean);
@@ -3720,7 +3722,10 @@ async function analyzeProject(projectId, options = {}) {
       }
       candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced', 'dynamic', 'natural');
     }
-    meta.status = 'ready';
+    const semanticUsed=Boolean(candidates.some(x=>x?.signals?.semantic));
+    const contextReviewed=Boolean(candidates.some(x=>x?.signals?.contextReviewed));
+    if(!aiError && transcript?.words?.length && !semanticUsed) aiError='Ollama semantic selection was unavailable or returned no usable clips. Deterministic quality selection was used.';
+    meta.status = aiError ? 'degraded' : 'ready';
     meta.updatedAt = new Date().toISOString();
     meta.analysis = {
       scenesDetected: scenes.length,
@@ -3743,6 +3748,10 @@ async function analyzeProject(projectId, options = {}) {
       progress: 100,
       aiConfigured: true,
       aiError,
+      whisperStatus: transcript?.words?.length ? 'ok' : 'failed',
+      semanticEngine: semanticUsed ? 'ollama' : 'heuristic-fallback',
+      contextReview: contextReviewed ? 'ollama' : 'fallback',
+      degraded: Boolean(aiError),
       clipCountPreference,
       clipTarget: clipCountPreference==='auto' ? 'quality-only' : resolveClipTarget(duration, clipCountPreference),
       clipSearchBudget: resolveClipTarget(duration, clipCountPreference),
@@ -3807,10 +3816,32 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
   return { url: `/media/previews/${fileName}`, start: safeStart, end: safeEnd, cached: false, edited: true, render:renderInfo };
 }
 
+async function startBackgroundAnalysis(projectId, options = {}) {
+  const id=String(projectId||'');
+  if(projectTaskIsActive(id)) return await readMeta(id);
+  const meta=await readMeta(id);
+  meta.status='analyzing';
+  meta.updatedAt=new Date().toISOString();
+  meta.analysis={...(meta.analysis||{}),stage:'queued',progress:5,error:null,interrupted:false};
+  await writeMeta(meta);
+  void withProjectTask(id,()=>analyzeProject(id,options)).catch(async err=>{
+    try{
+      const current=await readMeta(id);
+      current.status='failed';
+      current.updatedAt=new Date().toISOString();
+      current.analysis={...(current.analysis||{}),stage:'failed',progress:Number(current.analysis?.progress||0),error:err?.message||'Analysis failed',aiError:err?.message||'Analysis failed'};
+      await writeMeta(current);
+    }catch{}
+    console.error('Background analysis failed:',err);
+  });
+  return meta;
+}
+
 app.post('/api/videos/:id/analyze', async (req, res, next) => {
   try {
     deletedProjectIds.delete(String(req.params.id));
-    res.json(await withProjectTask(req.params.id, () => analyzeProject(req.params.id, { clipCount: req.body?.clipCount ?? 'auto' })));
+    const meta=await startBackgroundAnalysis(req.params.id,{clipCount:req.body?.clipCount??'auto'});
+    res.status(202).json(meta);
   } catch (e) { next(e); }
 });
 

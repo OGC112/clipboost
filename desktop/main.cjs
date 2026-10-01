@@ -718,6 +718,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width:1600, height:980, minWidth:1100, minHeight:720,
     backgroundColor:'#050913', show:false, autoHideMenuBar:true,
+    frame:false, titleBarStyle:'hidden',
     icon:path.join(appRoot(), 'desktop', 'assets', 'clipboost.ico'),
     webPreferences:{ contextIsolation:true, nodeIntegration:false, sandbox:true, webviewTag:true, preload:path.join(__dirname,'preload.cjs') }
   });
@@ -790,6 +791,15 @@ async function createWindow() {
   if (readDesktopSettings().checkUpdatesOnStartup) setTimeout(() => checkForUpdates(false), 5000);
 }
 function stopBackend() { stopBackendTree(); }
+
+ipcMain.handle('desktop:window-minimize', () => { if(mainWindow&&!mainWindow.isDestroyed())mainWindow.minimize(); return {ok:true}; });
+ipcMain.handle('desktop:window-maximize', () => {
+  if(!mainWindow||mainWindow.isDestroyed())return {ok:false};
+  if(mainWindow.isMaximized())mainWindow.unmaximize();else mainWindow.maximize();
+  return {ok:true,maximized:mainWindow.isMaximized()};
+});
+ipcMain.handle('desktop:window-close', () => { if(mainWindow&&!mainWindow.isDestroyed())mainWindow.close(); return {ok:true}; });
+ipcMain.handle('desktop:window-state', () => ({ok:true,maximized:Boolean(mainWindow&&!mainWindow.isDestroyed()&&mainWindow.isMaximized())}));
 
 ipcMain.on('desktop:activity', () => markRendererActivity());
 ipcMain.handle('desktop:import-campaign-authenticated', async (_event, url) => runAuthenticatedCampaignImport(url));

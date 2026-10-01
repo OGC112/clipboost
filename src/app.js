@@ -135,6 +135,11 @@
       <div class="mint-home-top-actions mint-split-actions mint-clean-actions">
         ${updatePill}
         <button class="mint-home-icon-btn mint-settings-gear" data-page="settings" type="button" aria-label="Settings" title="Settings">⚙</button>
+        <div class="mint-window-controls" aria-label="Window controls">
+          <button type="button" id="mintWindowMin" title="Minimize" aria-label="Minimize">—</button>
+          <button type="button" id="mintWindowMax" title="Maximize" aria-label="Maximize">□</button>
+          <button type="button" id="mintWindowClose" class="close" title="Close" aria-label="Close">×</button>
+        </div>
       </div>
     </header>`
   }
@@ -383,8 +388,32 @@
 
   function formatTime(sec){const s=Math.max(0,Number(sec)||0);const m=Math.floor(s/60);return `${String(m).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`}
 
+  async function ensureStudioPreflight({needsDownload=false}={}){
+    try{
+      const r=await fetch('/api/system/health');
+      const h=await readJsonResponse(r,'AI Studio preflight failed');
+      state.aiPreflight=h;
+      const critical=[['FFmpeg',h.ffmpeg],['FFprobe',h.ffprobe],['Python',h.python],['faster-whisper',h.whisper]];
+      if(needsDownload)critical.push(['yt-dlp',h.ytDlp]);
+      const missing=critical.filter(([,x])=>!x?.ok).map(([name])=>name);
+      if(missing.length){
+        showNotice({kind:'danger',eyebrow:'AI Studio preflight',title:'Local AI is not ready',message:`Missing: ${missing.join(', ')}. Open Settings → System health before processing.`});
+        return false;
+      }
+      if(!h.ollama?.ok&&!state.aiPreflightOllamaWarned){
+        state.aiPreflightOllamaWarned=true;
+        showNotice({kind:'warning',eyebrow:'AI Studio preflight',title:'Ollama is unavailable',message:'Mint can continue with deterministic clip selection, but semantic selection will run in degraded mode.'});
+      }
+      return true;
+    }catch(e){
+      showNotice({kind:'danger',eyebrow:'AI Studio preflight',title:'Could not verify local AI',message:e.message||'System health check failed.'});
+      return false;
+    }
+  }
+
   async function uploadVideo(file){
     if(!file) return;
+    if(!(await ensureStudioPreflight({needsDownload:false})))return;
     state.uploadStatus='uploading'; state.uploadProgress=8; render();
     try{
       const fd=new FormData(); if(state.video?.status==='linked'&&state.video?.id)fd.append('projectId',state.video.id); fd.append('video',file);
@@ -398,6 +427,7 @@
       state.video=uploaded; try{localStorage.setItem('clipboost:lastProjectId',uploaded.id)}catch{} state.uploadStatus='analyzing'; state.uploadProgress=78; render();
       const r=await fetch(`/api/videos/${uploaded.id}/analyze`,{method:'POST'}); const data=await readJsonResponse(r,'Analysis failed');
       state.video=data; state.selectedCandidate=0; state.uploadStatus='idle'; state.uploadProgress=100; render();
+      pollProjectUntilSettled(uploaded.id);
     }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; showNotice({kind:'danger',title:'Upload failed',message:e.message||'Upload failed'}); render();}
   }
 
@@ -530,9 +560,11 @@
       if(['ingesting','analyzing'].includes(data.status)){
         window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);
       }else{
-        if(data.status==='ready')state.selectedCandidate=0;
+        if(['ready','degraded'].includes(data.status))state.selectedCandidate=0;
         state.projects=null;
         render();
+        if(data.status==='degraded')showNotice({kind:'warning',eyebrow:'AI Studio',title:'Analysis completed in degraded mode',message:data.analysis?.aiError||'A local AI component fell back to deterministic processing.'});
+        if(data.status==='failed')showNotice({kind:'danger',eyebrow:'AI Studio',title:'Analysis failed',message:data.analysis?.error||'The project could not be analyzed.'});
         if(data.processingInterrupted){
           showNotice({kind:'warning',eyebrow:'AI Studio',title:'Processing was interrupted',message:'ClipBoost recovered this project. You can retry the analysis or delete the project safely.'});
         }
@@ -541,6 +573,7 @@
   }
   async function startProjectIngestion(id){
     try{
+      if(!(await ensureStudioPreflight({needsDownload:true})))return;
       const r=await fetch(`/api/projects/${encodeURIComponent(id)}/ingest`,{method:'POST'});
       const data=await readJsonResponse(r,'Automatic ingestion could not start');
       state.video=data;render();pollProjectUntilSettled(id);
@@ -563,7 +596,7 @@
     try{const r=await fetch('/api/projects');state.projects=await readJsonResponse(r,'Could not load projects')}catch(e){state.projects=[]}finally{state.projectsLoading=false;render()}
   }
   async function openProject(id){
-    try{const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);state.video=await readJsonResponse(r,'Could not open project');state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;try{localStorage.setItem('clipboost:lastProjectId',id)}catch{}navigate('studio');if(['ingesting','analyzing'].includes(state.video?.status))pollProjectUntilSettled(id)}catch(e){showNotice({kind:'danger',title:'Could not open project',message:e.message||'Could not open project'})}
+    try{const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);state.video=await readJsonResponse(r,'Could not open project');state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;try{localStorage.setItem('clipboost:lastProjectId',id)}catch{}if(state.video?.campaign?.id||state.video?.campaignId){state.campaignSelected=state.video.campaign?.id||state.video.campaignId;state.campaignEditorOpen=true;navigate('campaigns')}else{state.campaignEditorOpen=false;navigate('studio')}if(['ingesting','analyzing'].includes(state.video?.status))pollProjectUntilSettled(id)}catch(e){showNotice({kind:'danger',title:'Could not open project',message:e.message||'Could not open project'})}
   }
   async function restoreLastStudioProject(){
     if(state.page!=='studio'||state.video||state.restoringProject)return;
@@ -813,8 +846,36 @@
     </div>`
   }
 
+  function campaignEditorView(c){
+    let editor=studio();
+    const context=`<section class="mint-campaign-editor-context">
+      <div class="mint-campaign-editor-context-main">
+        <span class="campaign-state ${escapeHtml(c.status||'active')}">${escapeHtml(c.status||'active')}</span>
+        <div><b>${escapeHtml(c.name||'Campaign')}</b><small>${escapeHtml(c.provider||'Campaign')} · ${escapeHtml(campaignPaymentSummary(c))}</small></div>
+      </div>
+      <div class="mint-campaign-editor-context-stats">
+        <span><small>Minimum</small><b>${campaignQualification(c)?formatCount(campaignQualification(c)):'—'}</b></span>
+        <span><small>Tracked</small><b>${formatCount(c.totals?.totalViews||0)}</b></span>
+        <span><small>Rules</small><b>${(c.requirements||[]).length+(c.requiredHashtags||[]).length+(c.requiredMentions||[]).length}</b></span>
+      </div>
+      <div class="mint-campaign-editor-context-actions">
+        <button class="btn secondary" id="campaignEditorRulesBtn">Rules</button>
+        <button class="btn secondary" id="campaignEditorResultsBtn">Results</button>
+        <button class="btn secondary" id="exitCampaignEditorBtn">Campaign manager</button>
+      </div>
+    </section>`;
+    editor=editor.replace('mint-studio-page-v142','mint-studio-page-v142 mint-campaign-editor-page-v150');
+    editor=editor.replace('<div class="eyebrow">AI VIDEO EDITOR</div>','<div class="eyebrow">CAMPAIGN VIDEO EDITOR</div>');
+    editor=editor.replace('<h1>AI Studio</h1>',`<h1>Campaign Studio <span class="mint-editor-campaign-name">· ${escapeHtml(c.name)}</span></h1>`);
+    editor=editor.replace('Turn any source into polished short-form clips with AI-assisted editing.','Edit approved campaign media with campaign-aware clipping, rules and compliance.');
+    editor=editor.replace('<section class="mint-studio-toolstrip-v142">',context+'<section class="mint-studio-toolstrip-v142">');
+    return editor;
+  }
+
   function campaigns(){
-    const list=state.campaigns?.campaigns||[];const active=selectedCampaign();const totals=list.reduce((a,c)=>{a.views+=Number(c.totals?.totalViews||0);a.revenue+=Math.max(Number(c.totals?.estimatedRevenue||0),Number(c.totals?.confirmedRevenue||0));a.confirmed+=Number(c.totals?.confirmedRevenue||0);a.posts+=Number(c.totals?.postCount||0);return a},{views:0,revenue:0,confirmed:0,posts:0});
+    const list=state.campaigns?.campaigns||[];const active=selectedCampaign();
+    if(state.campaignEditorOpen&&active&&state.video?.campaign?.id===active.id)return campaignEditorView(active);
+    const totals=list.reduce((a,c)=>{a.views+=Number(c.totals?.totalViews||0);a.revenue+=Math.max(Number(c.totals?.estimatedRevenue||0),Number(c.totals?.confirmedRevenue||0));a.confirmed+=Number(c.totals?.confirmedRevenue||0);a.posts+=Number(c.totals?.postCount||0);return a},{views:0,revenue:0,confirmed:0,posts:0});
     const importRecovery=state.campaignImportDraft?`<div class="campaign-import-recovery"><span><b>Unsaved import</b><small>${escapeHtml(state.campaignImportDraft.name||'Campaign')} · review saved automatically</small></span><button class="btn secondary compact-btn" id="reopenCampaignImportBtn">Review import</button><button class="icon-btn danger-lite" id="discardCampaignImportBtn" title="Discard saved import">×</button></div>`:'';
     const importBar=`<section class="card campaign-import campaign-import-polished campaign-import-compact"><div class="campaign-import-copy"><div class="eyebrow">SMART IMPORT</div><b>Import a campaign from its real page</b><small>ClipBoost opens a secure browser session, lets you sign in when needed, then reads the campaign + requirements without an API.</small></div><div class="campaign-import-box"><input id="campaignImportUrl" value="${escapeHtml(state.campaignDraftUrl||'')}" placeholder="Paste campaign URL"><button class="btn secondary" id="importCampaignBtn" ${state.campaignBusy?'disabled':''}>${state.campaignBusy?'Waiting…':'Smart Import'}</button><button class="btn primary" id="newCampaignBtn">+ Add campaign</button></div>${importRecovery}</section>`;
     const cards=list.length?list.map(c=>{const t=c.totals||{},days=daysUntil(c.deadline),ready=campaignReadiness(c),rates=campaignRateEntries(c),q=campaignQualification(c),model=campaignPaymentModel(c);return `<button class="campaign-list-card real-campaign-card ${active?.id===c.id?'active':''}" data-campaign-select="${escapeHtml(c.id)}"><div class="campaign-card-top"><span class="campaign-provider">${escapeHtml(c.provider||'Manual')}</span><span class="campaign-state ${c.status}">${escapeHtml(c.status||'active')}</span></div><strong>${escapeHtml(c.name)}</strong><div class="campaign-real-payment"><small>${model==='bounty-pool'?'Bounty pool':model==='per-views'?'Rate':model==='fixed-reward'?'Fixed reward':'Custom payout'}</small><b>${escapeHtml(campaignPaymentSummary(c))}</b></div>${rates.length?`<div class="campaign-rate-badges">${rates.slice(0,4).map(r=>`<span>${escapeHtml(r.label)} ${formatMoney(r.value,c.currency)}</span>`).join('')}</div>`:''}<div class="campaign-card-metrics"><span><b>${formatCount(t.totalViews||0)}</b> views</span><span><b>${q?formatCount(q):'—'}</b> minimum</span><span><b>${formatMoney(t.confirmedRevenue||0,c.currency)}</b> confirmed</span></div>${q?`<div class="campaign-progress"><i style="width:${Math.min(100,Number(t.progress||0))}%"></i></div>`:''}<div class="campaign-card-footer"><small>${days===null?'No deadline':days<0?'Deadline passed':`${days} day${days===1?'':'s'} left`}</small><span class="campaign-ready-dot ${ready.ready?'ready':''}">${ready.score}% setup</span></div></button>`}).join(''):`<div class="campaign-empty campaign-empty-rich"><div class="orb">◎</div><b>No campaigns yet</b><span>Add a campaign you joined, mirror its payout terms and authorized sources, then send sources into AI Studio.</span><button class="btn primary" id="emptyNewCampaignBtn">Add first campaign</button></div>`;
@@ -924,9 +985,11 @@
   }
 
   async function startCampaignCreating(){
-    const c=selectedCampaign();if(!c)return;state.campaignTab='overview';render();
-    setTimeout(()=>document.querySelector('.campaign-studio-v2-grid')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
-    if(!(c.sourceUrls||[]).length&&!(c.resourceUrls||[]).length)showNotice({kind:'info',eyebrow:'Campaign Studio',title:'Add an authorized source first',message:'Smart Import or the Sources tab can add the official videos and campaign asset packs before generation.'});
+    const c=selectedCampaign();if(!c)return;
+    const first=(c.sourceUrls||[])[0];
+    if(first)return openCampaignSource(first.id);
+    state.campaignTab='sources';render();
+    showNotice({kind:'info',eyebrow:'Campaign Studio',title:'Add an authorized source first',message:'Campaign Studio is now the campaign video editor. Add or choose an approved source to start editing.'});
   }
   async function copyCampaignChecklist(){
     const c=selectedCampaign();if(!c)return;const q=campaignQualification(c),rates=campaignRateEntries(c);
@@ -934,13 +997,15 @@
     try{await navigator.clipboard.writeText(lines);showNotice({kind:'success',eyebrow:'Campaign',title:'Publishing checklist copied',message:'Payment terms, qualification, platforms, hashtags, mentions and CTA are ready to reference when you publish.'})}catch{showNotice({kind:'warning',title:'Could not copy checklist',message:'Clipboard access was blocked by Windows.'})}
   }
   async function batchCampaignProjects(){const c=selectedCampaign();if(!c||state.campaignBusy)return;state.campaignBusy=true;state.campaignMessage='Queuing campaign sources…';render();try{const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/batch-projects`,{method:'POST'});const data=await readJsonResponse(r,'Could not queue sources');state.projects=null;state.campaignMessage=`${data.count||0} source project${Number(data.count||0)===1?'':'s'} queued in Projects${data.skipped?` · ${data.skipped} already queued`:''}.`}catch(e){state.campaignMessage=e.message||'Could not queue campaign sources'}finally{state.campaignBusy=false;render()}}
-  async function openCampaignSource(sourceId){const c=selectedCampaign();if(!c||state.projectBusy)return;state.projectBusy=true;render();try{const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceId})});const data=await readJsonResponse(r,'Could not create campaign project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}navigate('studio');startProjectIngestion(data.id)}catch(e){showNotice({kind:'danger',title:'Could not open campaign source',message:e.message||'Could not create campaign project'})}finally{state.projectBusy=false}}
+  async function openCampaignSource(sourceId){const c=selectedCampaign();if(!c||state.projectBusy)return;state.projectBusy=true;render();try{const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceId})});const data=await readJsonResponse(r,'Could not create campaign project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;state.campaignEditorOpen=true;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}navigate('campaigns');startProjectIngestion(data.id)}catch(e){showNotice({kind:'danger',title:'Could not open campaign source',message:e.message||'Could not create campaign project'})}finally{state.projectBusy=false}}
   async function deleteCampaign(){const c=selectedCampaign();if(!c)return;const ok=await confirmAction({kind:'danger',eyebrow:'Campaigns',title:`Delete ${c.name}?`,message:'This removes the campaign workspace and its view tracking. Existing AI Studio projects and exported videos are kept.',confirmLabel:'Delete campaign'});if(!ok)return;const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}`,{method:'DELETE'});await readJsonResponse(r,'Could not delete campaign');state.campaignSelected=null;state.campaigns=null;await loadCampaigns()}
   async function runCampaignCheck(){const v=state.video;if(!v?.campaign?.id)return;const ci=state.selectedCandidate||0,base=v.candidates?.[ci]||{};const start=Number(document.getElementById('clipStart')?.value??base.start??0),end=Number(document.getElementById('clipEnd')?.value??base.end??start+30);const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci,start,end,options:currentRenderOptions()})});state.campaignCompliance=await readJsonResponse(r,'Campaign check failed');render()}
   async function generateCampaignVariants(){const v=state.video;if(!v?.campaign?.id)return;const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/variants`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:state.selectedCandidate||0})});const data=await readJsonResponse(r,'Could not generate variants');state.campaignVariants=data.variants||[];render()}
   function projectDisplayState(p){
     if(p?.processingInterrupted)return {progress:36,progressLabel:'Interrupted',badge:'Needs attention',done:false};
     if(p?.status==='ready')return {progress:100,progressLabel:'Ready',badge:'Ready',done:true};
+    if(p?.status==='degraded')return {progress:100,progressLabel:'Ready with fallback',badge:'Degraded',done:true};
+    if(p?.status==='failed')return {progress:100,progressLabel:'Failed',badge:'Failed',done:false};
     if(p?.status==='uploaded')return {progress:92,progressLabel:'Source ready',badge:'Ready to analyze',done:false};
     if(p?.status==='linked')return {progress:15,progressLabel:'Linked',badge:p?.ingestionError?'Retry source':'Needs source file',done:false};
     if(['ingesting','analyzing'].includes(p?.status))return {progress:p?.status==='ingesting'?45:65,progressLabel:p?.status==='ingesting'?'Downloading':'Processing',badge:'In progress',done:false};
@@ -1095,6 +1160,9 @@
     document.querySelectorAll('[data-campaign-open-studio]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignOpenStudio;state.campaignTab='overview';navigate('campaigns')});
     document.querySelectorAll('[data-campaign-discover-select]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignDiscoverSelect;state.campaignTab='overview';navigate('campaigns')});
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+    const winMin=document.getElementById('mintWindowMin');if(winMin)winMin.onclick=()=>window.clipboostDesktop?.minimizeWindow?.();
+    const winMax=document.getElementById('mintWindowMax');if(winMax)winMax.onclick=()=>window.clipboostDesktop?.maximizeWindow?.();
+    const winClose=document.getElementById('mintWindowClose');if(winClose)winClose.onclick=()=>window.clipboostDesktop?.closeWindow?.();
     const updateCenter=document.getElementById('updateCenterBtn');if(updateCenter)updateCenter.onclick=async()=>{const u=state.desktopUpdate||{};if(u.status==='ready'){await promptReadyUpdate(u.version,{force:true});}else if(u.status==='error'){showNotice({kind:'danger',eyebrow:'Updates',title:'Update issue',message:u.message||'ClipBoost could not finish the update.'});}else{showNotice({kind:'update',eyebrow:'Updates',title:u.status==='checking'?'Checking for updates':`Downloading ClipBoost ${u.version||''}`,message:u.status==='downloading'?`${Math.round(u.percent||0)}% downloaded`:'ClipBoost is checking the release channel.'});}};
     const file=document.getElementById('videoFile'),drop=document.getElementById('dropZone');
     if(file)file.onchange=()=>{const chosen=file.files&&file.files[0];if(chosen)uploadVideo(chosen)};
@@ -1156,7 +1224,7 @@
       try{
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
-        state.video=data;state.selectedCandidate=0;
+        state.video=data;state.selectedCandidate=0;pollProjectUntilSettled(state.video.id);
       }catch(e){showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
       finally{state.regenerating=false;render()}
     };
@@ -1210,6 +1278,10 @@
       document.querySelectorAll('[data-campaign-post-delete]').forEach(el=>el.onclick=()=>deleteCampaignPost(el.dataset.campaignPostDelete).catch(e=>showNotice({kind:'danger',title:'Could not remove post',message:e.message})));
       const pack=document.getElementById('downloadSubmissionPackBtn');if(pack)pack.onclick=()=>{const c=selectedCampaign();if(c)window.open(`/api/campaigns/${encodeURIComponent(c.id)}/submission-pack`,'_blank')};
     }
+    const exitCampaignEditor=document.getElementById('exitCampaignEditorBtn');if(exitCampaignEditor)exitCampaignEditor.onclick=()=>{state.campaignEditorOpen=false;state.campaignTab='overview';render()};
+    const campaignEditorRules=document.getElementById('campaignEditorRulesBtn');if(campaignEditorRules)campaignEditorRules.onclick=()=>{state.campaignEditorOpen=false;state.campaignTab='rules';render()};
+    const campaignEditorResults=document.getElementById('campaignEditorResultsBtn');if(campaignEditorResults)campaignEditorResults.onclick=()=>{state.campaignEditorOpen=false;state.campaignTab='results';render()};
+
     const openStudioCampaign=document.getElementById('openStudioCampaignBtn');if(openStudioCampaign)openStudioCampaign.onclick=()=>{const id=state.video?.campaign?.id;if(id)state.campaignSelected=id;navigate('campaigns')};
     const campaignCheck=document.getElementById('campaignCheckBtn');if(campaignCheck)campaignCheck.onclick=()=>runCampaignCheck().catch(e=>showNotice({kind:'danger',title:'Campaign check failed',message:e.message}));
     const campaignVariants=document.getElementById('campaignVariantsBtn');if(campaignVariants)campaignVariants.onclick=()=>generateCampaignVariants().catch(e=>showNotice({kind:'danger',title:'Could not generate variants',message:e.message}));

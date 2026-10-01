@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.19",
-  "description": "Mint unified no-block design - Auto Publisher safe build",
+  "version": "21.15.0",
+  "description": "Mint functional editor pass: compact AI Studio, campaign editor, frameless shell, reliability",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

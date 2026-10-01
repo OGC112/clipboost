@@ -1,15 +1,37 @@
-Mint 21.14.19 — Auto Publisher Safe Fix
+Mint 21.15.0 — Functional Editor Pass
 
-Reason for this build:
-21.14.18 used an npm postinstall patch script. Auto Publisher correctly detected the ZIP,
-but npm install failed while executing that postinstall script.
+WINDOW / BRANDING
+- Removes the native Windows title strip with a frameless Electron window.
+- Adds integrated minimize / maximize / close controls inside the Mint header.
+- Replaces the desktop / executable / tray icon with a minimal Mint icon.
 
-21.14.19:
-- removes postinstall completely
-- contains only ready-to-copy files
-- keeps the larger/thicker navigation
-- applies the unified no-block visual style via CSS to:
-  AI Studio, Campaign Discover, Campaign Studio, Library, Projects, Settings and analytics surfaces
-- no runtime patching during npm install
-- no backend changes
-- no .env or secrets
+AI STUDIO
+- Much more compact editor layout.
+- Removes the large four-feature strip.
+- Reduces source video and short preview size.
+- Timeline and detected clips are visible together.
+- Keeps Auto Director, captions, preview and export functionality.
+- Adds AI preflight before local upload / automatic download.
+
+CAMPAIGN STUDIO
+- Campaign Studio now opens the same real editor engine for campaign videos.
+- Campaign context remains visible while editing.
+- Adds quick access to campaign Rules and Results.
+- Campaign sources stay inside Campaign Studio instead of redirecting to AI Studio.
+- Campaign projects opened from Projects also return to Campaign Studio.
+
+RELIABILITY
+- Local upload analysis runs as a background project job with polling.
+- Generate variations uses the same background lifecycle.
+- Adds ready / degraded / failed project states.
+- Records Whisper / semantic-engine diagnostics.
+- System health now checks faster-whisper explicitly.
+- Ollama failure can fall back without pretending semantic AI was used.
+
+INTERFACE FIXES
+- Repairs Results spacing/layout.
+- Tightens Discover campaign layout.
+- Keeps the campaign manager compact when no source is being edited.
+
+The patch script is defensive: it exits successfully instead of trapping Auto Publisher
+in an npm-install retry loop if a future source file no longer matches.

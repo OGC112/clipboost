@@ -12,5 +12,9 @@ contextBridge.exposeInMainWorld('clipboostDesktop', {
   openConfig: () => ipcRenderer.invoke('desktop:open-config'),
   openExportsFolder: () => ipcRenderer.invoke('desktop:open-exports-folder'),
   restartApp: () => ipcRenderer.invoke('desktop:restart-app'),
+  minimizeWindow: () => ipcRenderer.invoke('desktop:window-minimize'),
+  maximizeWindow: () => ipcRenderer.invoke('desktop:window-maximize'),
+  closeWindow: () => ipcRenderer.invoke('desktop:window-close'),
+  getWindowState: () => ipcRenderer.invoke('desktop:window-state'),
   reportActivity: () => ipcRenderer.send('desktop:activity')
 });

@@ -1,0 +1,338 @@
+/* Mint 21.15.0 — functionality-first editor pass */
+
+/* --------------------------------------------------------- */
+/* Frameless window: the app header IS the Windows titlebar  */
+/* --------------------------------------------------------- */
+html,body,#app,.app{min-height:100%;background:#080707!important}
+.mint-red-topbar{
+  -webkit-app-region:drag!important;
+  min-height:96px!important;
+  padding:0 0 0 34px!important;
+  border-top:0!important;
+}
+.mint-red-topbar button,
+.mint-red-topbar a,
+.mint-red-topbar nav,
+.mint-red-topbar select,
+.mint-red-topbar input{
+  -webkit-app-region:no-drag!important;
+}
+.mint-home-top-actions{
+  align-self:stretch!important;
+  gap:8px!important;
+}
+.mint-window-controls{
+  align-self:stretch!important;
+  display:flex!important;
+  margin-left:6px!important;
+  -webkit-app-region:no-drag!important;
+}
+.mint-window-controls button{
+  width:46px!important;
+  height:100%!important;
+  min-height:46px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:#948d8f!important;
+  font:500 16px/1 system-ui!important;
+}
+.mint-window-controls button:hover{background:rgba(255,255,255,.065)!important;color:#fff!important}
+.mint-window-controls .close:hover{background:#c42b34!important;color:#fff!important}
+
+/* --------------------------------------------------------- */
+/* AI Studio: compact editor, no giant landing-page layout   */
+/* --------------------------------------------------------- */
+.mint-studio-page-v142{
+  width:min(1500px,calc(100% - 54px))!important;
+  padding-top:18px!important;
+}
+.mint-studio-header-v142{
+  min-height:0!important;
+  padding:0 0 15px!important;
+  margin:0 0 14px!important;
+}
+.mint-studio-header-v142 h1{
+  margin:4px 0 4px!important;
+  font-size:34px!important;
+  line-height:1!important;
+}
+.mint-studio-header-v142 p{font-size:10.5px!important}
+.mint-studio-header-actions-v142 .btn{height:36px!important;min-height:36px!important;padding:0 13px!important}
+.mint-studio-toolstrip-v142{display:none!important}
+
+.mint-studio-page-v142 .ai-analysis-bar{
+  min-height:0!important;
+  margin:0 0 10px!important;
+  padding:9px 0!important;
+  border-top:1px solid rgba(255,255,255,.055)!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-studio-page-v142 .upload-card{
+  min-height:62px!important;
+  margin:0 0 14px!important;
+  padding:10px 0!important;
+}
+.mint-studio-page-v142 .upload-icon{
+  width:40px!important;height:40px!important;font-size:16px!important;border-radius:10px!important;
+}
+.mint-studio-page-v142 .upload-copy strong{font-size:11px!important}
+.mint-studio-page-v142 .upload-copy span,
+.mint-studio-page-v142 .upload-copy small{font-size:7.8px!important}
+
+.mint-studio-workspace-v142{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 300px!important;
+  gap:20px!important;
+  align-items:start!important;
+}
+.mint-studio-main-v142{display:grid!important;gap:14px!important;min-width:0!important}
+.mint-studio-side-v142{
+  display:grid!important;
+  gap:14px!important;
+  min-width:0!important;
+  padding-left:18px!important;
+}
+.mint-studio-source-v142{padding-bottom:14px!important}
+.mint-studio-source-head-v142{margin-bottom:8px!important}
+.mint-studio-source-head-v142 h3{font-size:11.5px!important}
+.mint-studio-video-v142,
+.mint-studio-video-v142 .real-video,
+.mint-studio-video-v142 iframe{
+  max-height:320px!important;
+}
+.mint-studio-video-v142{
+  height:min(32vh,320px)!important;
+  min-height:210px!important;
+  overflow:hidden!important;
+}
+.mint-studio-video-v142 .real-video,
+.mint-studio-video-v142 iframe{
+  width:100%!important;height:100%!important;object-fit:contain!important;background:#050505!important;
+}
+.mint-studio-video-v142>.media-thumb,
+.mint-studio-video-v142>.thumb{
+  height:100%!important;
+}
+
+.mint-studio-timeline-card-v142{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 255px!important;
+  grid-template-rows:auto auto 1fr!important;
+  column-gap:16px!important;
+  align-items:start!important;
+  padding-top:12px!important;
+  border-top:1px solid rgba(255,255,255,.06)!important;
+}
+.mint-studio-timeline-card-v142>.section-head{grid-column:1/-1!important;margin-bottom:8px!important}
+.mint-studio-timeline-v142{
+  grid-column:1!important;
+  grid-row:2!important;
+  min-height:105px!important;
+}
+.mint-studio-moments-v142{
+  grid-column:2!important;
+  grid-row:2/4!important;
+  max-height:250px!important;
+  overflow:auto!important;
+  padding-left:14px!important;
+  border-left:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-studio-moments-v142 .moments-head{margin:0 0 7px!important}
+.mint-studio-moments-v142 .clip{
+  min-height:0!important;
+  margin:0!important;
+  padding:7px 0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.05)!important;
+  background:transparent!important;
+}
+.mint-studio-moments-v142 .clip-thumb{width:78px!important;min-width:78px!important;height:48px!important}
+.mint-studio-moments-v142 .clip-info strong{font-size:8.5px!important}
+.mint-studio-moments-v142 .quality-mini,
+.mint-studio-moments-v142 .clip-info p,
+.mint-studio-moments-v142 .clip-info em{display:none!important}
+
+.mint-preview-card-v142{padding-bottom:13px!important}
+.mint-preview-card-v142 .section-head{margin-bottom:8px!important}
+.mint-preview-card-v142 .phone.tall{
+  width:min(100%,205px)!important;
+  height:360px!important;
+  min-height:360px!important;
+  margin:0 auto 9px!important;
+  border-radius:15px!important;
+}
+.mint-preview-card-v142 .clip-range{gap:7px!important}
+.mint-preview-card-v142 .clip-range input{height:31px!important}
+.mint-preview-card-v142 .preview-note{padding:7px!important;font-size:7px!important}
+
+.mint-ai-tools-v142 .section-head{margin-bottom:8px!important}
+.mint-ai-tools-v142 .auto-director-card,
+.mint-ai-tools-v142 .caption-color-control,
+.mint-ai-tools-v142 .selectrow,
+.mint-ai-tools-v142 .quality-explainer,
+.mint-ai-tools-v142 .edit-plan-card{
+  padding:9px 0!important;
+}
+.mint-ai-tools-v142 .auto-director-tags{gap:4px!important}
+.mint-ai-tools-v142 .auto-director-tags span{font-size:6.8px!important;padding:3px 5px!important}
+.mint-ai-tools-v142 .caption-color-palette{gap:4px!important}
+.mint-ai-tools-v142 .caption-color-chip{min-height:27px!important;padding:3px 6px!important;font-size:7px!important}
+.mint-ai-tools-v142 .generate{min-height:36px!important;height:36px!important;margin-top:8px!important}
+
+/* --------------------------------------------------------- */
+/* Campaign Studio editor mode                               */
+/* --------------------------------------------------------- */
+.mint-campaign-editor-page-v150 .mint-studio-header-v142 h1 .mint-editor-campaign-name{
+  color:#8e8789!important;font-weight:480!important;font-size:.58em!important;letter-spacing:-.02em!important;
+}
+.mint-campaign-editor-context{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto auto!important;
+  gap:18px!important;
+  align-items:center!important;
+  padding:10px 0 13px!important;
+  margin-bottom:10px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-campaign-editor-context-main{display:flex!important;align-items:center!important;gap:10px!important}
+.mint-campaign-editor-context-main b{display:block!important;font-size:11px!important}
+.mint-campaign-editor-context-main small{display:block!important;margin-top:2px!important;color:#817a7c!important;font-size:7.5px!important}
+.mint-campaign-editor-context-stats{display:flex!important;align-items:center!important}
+.mint-campaign-editor-context-stats span{
+  min-width:74px!important;padding:0 12px!important;border-left:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-campaign-editor-context-stats small{display:block!important;color:#706a6c!important;font-size:6.8px!important}
+.mint-campaign-editor-context-stats b{display:block!important;margin-top:2px!important;font-size:9.5px!important}
+.mint-campaign-editor-context-actions{display:flex!important;gap:6px!important}
+.mint-campaign-editor-context-actions .btn{height:32px!important;min-height:32px!important;padding:0 10px!important;font-size:8px!important}
+
+/* manager stays compact when no media source is being edited */
+.campaigns-page{
+  width:min(1490px,calc(100% - 64px))!important;
+  padding-top:22px!important;
+}
+.campaigns-page .campaign-page-title{margin-bottom:16px!important;padding-bottom:17px!important}
+.campaigns-page .campaign-page-title h1{font-size:38px!important}
+.campaigns-page .campaign-import{margin-bottom:16px!important}
+.campaign-layout-real{gap:22px!important}
+.campaign-grid-list{width:245px!important;min-width:245px!important}
+.campaign-detail{min-width:0!important}
+
+/* --------------------------------------------------------- */
+/* Results bugfix / proper spacing                           */
+/* --------------------------------------------------------- */
+.mint-results-nb-v1418{
+  width:min(1450px,calc(100% - 72px))!important;
+  padding-top:30px!important;
+}
+.mint-page-heading-v1418{
+  display:flex!important;
+  margin-bottom:24px!important;
+  padding-bottom:20px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-page-heading-v1418 h1{font-size:42px!important;margin:7px 0!important}
+.mint-page-heading-v1418 p{font-size:11px!important;color:#9e9799!important}
+.mint-results-summary-v1418{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  width:100%!important;
+  margin:0 0 28px!important;
+  padding:0 0 22px!important;
+  border-bottom:1px solid rgba(255,255,255,.065)!important;
+}
+.mint-results-summary-v1418>div{
+  min-width:0!important;
+  padding:0 24px!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-results-summary-v1418>div:first-child{padding-left:0!important}
+.mint-results-summary-v1418>div:last-child{border-right:0!important}
+.mint-results-summary-v1418 b{display:block!important;font-size:26px!important;line-height:1!important;color:#fff!important}
+.mint-results-summary-v1418 small{display:block!important;margin-top:5px!important;font-size:8px!important;color:#777173!important}
+.mint-results-list-v1418>header{
+  display:flex!important;justify-content:space-between!important;align-items:center!important;
+  padding-bottom:10px!important;border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.mint-results-row-v1418{
+  display:grid!important;
+  grid-template-columns:minmax(210px,1.7fr) repeat(5,minmax(85px,.55fr)) 24px!important;
+  gap:12px!important;
+  align-items:center!important;
+  width:100%!important;
+  min-height:64px!important;
+  padding:11px 0!important;
+  border:0!important;
+  border-bottom:1px solid rgba(255,255,255,.05)!important;
+  background:transparent!important;
+  color:inherit!important;
+  text-align:left!important;
+}
+.mint-results-row-v1418>div{min-width:0!important}
+.mint-results-row-v1418 strong,.mint-results-row-v1418 b{display:block!important;color:#fff!important;font-size:10px!important}
+.mint-results-row-v1418 small{display:block!important;margin-top:3px!important;color:#777173!important;font-size:7.3px!important}
+
+/* --------------------------------------------------------- */
+/* Discover: cleaner campaign list                           */
+/* --------------------------------------------------------- */
+.campaign-discover-v143{padding-top:28px!important}
+.campaign-discover-header-v143{margin-bottom:20px!important;padding-bottom:20px!important}
+.campaign-discover-import-v143{
+  grid-template-columns:minmax(250px,.7fr) minmax(0,1.3fr)!important;
+  padding:16px 0!important;
+  margin-bottom:20px!important;
+}
+.campaign-discover-summary-v143{margin-bottom:18px!important;padding-bottom:16px!important}
+.campaign-discover-grid-v143{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:16px!important;
+}
+.campaign-discover-card-v143{
+  padding:16px!important;
+  border:1px solid rgba(255,255,255,.065)!important;
+  border-radius:12px!important;
+  background:rgba(15,12,13,.58)!important;
+}
+.campaign-discover-facts-v143{
+  display:grid!important;
+  grid-template-columns:1.4fr .7fr .7fr!important;
+  gap:0!important;
+  padding:12px 0!important;
+  border-top:1px solid rgba(255,255,255,.055)!important;
+  border-bottom:1px solid rgba(255,255,255,.055)!important;
+}
+.campaign-discover-facts-v143>div{padding:0 12px!important;border-right:1px solid rgba(255,255,255,.05)!important}
+.campaign-discover-facts-v143>div:first-child{padding-left:0!important}
+.campaign-discover-facts-v143>div:last-child{border-right:0!important}
+.campaign-discover-actions-v143{margin-top:12px!important}
+
+/* Diagnostics */
+.ai-analysis-bar.warning{
+  border-color:rgba(225,157,45,.30)!important;
+}
+.ai-analysis-bar.warning::after{
+  content:"DEGRADED"!important;
+  margin-left:auto!important;
+  color:#d9ac4d!important;
+  font-size:7px!important;
+  font-weight:800!important;
+  letter-spacing:.12em!important;
+}
+
+/* responsive */
+@media(max-width:1180px){
+  .mint-studio-workspace-v142{grid-template-columns:minmax(0,1fr) 270px!important}
+  .mint-studio-timeline-card-v142{grid-template-columns:minmax(0,1fr) 220px!important}
+  .mint-campaign-editor-context{grid-template-columns:1fr!important}
+}
+@media(max-width:900px){
+  .mint-studio-workspace-v142{grid-template-columns:1fr!important}
+  .mint-studio-side-v142{padding-left:0!important;border-left:0!important;border-top:1px solid rgba(255,255,255,.06)!important;padding-top:14px!important}
+  .mint-studio-timeline-card-v142{grid-template-columns:1fr!important}
+  .mint-studio-timeline-card-v142>.section-head,.mint-studio-timeline-v142,.mint-studio-moments-v142{grid-column:1!important;grid-row:auto!important}
+  .mint-studio-moments-v142{border-left:0!important;padding-left:0!important;max-height:220px!important}
+  .campaign-discover-grid-v143{grid-template-columns:1fr!important}
+}
