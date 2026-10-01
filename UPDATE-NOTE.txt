@@ -1,11 +1,13 @@
-Mint 21.15.4 — Release Fix
+Mint 21.15.5 — Updater Race Fix
 
-Fixes:
-- restores electron-builder build configuration removed in 21.15.2
-- restores release output directory: release/
-- restores ClipBoost-Setup-${version}.exe artifact naming
-- restores NSIS updater configuration
-- keeps the requested top-right window control alignment
-- places Settings gear below the Windows controls
+Problem:
+v21.15.4 was published before latest.yml finished uploading. A running Mint client
+checked the release during that short window and received a 404.
 
-This release is specifically intended to repair the failed GitHub Actions Windows build.
+Fix:
+- create the GitHub release as a draft
+- upload installer, blockmap and latest.yml
+- verify latest.yml + installer are present
+- only then publish the release
+
+No UI or backend behavior changes.

@@ -78,7 +78,7 @@ jobs:
           Write-Host "Installer: $($exe.Name)"
           Write-Host "Updater metadata: $($yml.Name)"
 
-      - name: Create GitHub release
+      - name: Create draft release and upload updater files
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,7 +86,8 @@ jobs:
           $tag = "${{ steps.version.outputs.tag }}"
           $version = "${{ steps.version.outputs.version }}"
 
-          gh release create $tag --target "$env:GITHUB_SHA" --title "ClipBoost v$version" --generate-notes
+          # Keep the release private until all updater assets are available.
+          gh release create $tag --target "$env:GITHUB_SHA" --title "ClipBoost v$version" --generate-notes --draft
 
           $assets = Get-ChildItem release -File | Where-Object {
             $_.Name -eq 'latest.yml' -or
@@ -98,3 +99,18 @@ jobs:
             Write-Host "Uploading $($asset.Name)"
             gh release upload $tag "$($asset.FullName)" --clobber
           }
+
+          $uploaded = gh release view $tag --json assets | ConvertFrom-Json
+          $names = @($uploaded.assets | ForEach-Object { $_.name })
+
+          if ('latest.yml' -notin $names) {
+            throw "latest.yml was not uploaded to the release."
+          }
+
+          $installer = $names | Where-Object { $_ -like 'ClipBoost-Setup-*.exe' } | Select-Object -First 1
+          if (-not $installer) {
+            throw "Windows installer was not uploaded to the release."
+          }
+
+          Write-Host "All updater assets uploaded. Publishing release..."
+          gh release edit $tag --draft=false

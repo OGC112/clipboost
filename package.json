@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.4",
-  "description": "Mint release config repair and window chrome alignment",
+  "version": "21.15.5",
+  "description": "Mint updater release publication race fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
