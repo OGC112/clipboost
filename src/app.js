@@ -109,8 +109,6 @@
       <button class="mint-home-brand mint-wordmark-only" data-page="home" type="button"><strong>Mint</strong></button>
 
       <nav class="mint-split-nav mint-centered-nav">
-        <button data-page="home" class="mint-nav-home ${state.page==='home'?'active':''}" type="button">Home</button>
-
         <div class="mint-nav-group campaign-group">
           <span class="mint-nav-label">Campaigns</span>
           <div>

@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.0",
-  "description": "Mint functional editor pass: compact AI Studio, campaign editor, frameless shell, reliability",
+  "version": "21.15.1",
+  "description": "Mint navigation cleanup",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
