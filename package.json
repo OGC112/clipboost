@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.14.8",
-  "description": "Mint Red Noir background light and block match",
+  "version": "21.14.9",
+  "description": "Mint visible red light background fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -1,17 +1,17 @@
-Mint 21.14.8 — Red Noir Light/Block Match
+Mint 21.14.9 — Visible Red Light Fix
 
-Compared directly against the validated Red Noir reference.
+Why 21.14.8 looked unchanged:
+- the red-light pseudo-elements were placed behind .main's painted background
+- with the stacking/isolation setup, those layers were effectively hidden
 
-Corrected in code:
-- adds visible diagonal red light beams / streaks in the page background
-- adds controlled red bloom at top-right and lower edges
-- removes the flat red gradient look
-- warms all Home blocks toward translucent black/red-brown
-- reduces the outlined-dashboard feeling
-- campaign stats and brand panel are tuned closer to reference
-- project cards and imports use darker layered surfaces
-- red buttons and progress are less flat / less saturated
+21.14.9 fixes that in code:
+- red beams/bloom are painted directly into .main's background
+- previous hidden pseudo-elements are disabled
+- Home cards get visible warm-red translucent surfaces
+- Active Campaign inner panel/stats are closer to the validated mockup
+- project cards/import rows are more distinct
+- red buttons are darker and less flat
+- media/progress treatment is toned closer to the reference
 
-No image-generation assets are used in the UI.
 No backend or feature logic changed.
 No .env or secrets included.
