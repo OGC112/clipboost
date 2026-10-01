@@ -1,11 +1,10 @@
-Mint 21.15.12 — Discover Compact Control Row
+Mint 21.15.13 — Discover Split Control Row
 
-Discover is simplified to keep campaign discovery focused:
-- removed Tracked views from Discover summary
-- removed Confirmed payout from Discover summary
-- these performance metrics remain available in Results
-- kept Total campaigns and Active
-- Smart Import is shorter and more compact
-- Total campaigns + Active are attached directly to the import module
-- reduced vertical space before campaign cards
-- no campaign import behavior changed
+Discover control area is now one horizontal line:
+- Smart Import on the left
+- Total campaigns + Active on the right
+- KPI cards are stacked vertically inside a compact right column
+- removed the detached KPI row beneath Smart Import
+- campaign cards continue full width below
+- responsive fallback stacks sections only on smaller windows
+- no campaign import or campaign data behavior changed
