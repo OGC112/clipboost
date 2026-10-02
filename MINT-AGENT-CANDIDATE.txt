@@ -1,0 +1,6 @@
+Mint Agent supervised candidate
+Proposal: 9165312891 - Give Campaign Studio a dedicated compliance-first editor shell
+Version: 21.15.15
+Quality Gate: PASSED
+Generated: 2026-10-02T15:40:32.588Z
+Files: package.json, src/file.css

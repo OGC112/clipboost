@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.14",
-  "description": "Mint Discover refined hierarchy, compact controls and stronger campaign cards",
+  "version": "21.15.15",
+  "description": "Mint Agent candidate 21.15.15",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

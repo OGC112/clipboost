@@ -1,0 +1,57 @@
+
+/* Mint 21.15.4 — window controls aligned to Windows corner */
+
+.mint-topbar-pad-v154{
+  padding-right:205px!important;
+}
+
+.mint-window-controls.mint-corner-controls-v154{
+  position:fixed!important;
+  top:0!important;
+  right:0!important;
+  left:auto!important;
+  margin:0!important;
+  height:32px!important;
+  display:flex!important;
+  z-index:10050!important;
+  -webkit-app-region:no-drag!important;
+}
+
+.mint-window-controls.mint-corner-controls-v154 button{
+  width:46px!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+
+.mint-window-controls.mint-corner-controls-v154 button:hover{
+  background:rgba(255,255,255,.075)!important;
+}
+
+.mint-window-controls.mint-corner-controls-v154 .close:hover{
+  background:#cf2f39!important;
+  color:#fff!important;
+}
+
+.mint-settings-gear.mint-menu-aligned-gear-v154{
+  position:fixed!important;
+  top:34px!important;
+  right:22px!important;
+  left:auto!important;
+  margin:0!important;
+  width:42px!important;
+  height:42px!important;
+  min-width:42px!important;
+  min-height:42px!important;
+  z-index:10040!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border-radius:13px!important;
+  -webkit-app-region:no-drag!important;
+}
