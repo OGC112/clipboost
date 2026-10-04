@@ -372,3 +372,44 @@
   .campaign-discover-v143 > .campaign-discover-grid-v143{grid-template-columns:1fr!important}
   .campaign-discover-v143 .campaign-discover-card-v143{height:auto!important;min-height:304px!important}
 }
+
+/* ClipBoost 21.23.4 — compact campaign cards + fuller Discover canvas (hero untouched) */
+.campaign-discover-v143::before{
+  left:-10%!important;right:-10%!important;top:292px!important;height:720px!important;
+  background:
+    radial-gradient(ellipse at 14% 20%,rgba(132,11,25,.13),transparent 40%),
+    radial-gradient(ellipse at 72% 43%,rgba(102,8,20,.105),transparent 46%),
+    radial-gradient(ellipse at 46% 82%,rgba(72,6,14,.065),transparent 44%)!important;
+  filter:blur(22px)!important;
+}
+.campaign-discover-v143 > .campaign-discover-grid-v143{
+  grid-template-columns:repeat(auto-fill,minmax(286px,320px))!important;
+  gap:16px!important;
+  padding-bottom:18px!important;
+  background:
+    radial-gradient(ellipse at 12% 18%,rgba(255,42,59,.025),transparent 32%),
+    linear-gradient(180deg,rgba(255,255,255,.009),transparent 220px)!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143{
+  height:272px!important;min-height:272px!important;padding:16px!important;
+  border-radius:14px!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143 h3{
+  margin-top:13px!important;font-size:19px!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143>p{
+  min-height:28px!important;margin-top:6px!important;font-size:10.5px!important;
+}
+.campaign-discover-progress-v232{
+  height:3px!important;margin:9px 0 10px!important;border:0!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143{gap:6px!important}
+.campaign-discover-v143 .campaign-discover-facts-v143>div{
+  min-height:45px!important;padding:8px!important;
+}
+.campaign-discover-v143 .campaign-discover-actions-v143{
+  padding-top:9px!important;
+}
+@media(max-width:680px){
+  .campaign-discover-v143 .campaign-discover-card-v143{height:auto!important;min-height:264px!important}
+}
