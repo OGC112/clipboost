@@ -1,4 +1,4 @@
-# ClipBoost 21.22.0 — Campaign asset browser reliability
+# ClipBoost 21.23.0 — Discover campaign details modal
 
 ClipBoost now separates general long-form clipping from paid campaign work without changing the underlying AI pipeline.
 
