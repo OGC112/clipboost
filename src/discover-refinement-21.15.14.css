@@ -413,3 +413,29 @@
 @media(max-width:680px){
   .campaign-discover-v143 .campaign-discover-card-v143{height:auto!important;min-height:264px!important}
 }
+
+/* ClipBoost 21.23.5 — Discover hero tone only (geometry/content below hero untouched) */
+.campaign-discover-v143 > .campaign-discover-header-v143{
+  background:radial-gradient(ellipse at 50% 43%,rgba(118,18,31,.075),transparent 58%)!important;
+}
+.campaign-discover-v143 > .campaign-discover-header-v143 .eyebrow{
+  color:#a78f94!important;
+  opacity:.92!important;
+}
+.campaign-discover-v143 > .campaign-discover-header-v143 h1{
+  color:#ddd7d9!important;
+  background:linear-gradient(180deg,#eee9ea 4%,#d8d1d3 58%,#c8c0c2 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+  text-shadow:0 1px 0 rgba(255,255,255,.025)!important;
+}
+.campaign-discover-v143 > .campaign-discover-header-v143 p{
+  color:#92898c!important;
+  opacity:.9!important;
+}
+.campaign-discover-v143 > .campaign-discover-header-v143 .mint-editor-source-badge{
+  color:#9e9aa6!important;
+  border-color:rgba(184,166,173,.16)!important;
+  background:rgba(17,13,15,.38)!important;
+}
