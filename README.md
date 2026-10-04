@@ -1,4 +1,4 @@
-# ClipBoost 21.18.0 — Simplified Workspace & Campaign Studio
+# ClipBoost 21.19.0 — Simplified Workspace & Campaign Studio
 
 ClipBoost now separates general long-form clipping from paid campaign work without changing the underlying AI pipeline.
 
