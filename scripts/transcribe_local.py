@@ -1,4 +1,5 @@
 import argparse, json, sys, subprocess, tempfile, os, time, re, wave, shutil
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 _MODEL = None
@@ -133,10 +134,23 @@ def load_model(model_name, device, compute_type, cpu_threads, workers):
     _MODEL = WhisperModel(model_name, device=device, compute_type=compute_type, **kwargs)
 
 
+def read_pcm_audio(path):
+    # ClipBoost creates 16 kHz mono PCM WAV chunks itself. Passing a float32
+    # waveform to faster-whisper bypasses PyAV decoding entirely. This keeps
+    # transcription compatible with PyAV 19+, whose av.open() removed the
+    # metadata_errors argument still used by some faster-whisper releases.
+    with wave.open(path, 'rb') as wf:
+        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() != 16000:
+            raise RuntimeError('Unexpected Whisper audio format; expected 16 kHz mono PCM.')
+        frames = wf.readframes(wf.getnframes())
+    return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def transcribe_audio(audio_path, offset):
     global _MODEL
+    audio = read_pcm_audio(audio_path)
     segments, info = _MODEL.transcribe(
-        audio_path,
+        audio,
         beam_size=5,
         word_timestamps=True,
         vad_filter=True,

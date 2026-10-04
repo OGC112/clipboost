@@ -570,7 +570,7 @@
         if(['ready','degraded'].includes(data.status))state.selectedCandidate=0;
         state.projects=null;
         render();
-        if(data.status==='degraded')showNotice({kind:'warning',eyebrow:'AI Studio',title:'Analysis completed in degraded mode',message:data.analysis?.aiError||'A local AI component fell back to deterministic processing.'});
+        if(data.status==='degraded')showNotice({kind:'warning',eyebrow:data.campaign?.id?'Campaign Studio':'AI Studio',title:'Analysis completed with fallback',message:data.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
         if(data.status==='failed')showNotice({kind:'danger',eyebrow:'AI Studio',title:'Analysis failed',message:data.analysis?.error||'The project could not be analyzed.'});
         if(data.processingInterrupted){
           showNotice({kind:'warning',eyebrow:'AI Studio',title:'Processing was interrupted',message:'ClipBoost recovered this project. You can retry the analysis or delete the project safely.'});

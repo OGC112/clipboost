@@ -3708,7 +3708,11 @@ async function analyzeProject(projectId, options = {}) {
         await writeMeta(meta);
         candidates = await semanticClipCandidatesLocal(meta, transcript, signalCandidates, clipCountPreference);
       } catch (err) {
-        aiError = err?.message || 'Local AI analysis failed';
+        const rawAiError=String(err?.message||'Local AI analysis failed');
+        console.warn('[analysis] Local transcription/AI fallback:', rawAiError);
+        aiError = /metadata_errors|PyAV|av\.open/i.test(rawAiError)
+          ? 'Local transcription is temporarily unavailable. ClipBoost continued with visual and audio-signal analysis.'
+          : 'Local AI analysis could not complete. ClipBoost continued with deterministic clip selection.';
         candidates = transcript?.words?.length
           ? heuristicTranscriptCandidates(meta, transcript, signalCandidates, clipCountPreference)
           : selectDiverseCandidates(signalCandidates.filter(c=>Number(c.score||0)>=78), resolveClipTarget(duration, clipCountPreference), duration, clipCountPreference);
