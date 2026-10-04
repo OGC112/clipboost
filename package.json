@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.15.15",
-  "description": "Mint Agent candidate 21.15.15",
+  "version": "21.16.0",
+  "description": "ClipBoost 21.16.0 — Two-editor workflows",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
