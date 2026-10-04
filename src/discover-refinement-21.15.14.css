@@ -297,3 +297,78 @@
 }
 .campaign-discover-v143 .campaign-discover-card-v143 h3{color:rgba(250,249,250,.96)!important}
 .campaign-discover-v143 .campaign-discover-card-v143>p{color:rgba(202,198,202,.55)!important}
+
+
+/* ClipBoost 21.23.3 — Discover polish (hero intentionally untouched) */
+.campaign-discover-v143 > .campaign-discover-import-v143{
+  grid-template-columns:minmax(250px,.68fr) minmax(0,1.32fr)!important;
+  gap:22px!important;
+}
+.campaign-discover-v143 .campaign-discover-import-controls-v143{
+  display:grid!important;
+  grid-template-columns:minmax(180px,1fr) 124px 148px!important;
+  gap:8px!important;
+  min-width:0!important;
+  align-items:center!important;
+}
+.campaign-discover-v143 .campaign-discover-import-controls-v143>*{min-width:0!important}
+.campaign-discover-v143 .campaign-discover-import-controls-v143 .btn{
+  width:100%!important;padding-inline:10px!important;white-space:nowrap!important;
+  overflow:hidden!important;text-overflow:ellipsis!important;
+}
+.campaign-discover-v143 .campaign-discover-import-controls-v143 #newCampaignBtn{
+  border-color:rgba(255,76,88,.42)!important;
+}
+.campaign-discover-v143 > .campaign-discover-grid-v143{
+  grid-template-columns:repeat(auto-fill,minmax(320px,360px))!important;
+  gap:18px!important;padding-bottom:24px!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143{
+  min-height:304px!important;height:304px!important;padding:19px!important;
+  border-color:rgba(255,255,255,.095)!important;
+}
+.campaign-discover-v143 .campaign-discover-card-top-v143{
+  position:relative!important;z-index:1!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143 h3{
+  position:relative!important;z-index:1!important;margin-top:18px!important;font-size:21px!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143>p{
+  position:relative!important;z-index:1!important;min-height:38px!important;color:rgba(220,216,220,.57)!important;
+}
+.campaign-discover-progress-v232{
+  height:5px!important;margin:12px 0 13px!important;background:rgba(255,255,255,.065)!important;
+  border:1px solid rgba(255,255,255,.025)!important;
+}
+.campaign-discover-progress-v232>span{
+  min-width:3px!important;background:linear-gradient(90deg,rgba(185,31,47,.92),#ff3f50)!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143{
+  margin-top:0!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143>div{
+  min-height:51px!important;padding:10px!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143 b{
+  display:block!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+}
+.campaign-discover-v143 .campaign-discover-actions-v143{
+  margin-top:auto!important;padding-top:12px!important;border-top:1px solid rgba(255,255,255,.045)!important;
+}
+.campaign-discover-v143 .campaign-discover-actions-v143 .btn:first-child{
+  background:rgba(255,255,255,.018)!important;border-color:rgba(255,255,255,.11)!important;
+}
+@media(max-width:1280px){
+  .campaign-discover-v143 > .campaign-discover-import-v143{grid-template-columns:250px minmax(0,1fr)!important;gap:16px!important}
+  .campaign-discover-v143 .campaign-discover-import-controls-v143{grid-template-columns:minmax(150px,1fr) 118px 140px!important}
+}
+@media(max-width:1040px){
+  .campaign-discover-v143 > .campaign-discover-import-v143{grid-template-columns:1fr!important}
+  .campaign-discover-v143 .campaign-discover-import-controls-v143{grid-template-columns:minmax(0,1fr) 124px 148px!important}
+}
+@media(max-width:680px){
+  .campaign-discover-v143 .campaign-discover-import-controls-v143{grid-template-columns:1fr 1fr!important}
+  .campaign-discover-v143 .campaign-discover-import-controls-v143 input{grid-column:1/-1!important}
+  .campaign-discover-v143 > .campaign-discover-grid-v143{grid-template-columns:1fr!important}
+  .campaign-discover-v143 .campaign-discover-card-v143{height:auto!important;min-height:304px!important}
+}

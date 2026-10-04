@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.2",
-  "description": "ClipBoost 21.23.0 \u2014 Discover campaign details modal",
+  "version": "21.23.3",
+  "description": "ClipBoost 21.23.3 — Discover polish and layout fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
