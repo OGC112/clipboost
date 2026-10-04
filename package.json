@@ -1,12 +1,8 @@
-﻿{
+{
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-<<<<<<< HEAD
-  "version": "21.23.1",
-=======
   "version": "21.23.2",
->>>>>>> c4911fd (Auto publish ClipBoost v21.23.2)
   "description": "ClipBoost 21.23.0 \u2014 Discover campaign details modal",
   "type": "module",
   "main": "desktop/main.cjs",
@@ -76,4 +72,3 @@
   },
   "author": "ClipBoost"
 }
-
