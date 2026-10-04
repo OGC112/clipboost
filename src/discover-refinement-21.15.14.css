@@ -40,6 +40,7 @@
   gap:18px!important;
   padding:16px 18px!important;
   background:linear-gradient(180deg,rgba(18,13,16,.88),rgba(12,9,11,.92))!important;
+  box-shadow:none!important;
 }
 
 .campaign-discover-v143 > .campaign-discover-import-v143::before{
@@ -133,13 +134,13 @@
   border-radius:15px!important;
   background:linear-gradient(160deg,rgba(19,14,17,.94),rgba(11,9,11,.98))!important;
   border-color:rgba(255,255,255,.075)!important;
-  box-shadow:0 15px 34px rgba(0,0,0,.26)!important;
+  box-shadow:none!important;
 }
 
 .campaign-discover-v143 .campaign-discover-card-v143:hover{
   transform:translateY(-2px)!important;
   border-color:rgba(255,58,65,.25)!important;
-  box-shadow:0 20px 42px rgba(0,0,0,.34)!important;
+  box-shadow:none!important;
 }
 
 .campaign-discover-v143 .campaign-discover-card-v143 h3{
