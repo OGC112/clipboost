@@ -1263,8 +1263,8 @@
     }
     if(state.page==='library'&&!state.libraryLoaded&&!state.libraryLoading)setTimeout(loadLibrary,0);
     if((state.page==='projects'||state.page==='home')&&!state.projects&&!state.projectsLoading)setTimeout(loadProjects,0);
-    if((state.page==='campaigns'||state.page==='campaign-discover'||state.page==='home')&&!state.campaigns&&!state.campaignsLoading)setTimeout(loadCampaigns,0);
-    if(state.page==='campaign-discover'||state.page==='campaigns'){
+    if((state.page==='campaigns'||state.page==='campaign-editor'||state.page==='campaign-discover'||state.page==='analytics'||state.page==='home')&&!state.campaigns&&!state.campaignsLoading)setTimeout(loadCampaigns,0);
+    if(state.page==='campaign-discover'||state.page==='campaigns'||state.page==='campaign-editor'){
       const openNew=()=>{state.campaignDraftUrl='';state.campaignImportDraft=null;state.campaignFormOpen=true;render();setTimeout(()=>document.getElementById('campaignName')?.focus(),0)};
       const newBtn=document.getElementById('newCampaignBtn');if(newBtn)newBtn.onclick=openNew;
       const emptyNew=document.getElementById('emptyNewCampaignBtn');if(emptyNew)emptyNew.onclick=openNew;
