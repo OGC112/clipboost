@@ -1,4 +1,4 @@
-# ClipBoost 21.20.0 — Discover → Campaign Studio editing flow
+# ClipBoost 21.21.0 — Campaign asset browser reliability
 
 ClipBoost now separates general long-form clipping from paid campaign work without changing the underlying AI pipeline.
 

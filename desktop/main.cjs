@@ -517,7 +517,7 @@ async function loadCampaignWorkerSnapshot(url) {
   campaignImportWorker = worker;
   configureCampaignBrowser(worker);
   try {
-    await worker.loadURL(target);
+    try { await worker.loadURL(target); } catch (err) { if (Number(err?.errno)!==-3 && Number(err?.code)!==-3 && !/ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))) throw err; }
     let host='';try{host=new URL(target).hostname}catch{}
     await sleep(/canto\.global$/i.test(host)?3200:1800);
     // Give lazy-loaded Canto gallery tiles a chance to mount before counting them.
@@ -559,10 +559,10 @@ async function discoverCampaignAssetPack(rawUrl) {
     const x=out[idx];if(!x)return {clicked:false,count:out.length};x.el.click();return {clicked:true,count:out.length,previewUrl:x.src||'',label:x.text||'',href:x.href||''};
   })()`);
   try{
-    await worker.loadURL(target);await waitForGallery();
+    try { await worker.loadURL(target); } catch (err) { if (Number(err?.errno)!==-3 && Number(err?.code)!==-3 && !/ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))) throw err; } await waitForGallery();
     let top=await campaignBrowserSnapshot(worker);const declared=cantoDeclaredItemCount(top||{}),visible=cantoVisibleAssetCount(top||{});const targetCount=Math.min(12,Math.max(declared,visible,(top?.visibleMediaTiles||[]).length,1));
     for(let i=0;i<targetCount;i++){
-      if(i>0){try{await worker.loadURL(target);await waitForGallery()}catch{continue}}
+      if(i>0){try{await worker.loadURL(target)}catch(err){if(Number(err?.errno)!==-3&&Number(err?.code)!==-3&&!/ERR_ABORTED|\(-3\)/i.test(String(err?.message||'')))continue}await waitForGallery()}
       let clicked=null;try{clicked=await clickTile(i)}catch{}
       if(!clicked?.clicked)continue;
       await sleep(1150);
@@ -582,7 +582,7 @@ async function discoverCampaignAssetPack(rawUrl) {
       const inspected=await inspectCampaignResource({url:target,label:'Campaign asset'});
       for(const mediaUrl of inspected.mediaUrls||[]){if(!/^https?:/i.test(mediaUrl)||seenMedia.has(mediaUrl))continue;seenMedia.add(mediaUrl);items.push({label:`Video ${items.length+1}`,kind:'video',mediaUrl,pageUrl:target,previewUrl:'',duration:0})}
     }
-    const direct=items.filter(x=>x.mediaUrl).length;const summary=direct?`${direct} video${direct===1?'':'s'} ready to preview and send to AI Studio${items.length>direct?` · ${items.length-direct} additional item${items.length-direct===1?'':'s'} can be opened in Canto`:''}.`:`${items.length||0} pack item${items.length===1?'':'s'} detected, but Canto did not expose a direct video URL for AI Studio.`;
+    const direct=items.filter(x=>x.mediaUrl).length;const summary=direct?`${direct} video${direct===1?'':'s'} ready to preview and open in Campaign Studio${items.length>direct?` · ${items.length-direct} additional item${items.length-direct===1?'':'s'} can be opened in Canto`:''}.`:`${items.length||0} pack item${items.length===1?'':'s'} detected, but Canto did not expose a direct video URL for AI Studio.`;
     return {ok:true,items:items.slice(0,12),summary};
   } finally {if(!worker.isDestroyed())worker.destroy()}
 }
