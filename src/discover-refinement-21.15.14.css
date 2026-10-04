@@ -538,3 +538,69 @@
 @media(max-width:1040px){
   .campaign-discover-v143 > .campaign-discover-import-v143{grid-template-columns:1fr!important}
 }
+
+
+/* ClipBoost 21.23.7 — Final layout fix */
+/* Restore a clean white hero title while preserving enough line box for descenders. */
+.campaign-discover-v143 > .campaign-discover-header-v143 h1{
+  color:#f7f5f6!important;
+  background:none!important;
+  -webkit-background-clip:border-box!important;
+  background-clip:border-box!important;
+  -webkit-text-fill-color:#f7f5f6!important;
+  line-height:1.08!important;
+  padding-bottom:.12em!important;
+  overflow:visible!important;
+}
+
+/* Give the collection label breathing room below the separator. */
+.campaign-discover-v143 > .campaign-discover-grid-v143{
+  padding-top:54px!important;
+}
+.campaign-discover-v143 > .campaign-discover-grid-v143::before{
+  top:22px!important;
+}
+
+/* Keep the compact footprint, but guarantee all card controls remain inside the card. */
+.campaign-discover-v143 .campaign-discover-card-v143{
+  height:286px!important;
+  min-height:286px!important;
+  padding:16px 16px 15px!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143>p{
+  min-height:22px!important;
+}
+.campaign-discover-v143 .campaign-discover-progress-v232{
+  height:4px!important;
+  margin:7px 0 8px!important;
+  background:rgba(255,255,255,.09)!important;
+}
+.campaign-discover-v143 .campaign-discover-progress-v232>span{
+  background:linear-gradient(90deg,#b62638,#ff3d50)!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143>div{
+  min-height:44px!important;
+  padding:7px 8px!important;
+}
+.campaign-discover-v143 .campaign-discover-facts-v143 b{
+  font-size:10px!important;
+  line-height:1.12!important;
+}
+.campaign-discover-v143 .campaign-discover-actions-v143{
+  margin-top:8px!important;
+  padding-top:8px!important;
+  padding-bottom:0!important;
+  flex:0 0 auto!important;
+}
+.campaign-discover-v143 .campaign-discover-actions-v143 .btn{
+  height:32px!important;
+  min-height:32px!important;
+}
+@media(max-width:680px){
+  .campaign-discover-v143 .campaign-discover-card-v143{
+    height:auto!important;
+    min-height:282px!important;
+  }
+}

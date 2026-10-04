@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.6",
-  "description": "ClipBoost 21.23.6 — Discover visual balance",
+  "version": "21.23.7",
+  "description": "ClipBoost 21.23.7 — Discover final layout fix",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
