@@ -2,7 +2,7 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.0",
+  "version": "21.23.1",
   "description": "ClipBoost 21.23.0 \u2014 Discover campaign details modal",
   "type": "module",
   "main": "desktop/main.cjs",
