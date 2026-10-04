@@ -806,6 +806,7 @@
         </div>
         <h3>${escapeHtml(c.name||'Campaign')}</h3>
         <p>${escapeHtml(String(c.brief||c.objective||'No campaign brief saved yet.').slice(0,150))}</p>
+        <div class="campaign-discover-progress-v232" aria-label="${readiness.score}% campaign setup"><span style="--campaign-progress:${Math.max(0,Math.min(100,Number(readiness.score)||0))}%"></span></div>
         <div class="campaign-discover-facts-v143">
           <div><small>Payment</small><b>${escapeHtml(campaignPaymentSummary(c))}</b></div>
           <div><small>Minimum</small><b>${q?formatCount(q):'—'}</b></div>

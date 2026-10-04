@@ -226,3 +226,74 @@
     min-height:272px!important;
   }
 }
+\n\n/* ClipBoost 21.23.2 — Discover depth pass (hero intentionally unchanged) */
+.campaign-discover-v143{position:relative!important;isolation:isolate!important}
+.campaign-discover-v143::before{
+  content:"";position:absolute;z-index:-1;pointer-events:none;
+  left:-8%;right:-8%;top:310px;height:620px;
+  background:
+    radial-gradient(ellipse at 18% 24%,rgba(118,10,22,.105),transparent 43%),
+    radial-gradient(ellipse at 82% 58%,rgba(92,8,17,.085),transparent 48%);
+  filter:blur(18px);opacity:.92;
+}
+.campaign-discover-v143 > .campaign-discover-import-v143{
+  border-color:rgba(255,255,255,.085)!important;
+  background:linear-gradient(105deg,rgba(24,13,17,.88),rgba(13,10,12,.94) 46%,rgba(14,10,12,.91))!important;
+  box-shadow:none!important;
+}
+.campaign-discover-v143 > .campaign-discover-import-v143::before{
+  background:linear-gradient(180deg,#ff4652,#8d1724)!important;
+  box-shadow:none!important;
+}
+.campaign-discover-v143 .campaign-discover-import-controls-v143 input{
+  background:rgba(255,255,255,.025)!important;
+  border-color:rgba(255,255,255,.105)!important;
+  transition:border-color .18s ease,background .18s ease!important;
+}
+.campaign-discover-v143 .campaign-discover-import-controls-v143 input:focus{
+  border-color:rgba(255,62,77,.46)!important;
+  background:rgba(255,45,64,.035)!important;
+  outline:none!important;box-shadow:none!important;
+}
+.campaign-discover-v143 > .campaign-discover-grid-v143{
+  background:linear-gradient(180deg,rgba(255,255,255,.008),transparent 190px)!important;
+}
+.campaign-discover-v143 > .campaign-discover-grid-v143::after{
+  content:"";position:absolute;left:0;top:0;width:74px;height:1px;
+  background:linear-gradient(90deg,rgba(255,57,72,.52),transparent);
+}
+.campaign-discover-v143 .campaign-discover-card-v143{
+  position:relative!important;overflow:hidden!important;
+  background:linear-gradient(145deg,rgba(22,14,17,.94),rgba(12,10,12,.985))!important;
+  border-color:rgba(255,255,255,.085)!important;box-shadow:none!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:58px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,50,68,.035),transparent);
+}
+.campaign-discover-v143 .campaign-discover-card-v143:hover{
+  border-color:rgba(255,64,79,.26)!important;box-shadow:none!important;
+}
+.campaign-discover-v143 .campaign-discover-score-v143{
+  position:relative!important;padding:5px 8px 5px 21px!important;
+  border:1px solid rgba(255,55,72,.13)!important;border-radius:999px!important;
+  background:rgba(255,44,63,.07)!important;
+}
+.campaign-discover-v143 .campaign-discover-score-v143::before{
+  content:"";position:absolute;left:8px;top:50%;width:7px;height:7px;transform:translateY(-50%);
+  border-radius:50%;background:#ff4050;
+}
+.campaign-discover-progress-v232{
+  position:relative;height:3px;margin:11px 0 2px;border-radius:999px;
+  background:rgba(255,255,255,.055);overflow:hidden;
+}
+.campaign-discover-progress-v232>span{
+  display:block;height:100%;width:var(--campaign-progress,0%);border-radius:inherit;
+  background:linear-gradient(90deg,rgba(151,24,39,.8),#ff4050);
+}
+.campaign-discover-v143 .campaign-discover-facts-v143>div{
+  background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.012))!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+}
+.campaign-discover-v143 .campaign-discover-card-v143 h3{color:rgba(250,249,250,.96)!important}
+.campaign-discover-v143 .campaign-discover-card-v143>p{color:rgba(202,198,202,.55)!important}
