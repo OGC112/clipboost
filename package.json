@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.31",
-  "description": "ClipBoost 21.23.31 — Resolve generic Canto media from authenticated pack",
+  "version": "21.23.32",
+  "description": "ClipBoost 21.23.32 — Persistent campaign asset browser",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
