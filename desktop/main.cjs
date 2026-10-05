@@ -601,6 +601,26 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
   let target=safeHttpUrl(mediaUrl);
   if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error('Invalid campaign project.');
   if(!target&&referer){
+    // Generic Canto items (e.g. "Media 1") may point at a viewer route that Canto
+    // refuses as a top-level navigation. Resolve the real media from the parent pack
+    // first, using the already authenticated campaign session.
+    let cantoHost='';try{cantoHost=new URL(referer).hostname}catch{}
+    if(/canto\.global$/i.test(cantoHost)){
+      try{
+        const packBase=referer.replace(/([?&])viewIndex=\d+(&?)/i,(m,a,b)=>b?a:'').replace(/[?&]$/,'');
+        const discovered=await discoverCampaignAssetPack(packBase);
+        const wanted=String(label||'').trim().toLowerCase();
+        const ordinalMatch=wanted.match(/(?:media|asset|video)\s*(\d+)/i);
+        const ordinal=ordinalMatch?Math.max(0,Number(ordinalMatch[1])-1):-1;
+        const direct=(discovered?.items||[]).filter(x=>safeHttpUrl(x?.mediaUrl));
+        const byLabel=direct.find(x=>String(x?.label||'').trim().toLowerCase()===wanted);
+        const byOrdinal=ordinal>=0?(discovered?.items||[])[ordinal]:null;
+        target=safeHttpUrl(byLabel?.mediaUrl)||safeHttpUrl(byOrdinal?.mediaUrl)||'';
+      }catch{}
+    }
+    if(target){
+      // resolved from authenticated pack; skip the blocked viewer navigation
+    }else{
     const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
     configureCampaignBrowser(worker);
     const observedMedia=[];
@@ -631,6 +651,7 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
     }finally{
       try{ses.webRequest.onBeforeRequest(null)}catch{}
       if(!worker.isDestroyed())worker.destroy();
+    }
     }
   }
   if(!target)throw new Error('Canto did not expose a downloadable video for this asset. Open the media in Canto once, then retry.');
