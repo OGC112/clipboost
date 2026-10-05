@@ -34,7 +34,7 @@
     const m=state.uiModal;if(!m)return '';
     const kind=m.kind||'info';
     const mode=m.mode||'notice';
-    const actions=mode==='progress'?`<div class="cb-modal-installing"><span class="cb-modal-spinner" aria-hidden="true"></span><span>${escapeHtml(m.progressLabel||'Installing…')}</span></div>`:`<div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div>`;
+    const actions=mode==='progress'?`<div class="cb-modal-installing"><div class="cb-analysis-progress"><div class="cb-analysis-progress-head"><span>${escapeHtml(m.progressLabel||'Working…')}</span><strong>${Math.round(Math.max(0,Math.min(100,Number(m.progress||0))))}%</strong></div><div class="cb-analysis-progress-track"><i style="width:${Math.max(4,Math.min(100,Number(m.progress||4)))}%"></i></div></div></div>`:`<div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div>`;
     return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
   }
   function openModal(options={}){
@@ -1048,8 +1048,20 @@
       if(['ready','degraded'].includes(status))return data;
       if(status==='failed')throw new Error(data?.analysis?.error||data?.ingestion?.error||'Campaign video analysis failed.');
       const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'working').replace(/-/g,' ');
-      const pct=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
-      state.uiModal={...state.uiModal,title:status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…',progressLabel:`${stage}${Number.isFinite(pct)&&pct>0?` · ${Math.round(pct)}%`:''}`};render();
+      const reported=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
+      const elapsed=Date.now()-started;
+      const estimated=status==='analyzing'?Math.min(94,55+Math.floor(elapsed/4000)):Math.min(52,12+Math.floor(elapsed/5000));
+      const pct=reported>0?reported:estimated;
+      const nextTitle=status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…';
+      const nextLabel=stage||'Working';
+      if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
+        state.uiModal={...state.uiModal,title:nextTitle,progressLabel:nextLabel,progress:pct};
+        const modal=document.querySelector('.cb-modal');
+        if(modal){
+          const title=modal.querySelector('#cbModalTitle'),label=modal.querySelector('.cb-analysis-progress-head span'),value=modal.querySelector('.cb-analysis-progress-head strong'),bar=modal.querySelector('.cb-analysis-progress-track i');
+          if(title)title.textContent=nextTitle;if(label)label.textContent=nextLabel;if(value)value.textContent=`${Math.round(pct)}%`;if(bar)bar.style.width=`${Math.max(4,pct)}%`;
+        }else render();
+      }
       await new Promise(resolve=>setTimeout(resolve,1500));
     }
     throw new Error('Campaign video processing timed out.');
