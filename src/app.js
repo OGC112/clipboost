@@ -278,7 +278,7 @@
     const editApplied=c?.previewMeta?.editApplied||null;
     const autoTags=autoDirector?.labels?.length?autoDirector.labels:['Speech-aware','Scene-aware','Smart framing','Adaptive captions'];
     const hasLocal=Boolean(v?.sourceUrl); const linked=Boolean(v?.externalSource&&!hasLocal);
-    const ingesting=Boolean(v&&v.status==='ingesting'&&v.externalSource&&!hasLocal);
+    const ingesting=Boolean(v&&((v.status==='ingesting'&&v.externalSource&&!hasLocal)||state.campaignAssetImporting));
     const analyzing=Boolean(v&&v.status==='analyzing');
     const working=ingesting||analyzing;
     const ingestError=String(v?.ingestion?.error||'');
@@ -288,8 +288,8 @@
     const analysisStage=String(v?.analysis?.stage||'').replace(/-/g,' ');
     const transcriptionPhase=String(v?.analysis?.transcriptionPhase||'');
     const transcriptionDetail=(v?.analysis?.stage==='transcription'||v?.analysis?.stage==='transcription-retry')?`${v?.analysis?.transcriptionChunks?` · ${v.analysis.transcriptionChunk||0}/${v.analysis.transcriptionChunks} chunks`:transcriptionPhase==='audio-prep'?' · preparing audio once':transcriptionPhase==='speech-map'?' · mapping speech':transcriptionPhase==='model-load'?' · loading Whisper':''}${v.analysis.transcriptionWorkers?` · ${v.analysis.transcriptionWorkers} workers${v.analysis.transcriptionWorkerMode==='auto'?' auto':''}`:''}${Number.isFinite(Number(v.analysis.transcriptionProgress))?` · ${Math.round(Number(v.analysis.transcriptionProgress||0))}% transcript`:''}${v.analysis.transcriptionCacheHits?` · ${v.analysis.transcriptionCacheHits} cached`:''}${v.analysis.transcriptionSkippedSeconds?` · ${Math.round(v.analysis.transcriptionSkippedSeconds/60)}m silence skipped`:''}`:'';
-    const ingestTitle=analyzing?`Analyzing with Local AI…`:ingesting?'Downloading source automatically…':ingestError?'Automatic ingestion needs attention':linked?'Source linked — ready for automatic ingestion':v?'Upload another video':'Upload your first video';
-    const ingestCopy=analyzing?`Local AI is processing the downloaded video. ${analysisStage?`Current step: ${escapeHtml(analysisStage)}.`:''} Transcription now runs in resumable chunks and automatically retries a stalled chunk.`:ingesting?'ClipBoost is fetching the source, then it will run FFmpeg + local transcription automatically.':ingestError?`Automatic ingestion failed: ${escapeHtml(ingestError)}`:linked?'ClipBoost can fetch this public source automatically. Use this only for content you own or have permission to reuse.':'Drag & drop a video here, or choose a file from your computer.';
+    const ingestTitle=analyzing?`Analyzing with Local AI…`:state.campaignAssetImporting?'Downloading campaign asset from Canto…':ingesting?'Downloading source automatically…':ingestError?'Automatic ingestion needs attention':linked?'Source linked — ready for automatic ingestion':v?'Upload another video':'Upload your first video';
+    const ingestCopy=analyzing?`Local AI is processing the downloaded video. ${analysisStage?`Current step: ${escapeHtml(analysisStage)}.`:''} Transcription now runs in resumable chunks and automatically retries a stalled chunk.`:state.campaignAssetImporting?'ClipBoost is resolving and downloading the selected Canto asset with your authenticated campaign session. Analysis will start automatically when the file is ready.':ingesting?'ClipBoost is fetching the source, then it will run FFmpeg + local transcription automatically.':ingestError?`Automatic ingestion failed: ${escapeHtml(ingestError)}`:linked?'ClipBoost can fetch this public source automatically. Use this only for content you own or have permission to reuse.':'Drag & drop a video here, or choose a file from your computer.';
     const uploader=`<section class="card upload-card ${linked?'needs-source':''} ${working?'is-ingesting':''}" id="dropZone">
       <input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*">
       <div class="upload-icon">${working?'↻':'⇧'}</div>
@@ -1016,6 +1016,7 @@
       const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:sourceUrl,label})});
       let data=await readJsonResponse(r,'Could not create campaign asset project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;state.campaignAssetBrowser=null;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}state.campaignEditorOpen=true;navigate('campaigns');
       if(window.clipboostDesktop?.importCampaignAsset){
+        state.campaignAssetImporting=true;render();
         let imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl,pageUrl,label});
         if(!imported?.ok&&!mediaUrl&&packUrl&&packUrl!==pageUrl&&/BLOCKED_BY_CLIENT|did not expose|navigation/i.test(String(imported?.error||''))) imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl:'',pageUrl:packUrl,label});
 
@@ -1023,7 +1024,7 @@
         if(imported.project)state.video=imported.project;render();pollProjectUntilSettled(data.id);
       }else if(item.mediaUrl)startProjectIngestion(data.id);
       else throw new Error('This Canto asset requires the desktop authenticated importer.');
-    }catch(e){showNotice({kind:'danger',title:'Could not open campaign asset',message:e.message||'Could not create campaign asset project'})}finally{state.projectBusy=false}
+    }catch(e){showNotice({kind:'danger',title:'Could not open campaign asset',message:e.message||'Could not create campaign asset project'})}finally{state.campaignAssetImporting=false;state.projectBusy=false;render()}
   }
 
   async function startCampaignCreating(){
