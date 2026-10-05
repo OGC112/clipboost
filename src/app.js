@@ -1051,13 +1051,15 @@
       const data=await readJsonResponse(r,'Could not refresh campaign project');
       state.video=data;
       const status=String(data?.status||'');
-      if(['ready','degraded'].includes(status))return data;
+      if(['ready','degraded'].includes(status)){if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}return data}
       if(status==='failed')throw new Error(data?.analysis?.error||data?.ingestion?.error||'Campaign video analysis failed.');
-      const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'working').replace(/-/g,' ');
+      const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'Working').replace(/-/g,' ');
       const reported=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
-      const elapsed=Date.now()-started;
-      const estimated=status==='analyzing'?Math.min(94,55+Math.floor(elapsed/4000)):Math.min(52,12+Math.floor(elapsed/5000));
-      const pct=reported>0?reported:estimated;
+      const previous=Math.max(0,Number(state.uiModal?.progress||0));
+      // Never fake large jumps and never let progress move backwards. Backend stages
+      // are authoritative; a tiny time-based creep only reassures during long AI calls.
+      const creep=Math.min(status==='analyzing'?94:89,previous+(status==='analyzing'?.35:.2));
+      const pct=Math.max(previous,reported,creep);
       const nextTitle=status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…';
       const nextLabel=stage||'Working';
       if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
@@ -1089,7 +1091,8 @@
     if(p?.status==='ready')return {progress:100,progressLabel:'Ready',badge:'Ready',done:true};
     if(p?.status==='degraded')return {progress:100,progressLabel:'Ready with fallback',badge:'Degraded',done:true};
     if(p?.status==='failed')return {progress:100,progressLabel:'Failed',badge:'Failed',done:false};
-    if(p?.status==='uploaded')return {progress:92,progressLabel:'Source ready',badge:'Ready to analyze',done:false};
+    if(p?.status==='uploaded')return {progress:100,progressLabel:'Source ready',badge:'Ready to analyze',done:false};
+    if(p?.status==='preparing')return {progress:Number(p?.ingestion?.progress||92),progressLabel:'Preparing source',badge:'In progress',done:false};
     if(p?.status==='linked')return {progress:15,progressLabel:'Linked',badge:p?.ingestionError?'Retry source':'Needs source file',done:false};
     if(['ingesting','analyzing'].includes(p?.status))return {progress:p?.status==='ingesting'?45:65,progressLabel:p?.status==='ingesting'?'Downloading':'Processing',badge:'In progress',done:false};
     return {progress:35,progressLabel:'Needs attention',badge:'Needs attention',done:false};
