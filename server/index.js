@@ -1799,8 +1799,20 @@ app.post('/api/videos/campaign-stream', async (req,res,next)=>{
     existingProject.updatedAt=new Date().toISOString();
     existingProject.ingestion={...(existingProject.ingestion||{}),stage:'probing',progress:92,bytes:stat.size,error:null};
     await writeMeta(existingProject);
-    const details=await probe(outPath);
-    const meta={...existingProject,id:existingProject.id,originalName:existingProject.originalName||originalName,filename,sourcePath:outPath,sourceUrl:`/media/uploads/${filename}`,updatedAt:new Date().toISOString(),status:'uploaded',details,candidates:[],ingestion:{...(existingProject.ingestion||{}),stage:'ready',progress:100,bytes:stat.size,error:null}};
+    let details=await probe(outPath);
+    // Browser playback is part of the Campaign Studio workflow. Canto can expose
+    // MOV/MP4 files with codecs Chromium cannot decode even though FFmpeg can.
+    // Normalize those sources once at import time so Play, seek and final AI tools
+    // all work from the same browser-safe source.
+    const browserSafeVideo=['h264','vp8','vp9','av1'].includes(String(details.videoCodec||'').toLowerCase());
+    const browserSafeAudio=!details.audioCodec||['aac','mp3','opus','vorbis'].includes(String(details.audioCodec||'').toLowerCase());
+    if(!browserSafeVideo||!browserSafeAudio){
+      const normalizedName=`${crypto.randomUUID()}.mp4`,normalizedPath=path.join(uploadsDir,normalizedName);
+      await run('ffmpeg',['-y','-i',outPath,'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-movflags','+faststart',normalizedPath],{timeout:60*60*1000});
+      await fs.rm(outPath,{force:true}).catch(()=>{});
+      outPath=normalizedPath;filename=normalizedName;details=await probe(outPath);
+    }
+    const meta={...existingProject,id:existingProject.id,originalName:existingProject.originalName||originalName,filename,sourcePath:outPath,sourceUrl:`/media/uploads/${filename}`,updatedAt:new Date().toISOString(),status:'uploaded',details,candidates:[],ingestion:{...(existingProject.ingestion||{}),stage:'ready',progress:100,bytes:(await fs.stat(outPath)).size,error:null}};
     await writeMeta(meta);res.json(meta);
   }catch(e){if(outPath)await fs.rm(outPath,{force:true}).catch(()=>{});next(e)}
 });
