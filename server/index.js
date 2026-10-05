@@ -1773,6 +1773,34 @@ app.delete('/api/projects/:id', async (req, res, next) => {
   }
 });
 
+// Stream authenticated campaign media straight to disk. This avoids buffering the
+// entire Canto file in Electron and then rebuilding a multipart Blob.
+app.post('/api/videos/campaign-stream', async (req,res,next)=>{
+  let outPath='';
+  try{
+    const requestedProjectId=String(req.headers['x-clipboost-project-id']||'').trim();
+    const originalName=decodeURIComponent(String(req.headers['x-clipboost-file-name']||'campaign-asset.mp4'));
+    let existingProject=null;
+    if(/^[0-9a-f-]{36}$/i.test(requestedProjectId))existingProject=await readMeta(requestedProjectId).catch(()=>null);
+    if(!existingProject)return res.status(404).json({error:'Campaign project not found.'});
+    const contentType=String(req.headers['content-type']||'video/mp4').toLowerCase();
+    const ext=contentType.includes('quicktime')?'.mov':contentType.includes('webm')?'.webm':path.extname(originalName)||'.mp4';
+    const filename=`${crypto.randomUUID()}${ext}`;
+    outPath=path.join(uploadsDir,filename);
+    await new Promise((resolve,reject)=>{
+      const output=fsSync.createWriteStream(outPath);
+      req.on('aborted',()=>output.destroy(new Error('Campaign media transfer aborted.')));
+      req.on('error',reject);output.on('error',reject);output.on('finish',resolve);
+      req.pipe(output);
+    });
+    const stat=await fs.stat(outPath);
+    if(stat.size<1024)throw new Error('Canto returned an empty media file.');
+    const details=await probe(outPath);
+    const meta={...existingProject,id:existingProject.id,originalName:existingProject.originalName||originalName,filename,sourcePath:outPath,sourceUrl:`/media/uploads/${filename}`,updatedAt:new Date().toISOString(),status:'uploaded',details,candidates:[]};
+    await writeMeta(meta);res.json(meta);
+  }catch(e){if(outPath)await fs.rm(outPath,{force:true}).catch(()=>{});next(e)}
+});
+
 app.post('/api/videos', upload.single('video'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No video uploaded.' });
