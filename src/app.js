@@ -1008,23 +1008,51 @@
     finally{state.campaignAssetBusy=false;render()}
   }
   async function openCampaignAssetMedia(itemIndex){
-    const c=selectedCampaign(),b=state.campaignAssetBrowser;if(!c||!b||state.projectBusy)return;const item=(b.items||[])[Number(itemIndex)];if(!item||( !item.mediaUrl && !item.pageUrl))return;
-    state.projectBusy=true;render();
+    const c=selectedCampaign(),b=state.campaignAssetBrowser;if(!c||!b||state.projectBusy)return;const item=(b.items||[])[Number(itemIndex)];if(!item||(!item.mediaUrl&&!item.pageUrl))return;
+    const packUrl=b.packUrl||'',pageUrl=item.pageUrl||packUrl,label=item.label||b.label||'Campaign asset',mediaUrl=item.mediaUrl||'';
+    state.projectBusy=true;state.campaignAssetImporting=true;
+    state.uiModal={mode:'progress',kind:'update',eyebrow:'Campaign Studio',title:'Preparing campaign video…',message:label,detail:'ClipBoost will open Campaign Studio when the video and analysis are ready.',progressLabel:'Creating campaign project…'};
+    render();
     try{
-      const packUrl=b.packUrl||'',pageUrl=item.pageUrl||packUrl,label=item.label||b.label||'Campaign asset',mediaUrl=item.mediaUrl||'';
       const sourceUrl=mediaUrl||pageUrl||packUrl;
       const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:sourceUrl,label})});
-      let data=await readJsonResponse(r,'Could not create campaign asset project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;state.campaignAssetBrowser=null;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}state.campaignEditorOpen=true;navigate('campaigns');
-      if(window.clipboostDesktop?.importCampaignAsset){
-        state.campaignAssetImporting=true;render();
-        let imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl,pageUrl,label});
-        if(!imported?.ok&&!mediaUrl&&packUrl&&packUrl!==pageUrl&&/BLOCKED_BY_CLIENT|did not expose|navigation/i.test(String(imported?.error||''))) imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl:'',pageUrl:packUrl,label});
+      let data=await readJsonResponse(r,'Could not create campaign asset project');
+      state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}
+      state.uiModal={...state.uiModal,progressLabel:'Downloading video from Canto…'};render();
+      if(!window.clipboostDesktop?.importCampaignAsset)throw new Error('This Canto asset requires the desktop authenticated importer.');
+      let imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl,pageUrl,label});
+      if(!imported?.ok&&!mediaUrl&&packUrl&&packUrl!==pageUrl&&/BLOCKED_BY_CLIENT|did not expose|navigation/i.test(String(imported?.error||''))){
+        state.uiModal={...state.uiModal,progressLabel:'Retrying from the original Canto pack…'};render();
+        imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl:'',pageUrl:packUrl,label});
+      }
+      if(!imported?.ok)throw new Error(imported?.error||'Could not download the campaign asset from Canto.');
+      if(imported.project)state.video=imported.project;
+      state.uiModal={...state.uiModal,title:'Analyzing campaign video…',progressLabel:'Running Local AI and generating clips…'};render();
+      const settled=await waitForCampaignProjectResult(data.id);
+      state.video=settled;state.selectedCandidate=0;state.projects=null;state.campaignAssetBrowser=null;state.campaignEditorOpen=true;state.uiModal=null;
+      navigate('campaigns');
+      if(settled.status==='degraded')showNotice({kind:'warning',eyebrow:'Campaign Studio',title:'Analysis completed with fallback',message:settled.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
+    }catch(e){
+      state.uiModal=null;
+      showNotice({kind:'danger',eyebrow:'Campaign Studio',title:'Could not prepare campaign video',message:e.message||'Could not prepare this campaign asset.'});
+    }finally{state.campaignAssetImporting=false;state.projectBusy=false}
+  }
 
-        if(!imported?.ok)throw new Error(imported?.error||'Could not download the campaign asset from Canto.');
-        if(imported.project)state.video=imported.project;render();pollProjectUntilSettled(data.id);
-      }else if(item.mediaUrl)startProjectIngestion(data.id);
-      else throw new Error('This Canto asset requires the desktop authenticated importer.');
-    }catch(e){showNotice({kind:'danger',title:'Could not open campaign asset',message:e.message||'Could not create campaign asset project'})}finally{state.campaignAssetImporting=false;state.projectBusy=false;render()}
+  async function waitForCampaignProjectResult(id){
+    const started=Date.now(),timeoutMs=30*60*1000;
+    while(Date.now()-started<timeoutMs){
+      const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
+      const data=await readJsonResponse(r,'Could not refresh campaign project');
+      state.video=data;
+      const status=String(data?.status||'');
+      if(['ready','degraded'].includes(status))return data;
+      if(status==='failed')throw new Error(data?.analysis?.error||data?.ingestion?.error||'Campaign video analysis failed.');
+      const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'working').replace(/-/g,' ');
+      const pct=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
+      state.uiModal={...state.uiModal,title:status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…',progressLabel:`${stage}${Number.isFinite(pct)&&pct>0?` · ${Math.round(pct)}%`:''}`};render();
+      await new Promise(resolve=>setTimeout(resolve,1500));
+    }
+    throw new Error('Campaign video processing timed out.');
   }
 
   async function startCampaignCreating(){
