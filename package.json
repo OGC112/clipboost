@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.34.0",
-  "description": "ClipBoost 21.34.0 — Live Captions and Publish",
+  "version": "21.35.0",
+  "description": "ClipBoost 21.35.0 — Publishing Center Redesign",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
