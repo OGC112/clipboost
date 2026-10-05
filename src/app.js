@@ -278,7 +278,7 @@
     const editApplied=c?.previewMeta?.editApplied||null;
     const autoTags=autoDirector?.labels?.length?autoDirector.labels:['Speech-aware','Scene-aware','Smart framing','Adaptive captions'];
     const hasLocal=Boolean(v?.sourceUrl); const linked=Boolean(v?.externalSource&&!hasLocal);
-    const ingesting=Boolean(v&&((v.status==='ingesting'&&v.externalSource&&!hasLocal)||state.campaignAssetImporting));
+    const ingesting=Boolean(v&&((v.status==='ingesting'&&v.externalSource&&!hasLocal)||(state.campaignAssetImporting&&!hasLocal)));
     const analyzing=Boolean(v&&v.status==='analyzing');
     const working=ingesting||analyzing;
     const ingestError=String(v?.ingestion?.error||'');
@@ -1027,7 +1027,13 @@
       }
       if(!imported?.ok)throw new Error(imported?.error||'Could not download the campaign asset from Canto.');
       if(imported.project)state.video=imported.project;
-      state.uiModal={...state.uiModal,title:'Analyzing campaign video…',progressLabel:'Running Local AI and generating clips…'};render();
+      // The desktop importer starts analysis too, but explicitly start it here as an
+      // idempotent hand-off so an uploaded Canto asset can never remain stuck at 0%.
+      const analyzeStart=await fetch(`/api/videos/${encodeURIComponent(data.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
+      if(!analyzeStart.ok){const problem=await analyzeStart.json().catch(()=>({}));throw new Error(problem?.error||`Could not start campaign analysis (HTTP ${analyzeStart.status}).`)}
+      state.video={...(state.video||{}),status:'analyzing',analysis:{...(state.video?.analysis||{}),stage:'queued',progress:5}};
+      state.campaignAssetImporting=false;
+      state.uiModal={...state.uiModal,title:'Analyzing campaign video…',progressLabel:'Starting Local AI…',progress:5};render();
       const settled=await waitForCampaignProjectResult(data.id);
       state.video=settled;state.selectedCandidate=0;state.projects=null;state.campaignAssetBrowser=null;state.campaignEditorOpen=true;state.uiModal=null;
       navigate('campaigns');
