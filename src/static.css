@@ -524,3 +524,10 @@
 @media(max-width:1250px){.campaign-studio-v2-grid{grid-template-columns:1fr 1fr}.campaign-generate-panel{grid-column:1/-1}.campaign-results-kpis{grid-template-columns:repeat(3,1fr)}.campaign-results-layout{grid-template-columns:1fr}.simple-home-grid{grid-template-columns:1fr}.simple-campaign-facts{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:900px){.simplified-sidebar{width:78px}.main{margin-left:78px}.simplified-topbar .search{display:none}.simple-home-head{align-items:flex-start;flex-direction:column}.campaign-studio-v2-grid{grid-template-columns:1fr}.campaign-generate-panel{grid-column:auto}.campaign-results-kpis{grid-template-columns:1fr 1fr}.campaign-result-row{grid-template-columns:28px minmax(150px,1fr) 85px}.campaign-result-row>span:nth-child(4),.campaign-result-row>span:nth-child(5),.campaign-result-row>a{display:none}}
 @media(max-width:620px){.main{margin-left:0}.simple-campaign-facts,.campaign-results-kpis{grid-template-columns:1fr}.simple-home-actions{width:100%}.simple-home-actions .btn{flex:1}.campaign-platform-bars>div:not(.campaign-mini-empty){grid-template-columns:90px minmax(0,1fr) 55px}}
+
+/* 21.23.18 — stable Campaign Studio analysis progress */
+.cb-analysis-progress{width:min(420px,72vw)}
+.cb-analysis-progress-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:10px;color:#c8cfdd;font-size:13px}
+.cb-analysis-progress-head strong{color:#fff;font-variant-numeric:tabular-nums}
+.cb-analysis-progress-track{height:7px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.06)}
+.cb-analysis-progress-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ef3340,#ff5260);transition:width .45s ease;box-shadow:0 0 18px rgba(239,51,64,.28)}
