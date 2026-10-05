@@ -297,7 +297,8 @@
       <div class="upload-actions">${linked&&!working?`<button class="btn primary" id="autoIngestBtn" type="button">${ingestError?'Retry automatic ingest':'Ingest automatically'}</button>`:''}<label class="btn ${linked?'secondary':'primary'} upload-file-label" for="videoFile">${linked?'Choose local file':v&&state.uploadStatus==='idle'?'Choose another video':uploadLabel}</label></div>
     </section>`;
     const embed=linked?externalEmbed(v.externalSource):'';
-    const realVideo=hasLocal?`<video id="sourceVideo" class="real-video" controls preload="metadata" src="${v.sourceUrl}"></video>`:linked&&embed?`<iframe class="studio-source-embed" src="${embed}" title="${escapeHtml(v.originalName||'Linked source')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>`:`${mediaThumb(0,true)}<div class="caption">UPLOAD A <b>VIDEO</b></div><div class="play">▶</div>`;
+    const sourcePlaybackUrl=hasLocal?`${v.sourceUrl}${String(v.sourceUrl).includes('?')?'&':'?'}v=${encodeURIComponent(v.updatedAt||v.id||Date.now())}`:'';
+    const realVideo=hasLocal?`<video id="sourceVideo" class="real-video" controls playsinline preload="metadata" src="${sourcePlaybackUrl}"></video>`:linked&&embed?`<iframe class="studio-source-embed" src="${embed}" title="${escapeHtml(v.originalName||'Linked source')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>`:`${mediaThumb(0,true)}<div class="caption">UPLOAD A <b>VIDEO</b></div><div class="play">▶</div>`;
     const firstCaption=(c.captions||[])[0]?.text||c.hook||'';
     const clipStartValue=Number(c.start||0),clipEndValue=Math.max(clipStartValue+.25,Number(c.end||clipStartValue+30)),clipDuration=Math.max(.25,clipEndValue-clipStartValue);
     const clipPreviewLoading=state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
@@ -351,8 +352,8 @@
         <main class="mint-studio-main-v142">
           <section class="card mint-studio-source-v142">
             <header class="mint-studio-source-head-v142">
-              <div><div class="eyebrow">SOURCE</div><h3>${escapeHtml(videoTitle)}</h3></div>
-              <span class="mint-source-status-v142">${hasLocal?'Ready':linked?'Linked':'No source'}</span>
+              <div><div class="eyebrow">DOWNLOADED MEDIA</div><h3>${escapeHtml(videoTitle)}</h3></div>
+              <span class="mint-source-status-v142">${hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
             </header>
             <div class="video mint-studio-video-v142">${realVideo}</div>
           </section>
@@ -366,14 +367,14 @@
 
         <aside class="mint-studio-side-v142">
           <section class="card short-panel mint-preview-card-v142">
-            <div class="section-head"><div><div class="eyebrow">${longVideo?'EDIT FOCUS':`PREVIEW · ${candidates.length?selected+1:0}/${candidates.length}`}</div><h3>${longVideo?'Vertical highlight preview':'Short preview'}</h3></div><span>•••</span></div>
+            <div class="section-head"><div><div class="eyebrow">${longVideo?'FINAL PREVIEW':`FINAL PREVIEW · ${candidates.length?selected+1:0}/${candidates.length}`}</div><h3>${longVideo?'Final highlight':'Final preview'}</h3></div><span>•••</span></div>
             <div class="phone tall">${realPhone}</div>
             <div class="clip-range"><label>Start <input id="clipStart" type="number" step="0.1" value="${Number(c.start||0).toFixed(1)}"></label><label>End <input id="clipEnd" type="number" step="0.1" value="${Number(c.end||30).toFixed(1)}"></label></div>
             <div class="preview-note">Preview uses the same renderer as final export.</div>
           </section>
 
           <section class="card controls mint-ai-tools-v142">
-            <div class="section-head"><div><div class="eyebrow">AI DIRECTOR</div><h3>Automatic editing</h3></div><span>✦</span></div>
+            <div class="section-head"><div><div class="eyebrow">AI TOOLS</div><h3>Automatic editing</h3></div><span>✦</span></div>
             <div class="auto-director-card">
               <div class="auto-director-status"><span class="auto-director-dot"></span><div><strong>Auto Director</strong><small>Adapts every clip to speech, scenes and framing.</small></div></div>
               <div class="auto-director-tags">${autoTags.map(x=>`<span>${escapeHtml(x)}</span>`).join('')}</div>
