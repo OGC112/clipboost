@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.19",
-  "description": "ClipBoost 21.23.19 — Correct Ollama semantic fallback classification",
+  "version": "21.23.29",
+  "description": "ClipBoost 21.23.29 — Campaign asset loading polish",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
