@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.13",
-  "description": "ClipBoost 21.23.13 — Canto blocked-viewer recovery",
+  "version": "21.23.14",
+  "description": "ClipBoost 21.23.14 — Canto network media capture",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
