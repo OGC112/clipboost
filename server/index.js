@@ -1795,8 +1795,12 @@ app.post('/api/videos/campaign-stream', async (req,res,next)=>{
     });
     const stat=await fs.stat(outPath);
     if(stat.size<1024)throw new Error('Canto returned an empty media file.');
+    existingProject.status='preparing';
+    existingProject.updatedAt=new Date().toISOString();
+    existingProject.ingestion={...(existingProject.ingestion||{}),stage:'probing',progress:92,bytes:stat.size,error:null};
+    await writeMeta(existingProject);
     const details=await probe(outPath);
-    const meta={...existingProject,id:existingProject.id,originalName:existingProject.originalName||originalName,filename,sourcePath:outPath,sourceUrl:`/media/uploads/${filename}`,updatedAt:new Date().toISOString(),status:'uploaded',details,candidates:[]};
+    const meta={...existingProject,id:existingProject.id,originalName:existingProject.originalName||originalName,filename,sourcePath:outPath,sourceUrl:`/media/uploads/${filename}`,updatedAt:new Date().toISOString(),status:'uploaded',details,candidates:[],ingestion:{...(existingProject.ingestion||{}),stage:'ready',progress:100,bytes:stat.size,error:null}};
     await writeMeta(meta);res.json(meta);
   }catch(e){if(outPath)await fs.rm(outPath,{force:true}).catch(()=>{});next(e)}
 });
@@ -3712,7 +3716,7 @@ async function analyzeProject(projectId, options = {}) {
     }
     meta.status = 'analyzing';
     delete meta.processingInterruptedAt;
-    meta.analysis = { ...(meta.analysis || {}), stage: 'signals', progress: 12, interrupted:false, error:null };
+    meta.analysis = { ...(meta.analysis || {}), stage: 'Detecting scenes and audio', progress: 12, interrupted:false, error:null };
     await writeMeta(meta);
     const input = meta.sourcePath;
     const duration = meta.details.duration || 0;
@@ -3738,7 +3742,7 @@ async function analyzeProject(projectId, options = {}) {
           scenesDetected: scenes.length,
           silencesDetected: silences.length,
           engine: 'FFmpeg + local Context Engine v3',
-          stage: 'transcription',
+          stage: 'Transcribing speech',
           progress: 42,
           timeline: {
             scenes: scenes.slice(0, 1000),
@@ -3748,7 +3752,7 @@ async function analyzeProject(projectId, options = {}) {
         await writeMeta(meta);
         transcript = await transcribeLocally(meta);
         meta.transcript = transcript;
-        meta.analysis = { ...meta.analysis, stage: 'semantic-clips', progress: 72, transcription: transcript.model, wordCount: transcript.words.length };
+        meta.analysis = { ...meta.analysis, stage: 'Selecting semantic clips', progress: 72, transcription: transcript.model, wordCount: transcript.words.length };
         await writeMeta(meta);
         candidates = await semanticClipCandidatesLocal(meta, transcript, signalCandidates, clipCountPreference);
       } catch (err) {
@@ -3790,6 +3794,15 @@ async function analyzeProject(projectId, options = {}) {
       else if(Number(diag.successes||0)>0) aiError=null;
       else aiError='Ollama semantic selection did not run. Deterministic quality selection was used.';
     }
+    const ollamaDiagnostics=meta.__ollamaDiagnostics?{
+      successes:Number(meta.__ollamaDiagnostics.successes||0),
+      emptyResponses:Number(meta.__ollamaDiagnostics.emptyResponses||0),
+      semanticGenerated:Number(meta.__ollamaDiagnostics.semanticGenerated||0),
+      semanticAfterReview:Number(meta.__ollamaDiagnostics.semanticAfterReview||0),
+      semanticSelected:Number(meta.__ollamaDiagnostics.semanticSelected||0),
+      reviewRemovedSemantic:Number(meta.__ollamaDiagnostics.reviewRemovedSemantic||0),
+      errors:Array.isArray(meta.__ollamaDiagnostics.errors)?meta.__ollamaDiagnostics.errors.slice(0,5):[]
+    }:null;
     delete meta.__ollamaDiagnostics;
     meta.status = aiError ? 'degraded' : 'ready';
     meta.updatedAt = new Date().toISOString();
@@ -3810,8 +3823,9 @@ async function analyzeProject(projectId, options = {}) {
         fillers: transcript.cleanup.fillers || 0
       } : null,
       qualityEngine: transcript ? 'v3-context' : null,
-      stage: 'done',
+      stage: 'Ready',
       progress: 100,
+      ollamaDiagnostics,
       aiConfigured: true,
       aiError,
       whisperStatus: transcript?.words?.length ? 'ok' : 'failed',
