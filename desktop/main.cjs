@@ -675,9 +675,8 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
   const uploaded=await fetch(endpoint,{method:'POST',headers:{'Content-Type':type.startsWith('video/')?type:'video/mp4','X-ClipBoost-Project-Id':id,'X-ClipBoost-File-Name':encodeURIComponent(fileName)},body:response.body,duplex:'half'});
   const body=await uploaded.json().catch(()=>({}));
   if(!uploaded.ok)throw new Error(body?.error||`Could not stream Canto media (HTTP ${uploaded.status}).`);
-  const analyze=await fetch(backendRuntimeUrl(`/api/videos/${encodeURIComponent(id)}/analyze`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
-  const analyzed=await analyze.json().catch(()=>({}));
-  if(!analyze.ok)throw new Error(analyzed?.error||`Could not start campaign analysis (HTTP ${analyze.status}).`);
+  // Analysis is started by the renderer after this transfer succeeds. Keeping a
+  // single owner for the hand-off prevents duplicate starts and conflicting UI state.
   return {ok:true,project:body,mediaUrl:target};
 }
 
