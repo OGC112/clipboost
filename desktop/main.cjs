@@ -597,9 +597,27 @@ async function discoverCampaignAssetPack(rawUrl) {
 }
 
 async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label='Campaign asset') {
-  const id=String(projectId||'').trim(), target=safeHttpUrl(mediaUrl), referer=safeHttpUrl(pageUrl);
+  const id=String(projectId||'').trim(), referer=safeHttpUrl(pageUrl);
+  let target=safeHttpUrl(mediaUrl);
   if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error('Invalid campaign project.');
-  if(!target)throw new Error('Invalid campaign media URL.');
+  if(!target&&referer){
+    const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
+    configureCampaignBrowser(worker);
+    try{
+      try{await worker.loadURL(referer)}catch(err){if(Number(err?.errno)!==-3&&Number(err?.code)!==-3&&!/ERR_ABORTED|\(-3\)/i.test(String(err?.message||'')))throw err}
+      await sleep(1800);
+      for(let attempt=0;attempt<3&&!target;attempt++){
+        try{await worker.webContents.executeJavaScript(`(() => { const v=document.querySelector('video'); if(v){try{v.play()}catch{};return true} const b=[...document.querySelectorAll('button,[role="button"]')].find(el=>/play|preview|watch/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||''))); if(b){b.click();return true} return false })()`)}catch{}
+        await sleep(700);
+        let snap=null;try{snap=await campaignBrowserSnapshot(worker)}catch{}
+        const candidates=[];
+        for(const v of (Array.isArray(snap?.videos)?snap.videos:[]))for(const u of [v?.src,...(v?.sources||[])])if(/^https?:/i.test(String(u||'')))candidates.push(String(u));
+        if(!candidates.length){const info=resourceSnapshotKind(snap||{});for(const u of info.mediaUrls||[])if(/^https?:/i.test(String(u||'')))candidates.push(String(u))}
+        target=candidates[0]||'';
+      }
+    }finally{if(!worker.isDestroyed())worker.destroy()}
+  }
+  if(!target)throw new Error('Canto did not expose a downloadable video for this asset. Open the media in Canto once, then retry.');
   const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
   const headers={Accept:'video/*,*/*;q=0.8'};
   if(referer)headers.Referer=referer;
@@ -624,7 +642,7 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
   const analyze=await fetch(backendRuntimeUrl(`/api/videos/${encodeURIComponent(id)}/analyze`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
   const analyzed=await analyze.json().catch(()=>({}));
   if(!analyze.ok)throw new Error(analyzed?.error||`Could not start campaign analysis (HTTP ${analyze.status}).`);
-  return {ok:true,project:body};
+  return {ok:true,project:body,mediaUrl:target};
 }
 
 async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot=null, termsSnapshot=null, resourceInspections=[]) {
