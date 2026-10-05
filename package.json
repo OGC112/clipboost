@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.14",
-  "description": "ClipBoost 21.23.14 — Canto network media capture",
+  "version": "21.23.15",
+  "description": "ClipBoost 21.23.15 — Visible Canto campaign asset ingestion",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
