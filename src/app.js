@@ -1238,7 +1238,7 @@
     const modalBackdrop=document.getElementById('cbModalBackdrop');if(modalBackdrop)modalBackdrop.onclick=e=>{if(e.target===modalBackdrop&&state.uiModal?.mode==='confirm')finishModal(false)};
     const closeCampaignAssetBrowserNow=()=>{if(!state.campaignAssetBrowser)return;state.campaignAssetBrowser=null;state.campaignAssetBusy=false;render()};
     const assetClose=document.getElementById('closeCampaignAssetBrowser');if(assetClose)assetClose.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeCampaignAssetBrowserNow()});
-    const assetOverlay=document.getElementById('campaignAssetBrowserBackdrop');if(assetOverlay)assetOverlay.addEventListener('click',e=>{if(e.target===assetOverlay)closeCampaignAssetBrowserNow()});
+    const assetOverlay=document.getElementById('campaignAssetBrowserBackdrop');if(assetOverlay)assetOverlay.addEventListener('click',e=>{if(e.target===assetOverlay){e.preventDefault();e.stopPropagation()}});
 
     document.querySelectorAll('[data-shorts-count]').forEach(el=>el.onclick=()=>{state.shortsCount=[5,10,20].includes(Number(el.dataset.shortsCount))?Number(el.dataset.shortsCount):10;persistEditorPrefs();render()});
     document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{state.studioMode=el.dataset.studioMode==='long'?'long':'shorts';persistEditorPrefs();render()});
