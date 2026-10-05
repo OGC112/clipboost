@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.11",
-  "description": "ClipBoost 21.23.11 — Ollama semantic diagnostics",
+  "version": "21.23.12",
+  "description": "ClipBoost 21.23.12 — On-demand Canto asset resolution",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
