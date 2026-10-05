@@ -1785,7 +1785,7 @@ app.post('/api/videos/campaign-stream', async (req,res,next)=>{
     if(!existingProject)return res.status(404).json({error:'Campaign project not found.'});
     const contentType=String(req.headers['content-type']||'video/mp4').toLowerCase();
     const ext=contentType.includes('quicktime')?'.mov':contentType.includes('webm')?'.webm':path.extname(originalName)||'.mp4';
-    const filename=`${crypto.randomUUID()}${ext}`;
+    let filename=`${crypto.randomUUID()}${ext}`;
     outPath=path.join(uploadsDir,filename);
     await new Promise((resolve,reject)=>{
       const output=fsSync.createWriteStream(outPath);
