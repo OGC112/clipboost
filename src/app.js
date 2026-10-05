@@ -560,23 +560,35 @@
   function creatorAvatarMarkup(c,size='normal'){const name=(c&&c.name)||'Creator';const initial=escapeHtml(String(name).trim().charAt(0).toUpperCase()||'?');const src=escapeHtml((c&&c.avatar)||'');const img=src?'<img src="'+src+'" alt="'+escapeHtml(name)+'" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'">':'';return '<div class="creator-avatar-fallback '+escapeHtml(size)+'"><span>'+initial+'</span>'+img+'</div>';}
   async function pollProjectUntilSettled(id){
     clearTimeout(window.__clipboostProjectPoll);
+    const pollKey=String(id||'');
+    window.__clipboostActiveProjectPoll=pollKey;
     try{
       const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
       const data=await readJsonResponse(r,'Could not refresh project');
-      state.video=data;render();
+      if(window.__clipboostActiveProjectPoll!==pollKey)return;
+      const previousStatus=state.video?.id===data.id?state.video?.status:null;
+      state.video=data;
       if(['ingesting','analyzing'].includes(data.status)){
-        window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);
-      }else{
-        if(['ready','degraded'].includes(data.status))state.selectedCandidate=0;
-        state.projects=null;
         render();
-        if(data.status==='degraded')showNotice({kind:'warning',eyebrow:data.campaign?.id?'Campaign Studio':'AI Studio',title:'Analysis completed with fallback',message:data.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
-        if(data.status==='failed')showNotice({kind:'danger',eyebrow:'AI Studio',title:'Analysis failed',message:data.analysis?.error||'The project could not be analyzed.'});
-        if(data.processingInterrupted){
-          showNotice({kind:'warning',eyebrow:'AI Studio',title:'Processing was interrupted',message:'ClipBoost recovered this project. You can retry the analysis or delete the project safely.'});
-        }
+        window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);
+        return;
       }
-    }catch(e){console.warn(e);window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),2500)}
+      window.__clipboostActiveProjectPoll='';
+      window.__clipboostProjectPoll=null;
+      if(['ready','degraded'].includes(data.status))state.selectedCandidate=0;
+      state.projects=null;
+      render();
+      const noticeKey=`${data.id}:${data.status}:${data.updatedAt||''}`;
+      if(window.__clipboostLastSettledNotice!==noticeKey){
+        window.__clipboostLastSettledNotice=noticeKey;
+        if(data.status==='degraded')showNotice({kind:'warning',eyebrow:data.campaign?.id?'Campaign Studio':'AI Studio',title:'Analysis completed with fallback',message:data.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
+        if(data.status==='failed')showNotice({kind:'danger',eyebrow:data.campaign?.id?'Campaign Studio':'AI Studio',title:'Analysis failed',message:data.analysis?.error||'The project could not be analyzed.'});
+        if(data.processingInterrupted)showNotice({kind:'warning',eyebrow:data.campaign?.id?'Campaign Studio':'AI Studio',title:'Processing was interrupted',message:'ClipBoost recovered this project. You can retry the analysis or delete the project safely.'});
+      }
+    }catch(e){
+      console.warn(e);
+      if(window.__clipboostActiveProjectPoll===pollKey)window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),2500);
+    }
   }
   async function startProjectIngestion(id){
     try{
