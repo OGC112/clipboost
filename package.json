@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.12",
-  "description": "ClipBoost 21.23.12 — On-demand Canto asset resolution",
+  "version": "21.23.13",
+  "description": "ClipBoost 21.23.13 — Canto blocked-viewer recovery",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
