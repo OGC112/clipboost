@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.16",
-  "description": "ClipBoost 21.23.16 — Campaign asset load-to-results workflow",
+  "version": "21.23.17",
+  "description": "ClipBoost 21.23.17 — Fix Canto request interception",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
