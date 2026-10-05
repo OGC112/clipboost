@@ -366,13 +366,6 @@
         </main>
 
         <aside class="mint-studio-side-v142">
-          <section class="card short-panel mint-preview-card-v142">
-            <div class="section-head"><div><div class="eyebrow">${longVideo?'FINAL PREVIEW':`FINAL PREVIEW · ${candidates.length?selected+1:0}/${candidates.length}`}</div><h3>${longVideo?'Final highlight':'Final preview'}</h3></div><span>•••</span></div>
-            <div class="phone tall">${realPhone}</div>
-            <div class="clip-range"><label>Start <input id="clipStart" type="number" step="0.1" value="${Number(c.start||0).toFixed(1)}"></label><label>End <input id="clipEnd" type="number" step="0.1" value="${Number(c.end||30).toFixed(1)}"></label></div>
-            <div class="preview-note">Preview uses the same renderer as final export.</div>
-          </section>
-
           <section class="card controls mint-ai-tools-v142">
             <div class="section-head"><div><div class="eyebrow">AI TOOLS</div><h3>Automatic editing</h3></div><span>✦</span></div>
             <div class="auto-director-card">
@@ -1271,6 +1264,10 @@
       sourceVideo.addEventListener('loadedmetadata',applySeek,{once:true});
       if(sourceVideo.readyState>=1)applySeek();
       sourceVideo.addEventListener('timeupdate',()=>updateTimelinePlayhead(sourceVideo.currentTime));
+      sourceVideo.addEventListener('error',()=>{const err=sourceVideo.error;showNotice({kind:'danger',eyebrow:'Downloaded media',title:'Video playback failed',message:err?.message||`Electron could not decode this media (code ${err?.code||'unknown'}).`})});
+      // Native controls should own playback. Explicitly retry from the current
+      // position on a trusted click if Chromium loaded metadata but did not start.
+      sourceVideo.addEventListener('click',e=>{if(e.target!==sourceVideo||!sourceVideo.paused)return;sourceVideo.play().catch(err=>showNotice({kind:'danger',eyebrow:'Downloaded media',title:'Could not start playback',message:err?.message||'The video could not be played.'}))});
     }
     if(smartTimeline){smartTimeline.onclick=e=>{if(e.target.closest('[data-candidate]'))return;const rect=smartTimeline.getBoundingClientRect();if(!rect.width)return;const ratio=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));const t=ratio*Number(smartTimeline.dataset.duration||0);state.timelineSeek=t;updateTimelinePlayhead(t);if(sourceVideo){sourceVideo.currentTime=t;sourceVideo.play().catch(()=>{})}}}
 
@@ -1300,17 +1297,6 @@
       const cand=state.video.candidates[idx];
       if(cand&&!cand.previewUrl&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false}),0);
     }
-    const clipStartInput=document.getElementById('clipStart'),clipEndInput=document.getElementById('clipEnd');
-    const updateClipBounds=()=>{
-      const idx=state.selectedCandidate||0,cand=state.video?.candidates?.[idx];if(!cand)return;
-      const maxDuration=Math.max(.5,Number(state.video?.details?.duration||Infinity));
-      let start=Math.max(0,Number(clipStartInput?.value||cand.start||0));
-      let end=Math.min(maxDuration,Number(clipEndInput?.value||cand.end||start+30));
-      if(!Number.isFinite(end)||end<=start+.25)end=Math.min(maxDuration,start+.25);
-      cand.start=start;cand.end=end;cand.duration=Math.max(.25,end-start);cand.previewUrl=null;state.timelineSeek=start;state.candidatePreviewError='';render();
-    };
-    if(clipStartInput)clipStartInput.onchange=updateClipBounds;
-    if(clipEndInput)clipEndInput.onchange=updateClipBounds;
     const ex=document.getElementById('exportBtn');if(ex)ex.onclick=exportCurrent;const exAll=document.getElementById('exportAllBtn');if(exAll)exAll.onclick=exportAll;
     const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;persistEditorPrefs();invalidateRenderedPreviews();render();};document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';persistEditorPrefs();invalidateRenderedPreviews();render()});
     const generateVariationsBtn=document.getElementById('generateVariationsBtn');if(generateVariationsBtn)generateVariationsBtn.onclick=async()=>{
