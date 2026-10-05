@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.18",
-  "description": "ClipBoost 21.23.18 — Stable campaign analysis progress",
+  "version": "21.23.19",
+  "description": "ClipBoost 21.23.19 — Correct Ollama semantic fallback classification",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
