@@ -2859,6 +2859,7 @@ async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates 
 
   const sectionCount = duration > 20*60 ? Math.min(7, Math.max(2, Math.ceil(target/4))) : 1;
   const clips=[];
+  const ollamaDiagnostics={attempts:0,successes:0,emptyResponses:0,errors:[]};
   for(let section=0; section<sectionCount; section++){
     const sectionStart=(duration*section)/sectionCount;
     const sectionEnd=(duration*(section+1))/sectionCount;
@@ -2889,8 +2890,12 @@ Current section: ${sectionStart.toFixed(1)}-${sectionEnd.toFixed(1)} seconds.
 Cleaned transcript:
 ${inputText}`;
     try{
+      ollamaDiagnostics.attempts++;
       const parsed=await ollamaGenerateJson(prompt);
-      for(const c of (parsed.clips||[])){
+      ollamaDiagnostics.successes++;
+      const parsedClips=Array.isArray(parsed?.clips)?parsed.clips:[];
+      if(!parsedClips.length)ollamaDiagnostics.emptyResponses++;
+      for(const c of parsedClips){
         const momentStart=Math.max(sectionStart,Math.min(sectionEnd,Number(c.momentStart??c.start??sectionStart)));
         const momentEnd=Math.max(momentStart+.5,Math.min(duration,sectionEnd+4,Number(c.momentEnd??c.end??momentStart+6)));
         const start=Math.max(sectionStart,Math.min(momentStart,Number(c.start??momentStart)));
@@ -2898,9 +2903,12 @@ ${inputText}`;
         clips.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), momentStart, momentEnd, start, end, score:clampScore(c.score,70), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by ClipBoost Context Engine v3'), signals:{semantic:true,local:true,quality:true,boundaryAware:true,contextAware:true,section:section+1} }));
       }
     }catch(err){
+      const message=String(err?.message||err||'Unknown Ollama error');
+      ollamaDiagnostics.errors.push(message);
       // A failed model section should not discard deterministic Quality Engine candidates.
     }
   }
+  meta.__ollamaDiagnostics=ollamaDiagnostics;
   const fallback=fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c));
   const heuristic=heuristicTranscriptCandidates(meta,transcript,[...clips,...fallback],preference);
   const preReview=selectDiverseCandidates([...clips,...heuristic,...fallback],Math.max(10,target*2),duration,'review');
@@ -3728,7 +3736,20 @@ async function analyzeProject(projectId, options = {}) {
     }
     const semanticUsed=Boolean(candidates.some(x=>x?.signals?.semantic));
     const contextReviewed=Boolean(candidates.some(x=>x?.signals?.contextReviewed));
-    if(!aiError && transcript?.words?.length && !semanticUsed) aiError='Ollama semantic selection was unavailable or returned no usable clips. Deterministic quality selection was used.';
+    if(!aiError && transcript?.words?.length && !semanticUsed){
+      const diag=meta.__ollamaDiagnostics||{};
+      const errors=Array.isArray(diag.errors)?diag.errors.filter(Boolean):[];
+      const first=String(errors[0]||'');
+      if(errors.length){
+        if(/ECONNREFUSED|fetch failed|connect|socket/i.test(first)) aiError='Ollama is not reachable at the configured URL. Start Ollama or verify Settings > Local AI. Deterministic quality selection was used.';
+        else if(/timeout|timed out|AbortError/i.test(first)) aiError='Ollama timed out while selecting clips. The local model may be overloaded or too slow. Deterministic quality selection was used.';
+        else if(/model.*not found|pull model|not found.*model/i.test(first)) aiError=`Ollama model "${localAiConfig().ollamaModel}" is not installed. Pull the configured model or change it in Settings. Deterministic quality selection was used.`;
+        else if(/invalid JSON/i.test(first)) aiError='Ollama responded, but its clip-selection response was invalid JSON. Try another local model. Deterministic quality selection was used.';
+        else aiError=`Ollama clip selection failed: ${first.slice(0,280)}. Deterministic quality selection was used.`;
+      }else if(Number(diag.successes||0)>0) aiError='Ollama responded successfully but returned no usable semantic clips for this source. Deterministic quality selection was used.';
+      else aiError='Ollama semantic selection did not run. Deterministic quality selection was used.';
+    }
+    delete meta.__ollamaDiagnostics;
     meta.status = aiError ? 'degraded' : 'ready';
     meta.updatedAt = new Date().toISOString();
     meta.analysis = {
