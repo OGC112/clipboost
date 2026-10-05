@@ -362,6 +362,16 @@
             <div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>
             </div>
           </section>
+          ${candidates.length?`<section class="card mint-selected-preview-v128">
+            <div class="section-head"><div><div class="eyebrow">SELECTED CLIP</div><h3>${escapeHtml(c.title||c.reason||`Clip #${selected+1}`)}</h3></div><span class="muted">Clip ${selected+1} / ${candidates.length}</span></div>
+            <div class="mint-selected-preview-stage-v128">${realPhone}</div>
+            <div class="mint-selected-preview-actions-v128">
+              <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
+              <span>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</span>
+              <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
+              <button class="btn primary" type="button" id="previewExportBtn">Export clip</button>
+            </div>
+          </section>`:''}
         </main>
 
         <aside class="mint-studio-side-v142">
@@ -1292,6 +1302,9 @@
       syncCaption();
     }
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
+    const previousCandidateBtn=document.getElementById('previousCandidateBtn');if(previousCandidateBtn)previousCandidateBtn.onclick=()=>selectCandidatePreview(Math.max(0,(state.selectedCandidate||0)-1),{autoplay:true});
+    const nextCandidateBtn=document.getElementById('nextCandidateBtn');if(nextCandidateBtn)nextCandidateBtn.onclick=()=>selectCandidatePreview(Math.min((state.video?.candidates?.length||1)-1,(state.selectedCandidate||0)+1),{autoplay:true});
+    const previewExportBtn=document.getElementById('previewExportBtn');if(previewExportBtn)previewExportBtn.onclick=exportCurrent;
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];

@@ -1806,9 +1806,20 @@ app.post('/api/videos/campaign-stream', async (req,res,next)=>{
     // all work from the same browser-safe source.
     const browserSafeVideo=['h264','vp8','vp9','av1'].includes(String(details.videoCodec||'').toLowerCase());
     const browserSafeAudio=!details.audioCodec||['aac','mp3','opus','vorbis'].includes(String(details.audioCodec||'').toLowerCase());
-    if(!browserSafeVideo||!browserSafeAudio){
+    {
+      // Always rewrite Canto media into a Chromium-friendly MP4 container. Even
+      // H.264/AAC assets can arrive with a non-streamable atom layout that shows
+      // frame 0 and duration but refuses to start in Electron.
       const normalizedName=`${crypto.randomUUID()}.mp4`,normalizedPath=path.join(uploadsDir,normalizedName);
-      await run('ffmpeg',['-y','-i',outPath,'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-movflags','+faststart',normalizedPath],{timeout:60*60*1000});
+      if(browserSafeVideo&&browserSafeAudio){
+        try{
+          await run('ffmpeg',['-y','-i',outPath,'-map','0:v:0','-map','0:a:0?','-c','copy','-movflags','+faststart',normalizedPath],{timeout:60*60*1000});
+        }catch{
+          await run('ffmpeg',['-y','-i',outPath,'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-movflags','+faststart',normalizedPath],{timeout:60*60*1000});
+        }
+      }else{
+        await run('ffmpeg',['-y','-i',outPath,'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-movflags','+faststart',normalizedPath],{timeout:60*60*1000});
+      }
       await fs.rm(outPath,{force:true}).catch(()=>{});
       outPath=normalizedPath;filename=normalizedName;details=await probe(outPath);
     }
