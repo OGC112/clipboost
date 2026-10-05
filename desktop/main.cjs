@@ -587,6 +587,37 @@ async function discoverCampaignAssetPack(rawUrl) {
   } finally {if(!worker.isDestroyed())worker.destroy()}
 }
 
+async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label='Campaign asset') {
+  const id=String(projectId||'').trim(), target=safeHttpUrl(mediaUrl), referer=safeHttpUrl(pageUrl);
+  if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error('Invalid campaign project.');
+  if(!target)throw new Error('Invalid campaign media URL.');
+  const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
+  const headers={Accept:'video/*,*/*;q=0.8'};
+  if(referer)headers.Referer=referer;
+  let response=await ses.fetch(target,{method:'GET',headers,redirect:'follow'});
+  if(!response.ok&&referer){
+    const page=await ses.fetch(referer,{method:'GET',headers:{Accept:'text/html,*/*;q=0.8'},redirect:'follow'}).catch(()=>null);
+    if(page?.ok)response=await ses.fetch(target,{method:'GET',headers,redirect:'follow'});
+  }
+  if(!response.ok)throw new Error(`Canto media download failed (HTTP ${response.status}). Open the original pack once, then retry.`);
+  const type=String(response.headers.get('content-type')||'').toLowerCase();
+  if(type&&!type.startsWith('video/')&&!/octet-stream/.test(type))throw new Error(`Canto returned ${type} instead of a video file.`);
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.length<1024)throw new Error('Canto returned an empty media file.');
+  const ext=type.includes('quicktime')?'.mov':type.includes('webm')?'.webm':'.mp4';
+  const form=new FormData();
+  form.append('projectId',id);
+  form.append('video',new Blob([bytes],{type:type.startsWith('video/')?type:'video/mp4'}),`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`);
+  const endpoint=backendRuntimeUrl('/api/videos');if(!endpoint)throw new Error('ClipBoost backend is not available.');
+  const uploaded=await fetch(endpoint,{method:'POST',body:form});
+  const body=await uploaded.json().catch(()=>({}));
+  if(!uploaded.ok)throw new Error(body?.error||`Could not attach Canto media (HTTP ${uploaded.status}).`);
+  const analyze=await fetch(backendRuntimeUrl(`/api/videos/${encodeURIComponent(id)}/analyze`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
+  const analyzed=await analyze.json().catch(()=>({}));
+  if(!analyze.ok)throw new Error(analyzed?.error||`Could not start campaign analysis (HTTP ${analyze.status}).`);
+  return {ok:true,project:body};
+}
+
 async function parseCampaignBrowserSnapshots(targetUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot=null, termsSnapshot=null, resourceInspections=[]) {
   const endpoint = backendRuntimeUrl('/api/campaigns/import-snapshot');
   if (!endpoint) throw new Error('ClipBoost backend is not available.');
@@ -819,6 +850,7 @@ ipcMain.handle('desktop:window-state', () => ({ok:true,maximized:Boolean(mainWin
 ipcMain.on('desktop:activity', () => markRendererActivity());
 ipcMain.handle('desktop:import-campaign-authenticated', async (_event, url) => runAuthenticatedCampaignImport(url));
 ipcMain.handle('desktop:inspect-campaign-asset-pack', async (_event, url) => { try { return await discoverCampaignAssetPack(url); } catch (err) { return { ok:false, error:err?.message || 'Could not inspect this asset pack.' }; } });
+ipcMain.handle('desktop:import-campaign-asset', async (_event, payload={}) => { try { return await importCampaignAssetToProject(payload.projectId,payload.mediaUrl,payload.pageUrl,payload.label); } catch (err) { return {ok:false,error:err?.message||'Could not import campaign asset.'}; } });
 ipcMain.handle('desktop:clear-campaign-import-session', async () => { await session.fromPartition(CAMPAIGN_IMPORT_PARTITION).clearStorageData(); return { ok:true }; });
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
