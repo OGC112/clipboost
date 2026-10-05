@@ -576,7 +576,16 @@ async function discoverCampaignAssetPack(rawUrl) {
       const v=videos.find(v=>String(v?.src||'')===mediaUrl||(v?.sources||[]).includes(mediaUrl))||videos[0]||{};
       const pageUrl=safeHttpUrl(snap?.url)||clicked.href||target;const previewUrl=String(v?.poster||clicked.previewUrl||'');
       if(mediaUrl){seenMedia.add(mediaUrl);items.push({label:clicked.label||`Video ${i+1}`,kind:'video',mediaUrl,pageUrl,previewUrl,duration:Number(v?.duration||0)||0})}
-      else if(clicked.href||clicked.previewUrl){items.push({label:clicked.label||`Media ${i+1}`,kind:'media',mediaUrl:'',pageUrl:safeHttpUrl(clicked.href)||pageUrl,previewUrl:clicked.previewUrl||'',duration:0})}
+      else if(clicked.href||clicked.previewUrl){
+        const candidatePage=safeHttpUrl(clicked.href)||pageUrl;
+        let recovered='';
+        try{
+          const detail=await inspectCampaignResource({url:candidatePage,label:clicked.label||`Media ${i+1}`});
+          recovered=(detail.mediaUrls||[]).find(u=>/^https?:/i.test(String(u||''))&&!seenMedia.has(String(u)))||'';
+        }catch{}
+        if(recovered){seenMedia.add(recovered);items.push({label:clicked.label||`Video ${i+1}`,kind:'video',mediaUrl:recovered,pageUrl:candidatePage,previewUrl:clicked.previewUrl||'',duration:0})}
+        else items.push({label:clicked.label||`Media ${i+1}`,kind:'media',mediaUrl:'',pageUrl:candidatePage,previewUrl:clicked.previewUrl||'',duration:0});
+      }
     }
     if(!items.some(x=>x.mediaUrl)){
       const inspected=await inspectCampaignResource({url:target,label:'Campaign asset'});
