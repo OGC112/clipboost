@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.9",
-  "description": "ClipBoost 21.23.9 — Authenticated Canto campaign asset ingestion",
+  "version": "21.23.10",
+  "description": "ClipBoost 21.23.10 — Stable Campaign Studio polling and Canto asset recovery",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
