@@ -1058,7 +1058,7 @@
       const previous=Math.max(0,Number(state.uiModal?.progress||0));
       // Never fake large jumps and never let progress move backwards. Backend stages
       // are authoritative; a tiny time-based creep only reassures during long AI calls.
-      const creep=Math.min(status==='analyzing'?94:89,previous+(status==='analyzing'?.35:.2));
+      const creep=Math.min(status==='analyzing'?94:89,previous+(status==='analyzing' ? 0.35 : 0.2));
       const pct=Math.max(previous,reported,creep);
       const nextTitle=status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…';
       const nextLabel=stage||'Working';
