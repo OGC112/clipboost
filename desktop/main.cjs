@@ -597,13 +597,16 @@ async function discoverCampaignAssetPack(rawUrl) {
 }
 
 async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label='Campaign asset') {
-  const id=String(projectId||'').trim(), referer=safeHttpUrl(pageUrl);
+  const id=String(projectId||'').trim(),referer=safeHttpUrl(pageUrl);
   let target=safeHttpUrl(mediaUrl);
   if(!/^[0-9a-f-]{36}$/i.test(id))throw new Error('Invalid campaign project.');
-  if(!target&&referer){
-    // Generic Canto items (e.g. "Media 1") may point at a viewer route that Canto
-    // refuses as a top-level navigation. Resolve the real media from the parent pack
-    // first, using the already authenticated campaign session.
+  const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
+  const isBlocked=err=>/ERR_BLOCKED_BY_CLIENT|ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))||Number(err?.errno)===-3||Number(err?.code)===-3;
+  const candidates=[];
+  const addCandidate=u=>{const x=safeHttpUrl(u);if(x&&!candidates.includes(x))candidates.push(x)};
+  addCandidate(target);
+
+  if(referer){
     let cantoHost='';try{cantoHost=new URL(referer).hostname}catch{}
     if(/canto\.global$/i.test(cantoHost)){
       try{
@@ -614,69 +617,62 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
         const ordinal=ordinalMatch?Math.max(0,Number(ordinalMatch[1])-1):-1;
         const direct=(discovered?.items||[]).filter(x=>safeHttpUrl(x?.mediaUrl));
         const byLabel=direct.find(x=>String(x?.label||'').trim().toLowerCase()===wanted);
-        const byOrdinal=ordinal>=0?(discovered?.items||[])[ordinal]:null;
-        target=safeHttpUrl(byLabel?.mediaUrl)||safeHttpUrl(byOrdinal?.mediaUrl)||'';
+        if(byLabel)addCandidate(byLabel.mediaUrl);
+        if(ordinal>=0&&direct[ordinal])addCandidate(direct[ordinal].mediaUrl);
+        for(const item of direct)addCandidate(item.mediaUrl);
       }catch{}
     }
-    if(target){
-      // resolved from authenticated pack; skip the blocked viewer navigation
-    }else{
+  }
+
+  // Only use a hidden viewer as a last resort. A blocked Canto viewer navigation is
+  // expected and must never escape as the import error.
+  if(!candidates.length&&referer){
     const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
     configureCampaignBrowser(worker);
-    const observedMedia=[];
+    const observed=[];
     const observeRequest=(details,callback)=>{
-      const url=String(details?.url||'');
-      if(/^https?:/i.test(url)&&/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|\/video(?:[/?#]|$)|\/media(?:[/?#]|$)|stream|playback|rendition|download/i.test(url)) observedMedia.push(url);
+      const u=String(details?.url||'');
+      if(/^https?:/i.test(u)&&/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|stream|playback|rendition|download/i.test(u))observed.push(u);
       callback({cancel:false});
     };
-    const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
     ses.webRequest.onBeforeRequest(observeRequest);
     try{
-      try{await worker.loadURL(referer)}catch(err){
-        const blocked=/ERR_BLOCKED_BY_CLIENT|ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))||Number(err?.errno)===-3||Number(err?.code)===-3;
-        if(!blocked)throw err;
-        // Canto viewer links can be intentionally blocked as top-level navigations.
-        // Keep using the authenticated session and inspect whatever document remained loaded.
-      }
+      try{await worker.loadURL(referer)}catch(err){if(!isBlocked(err))throw err}
       await sleep(1800);
-      for(let attempt=0;attempt<3&&!target;attempt++){
-        try{await worker.webContents.executeJavaScript(`(() => { const v=document.querySelector('video'); if(v){try{v.play()}catch{};return true} const b=[...document.querySelectorAll('button,[role="button"]')].find(el=>/play|preview|watch/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||''))); if(b){b.click();return true} return false })()`)}catch{}
+      for(let attempt=0;attempt<3&&!candidates.length;attempt++){
+        try{await worker.webContents.executeJavaScript(`(() => {const v=document.querySelector('video');if(v){try{v.play()}catch{};return true}const b=[...document.querySelectorAll('button,[role="button"]')].find(el=>/play|preview|watch/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||'')));if(b){b.click();return true}return false})()`)}catch{}
         await sleep(700);
-        let snap=null;try{snap=await campaignBrowserSnapshot(worker)}catch{}
-        const candidates=[];
-        for(const v of (Array.isArray(snap?.videos)?snap.videos:[]))for(const u of [v?.src,...(v?.sources||[])])if(/^https?:/i.test(String(u||'')))candidates.push(String(u));
-        if(!candidates.length){const info=resourceSnapshotKind(snap||{});for(const u of info.mediaUrls||[])if(/^https?:/i.test(String(u||'')))candidates.push(String(u))}
-        target=candidates[0]||observedMedia.find(u=>/^https?:/i.test(u))||'';
+        try{
+          const snap=await campaignBrowserSnapshot(worker);
+          for(const v of (snap?.videos||[]))for(const u of [v?.src,...(v?.sources||[])])addCandidate(u);
+          const info=resourceSnapshotKind(snap||{});for(const u of info.mediaUrls||[])addCandidate(u);
+        }catch{}
+        for(const u of observed)addCandidate(u);
       }
-    }finally{
-      try{ses.webRequest.onBeforeRequest(null)}catch{}
-      if(!worker.isDestroyed())worker.destroy();
-    }
-    }
+    }finally{try{ses.webRequest.onBeforeRequest(null)}catch{}if(!worker.isDestroyed())worker.destroy()}
   }
-  if(!target)throw new Error('Canto did not expose a downloadable video for this asset. Open the media in Canto once, then retry.');
-  const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
-  const headers={Accept:'video/*,*/*;q=0.8'};
-  if(referer)headers.Referer=referer;
-  let response=await ses.fetch(target,{method:'GET',headers,redirect:'follow'});
-  if(!response.ok&&referer){
-    const page=await ses.fetch(referer,{method:'GET',headers:{Accept:'text/html,*/*;q=0.8'},redirect:'follow'}).catch(()=>null);
-    if(page?.ok)response=await ses.fetch(target,{method:'GET',headers,redirect:'follow'});
+
+  if(!candidates.length)throw new Error('Canto did not expose a downloadable video for this asset.');
+  const headers={Accept:'video/*,application/octet-stream;q=0.9,*/*;q=0.2'};if(referer)headers.Referer=referer;
+  let response=null,lastError=null;
+  for(const candidate of candidates){
+    try{
+      const probeResponse=await ses.fetch(candidate,{method:'GET',headers,redirect:'follow'});
+      if(!probeResponse.ok){lastError=new Error(`HTTP ${probeResponse.status}`);continue}
+      const contentType=String(probeResponse.headers.get('content-type')||'').toLowerCase();
+      if(contentType&&(contentType.includes('text/html')||contentType.includes('application/json')||contentType.startsWith('image/'))){lastError=new Error(`Canto candidate returned ${contentType}`);continue}
+      response=probeResponse;target=candidate;break;
+    }catch(err){lastError=err;if(!isBlocked(err))console.warn('[Campaign asset] Candidate failed:',err?.message||err)}
   }
-  if(!response.ok)throw new Error(`Canto media download failed (HTTP ${response.status}). Open the original pack once, then retry.`);
+  if(!response)throw new Error(`Canto did not expose a playable video stream.${lastError&&!isBlocked(lastError)?' '+String(lastError.message||lastError):''}`);
   const type=String(response.headers.get('content-type')||'').toLowerCase();
-  if(type&&!type.startsWith('video/')&&!/octet-stream/.test(type))throw new Error(`Canto returned ${type} instead of a video file.`);
   const ext=type.includes('quicktime')?'.mov':type.includes('webm')?'.webm':'.mp4';
   const fileName=`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`;
   const endpoint=backendRuntimeUrl('/api/videos/campaign-stream');if(!endpoint)throw new Error('ClipBoost backend is not available.');
   if(!response.body)throw new Error('Canto returned no media stream.');
-  // Pipe Canto directly into ClipBoost. Previously the whole video was buffered in
-  // Electron RAM and then uploaded a second time as multipart data.
   const uploaded=await fetch(endpoint,{method:'POST',headers:{'Content-Type':type.startsWith('video/')?type:'video/mp4','X-ClipBoost-Project-Id':id,'X-ClipBoost-File-Name':encodeURIComponent(fileName)},body:response.body,duplex:'half'});
   const body=await uploaded.json().catch(()=>({}));
   if(!uploaded.ok)throw new Error(body?.error||`Could not stream Canto media (HTTP ${uploaded.status}).`);
-  // Analysis is started by the renderer after this transfer succeeds. Keeping a
-  // single owner for the hand-off prevents duplicate starts and conflicting UI state.
   return {ok:true,project:body,mediaUrl:target};
 }
 
