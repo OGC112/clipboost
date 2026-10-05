@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.8",
-  "description": "ClipBoost 21.23.8 — Campaign route reliability",
+  "version": "21.23.9",
+  "description": "ClipBoost 21.23.9 — Authenticated Canto campaign asset ingestion",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
