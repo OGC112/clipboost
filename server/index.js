@@ -2103,6 +2103,17 @@ function formatCaptionGroup(group=[], nextWord=null, reason='length'){
   return stripCaptionPunctuation(group.map(w=>String(w.word||'')).join(' '));
 }
 
+function captionWordImportance(word='', index=0, group=[]) {
+  const raw=String(word||'').trim(), lex=wordLexeme(raw);
+  if(!lex)return 0;
+  let score=0;
+  if(/\d/.test(raw))score+=4;
+  if(raw.length>=7)score+=1;
+  if(/\b(secret|erreur|problème|vérité|jamais|toujours|résultat|argent|million|mille|pourcent|important|incroyable|impossible|meilleur|pire|secret|mistake|problem|truth|never|always|result|money|million|thousand|percent|important|crazy|impossible|best|worst)\b/i.test(lex))score+=4;
+  if(/[!?]/.test(raw))score+=1;
+  if(index===group.length-1&&group.length>1)score+=.5;
+  return score;
+}
 function wordsToCaptions(words = []) {
   const captions = [];
   let current = [];
@@ -2111,12 +2122,19 @@ function wordsToCaptions(words = []) {
     if (!current.length) return;
     const end = current[current.length - 1].end;
     const text = formatCaptionGroup(current,nextWord,reason);
-    if (text) captions.push({
-      id: crypto.randomUUID(),
-      start: Number(start.toFixed(3)),
-      end: Number(end.toFixed(3)),
-      text
-    });
+    if (text) {
+      const ranked=current.map((w,i)=>({i,score:captionWordImportance(w.word,i,current)})).sort((a,b)=>b.score-a.score);
+      const emphasize=new Set(ranked.filter(x=>x.score>=3).slice(0,2).map(x=>x.i));
+      captions.push({
+        id: crypto.randomUUID(),
+        start: Number(start.toFixed(3)),
+        end: Number(end.toFixed(3)),
+        text,
+        words: current.map((w,i)=>({word:String(w.word||''),start:Number(w.start||0),end:Number(w.end||w.start||0),emphasis:emphasize.has(i)})),
+        emphasis: [...emphasize].map(i=>String(current[i]?.word||'')).filter(Boolean),
+        beat: reason
+      });
+    }
     current = []; start = null;
   };
   const list=(words||[]).filter(w=>w?.word);
@@ -2173,7 +2191,7 @@ function upgradeTranscriptQuality(transcript=null) {
       ...(transcript.cleanup||{}),
       ...cleaned.stats,
       removedRanges: cleaned.removedRanges,
-      engine: 'ClipBoost Context Engine v3'
+      engine: 'ClipBoost Quality Engine v2'
     }
   };
 }
@@ -2723,8 +2741,17 @@ function finalizeCandidate(meta,transcript,candidate={}){
   const caps=clipCaptionsAbsolute(transcript,snapped.start,snapped.end);
   const actualOpening=caps.slice(0,2).map(x=>x.text).join(' ').trim();
   const hook=actualOpening||String(candidate.hook||'').trim();
+  const hookWindows=[];
+  for(let i=0;i<Math.min(4,caps.length);i++){
+    const text=caps.slice(i,Math.min(caps.length,i+2)).map(x=>x.text).join(' ').trim();
+    if(!text)continue;
+    const hs=scoreHookText(text);
+    if(hs>=55)hookWindows.push({start:Number(caps[i].start.toFixed(3)),text:text.slice(0,180),score:hs,type:/\?/.test(text)?'question':/\d/.test(text)?'number':/\b(mais|sauf|vérité|jamais|but|except|truth|never)\b/i.test(text)?'contrast':'statement'});
+  }
+  hookWindows.sort((a,b)=>b.score-a.score);
+  const hookOptions=hookWindows.filter((x,i,a)=>a.findIndex(y=>textSimilarity(y.text,x.text)>.82)===i).slice(0,3);
   const selectionText=clipTextAbsolute(transcript,snapped.start,snapped.end).slice(0,1800);
-  const draft={...candidate,start:snapped.start,end:snapped.end,duration:Number((snapped.end-snapped.start).toFixed(2)),selectionText,hook:hook.slice(0,180)};
+  const draft={...candidate,start:snapped.start,end:snapped.end,duration:Number((snapped.end-snapped.start).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
   const campaignFit=campaignFitForCandidate(meta,draft,quality);
   const viewPotential=clampScore(Math.round(quality.hook*.24+quality.retention*.26+quality.emotion*.10+quality.completeness*.20+quality.payoff*.12+quality.cleanSpeech*.08));
   const combinedScore=campaignFit?clampScore(Math.round(quality.overall*.72+campaignFit.score*.28)):quality.overall;
@@ -2736,7 +2763,7 @@ function finalizeCandidate(meta,transcript,candidate={}){
     campaignFit,
     quality,
     narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded)},
-    qualityEngine:campaignFit?'v3-context-campaign':'v3-context'
+    qualityEngine:campaignFit?'v4-quality-campaign':'v4-quality'
   };
 }
 
@@ -2950,7 +2977,7 @@ function qualityRerankCandidates(meta, transcript, candidates=[]) {
     const prior=Number(c.score||70);
     const quality=clamp(hook*.25+standalone*.20+payoff*.20+boundary*.20+speech*.15);
     const finalScore=clamp(prior*.32+quality*.68);
-    return {...c,score:finalScore,qualityScore:quality,qualityBreakdown:{hook:clamp(hook),standalone:clamp(standalone),payoff:clamp(payoff),boundary:clamp(boundary),speech:clamp(speech)},signals:{...(c.signals||{}),qualityEngineV1:true}};
+    return {...c,score:finalScore,qualityScore:quality,qualityBreakdown:{hook:clamp(hook),standalone:clamp(standalone),payoff:clamp(payoff),boundary:clamp(boundary),speech:clamp(speech)},signals:{...(c.signals||{}),qualityEngineV2:true}};
   }).sort((a,b)=>Number(b.score||0)-Number(a.score||0));
 }
 
@@ -2958,6 +2985,10 @@ async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates 
   const blocks = transcriptBlocks(transcript.words || []);
   const duration = Number(meta.details?.duration || 0);
   const target = resolveClipTarget(duration, preference);
+  if(duration>0&&duration<=30&&blocks.length){
+    const full=finalizeCandidate(meta,transcript,{id:crypto.randomUUID(),start:0,end:duration,score:82,title:'Full short asset',hook:String(blocks[0]?.text||'').slice(0,160),reason:'Short Asset Mode: preserve the complete creative and optimize hook, captions and edit.',signals:{local:true,shortAsset:true,qualityEngineV2:true}});
+    return qualityRerankCandidates(meta,transcript,[full]);
+  }
   if (!blocks.length) return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)), target, duration, preference);
 
   const sectionCount = duration > 20*60 ? Math.min(7, Math.max(2, Math.ceil(target/4))) : 1;
@@ -2972,7 +3003,7 @@ async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates 
     const inputText=timedText.length>38000?timedText.slice(0,38000):timedText;
     const ask=Math.min(7, Math.max(3, Math.ceil(target/sectionCount)+2));
     const campaignContext=meta?.campaign?.id?`\nCAMPAIGN MODE IS ACTIVE. Campaign: ${String(meta.campaign.name||'').slice(0,140)}. Brief: ${String(meta.campaign.brief||'').slice(0,3500)}. Required duration: ${Number(meta.campaign.minDuration||0)}-${Number(meta.campaign.maxDuration||60)} seconds. Favor moments directly relevant to this brief, but NEVER sacrifice context completeness or fabricate relevance. Avoid terms: ${(meta.campaign.forbiddenTerms||[]).join(', ')||'none'}. Previously used ranges in this project: ${(meta.campaign.usedMoments||[]).filter(m=>m.projectId===meta.id).map(m=>`${Number(m.start||0).toFixed(1)}-${Number(m.end||0).toFixed(1)}`).join(', ')||'none'}.\n`:'';
-    const prompt=`You are ClipBoost Context Engine v3, a short-form story editor. Analyze ONLY this timeline section. Your first job is to find genuinely interesting MOMENTS. Your second job is to identify enough setup before each moment and enough continuation after it so a new viewer understands the story and receives the payoff.${campaignContext}
+    const prompt=`You are ClipBoost Quality Engine v2, a short-form story editor. Analyze ONLY this timeline section. Your first job is to find genuinely interesting MOMENTS. Your second job is to identify enough setup before each moment and enough continuation after it so a new viewer understands the story and receives the payoff.${campaignContext}
 
 Rules, in priority order:
 1. FIND THE MOMENT: identify the exact statement, reveal, argument, joke, reaction, mistake, lesson or surprising action that makes the excerpt worth watching.
@@ -3003,7 +3034,7 @@ ${inputText}`;
         const momentEnd=Math.max(momentStart+.5,Math.min(duration,sectionEnd+4,Number(c.momentEnd??c.end??momentStart+6)));
         const start=Math.max(sectionStart,Math.min(momentStart,Number(c.start??momentStart)));
         const end=Math.max(momentEnd,Math.min(duration,sectionEnd+12,Number(c.end??momentEnd+8)));
-        clips.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), momentStart, momentEnd, start, end, score:clampScore(c.score,70), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by ClipBoost Context Engine v3'), signals:{semantic:true,local:true,quality:true,boundaryAware:true,contextAware:true,section:section+1} }));
+        clips.push(finalizeCandidate(meta,transcript,{ id:crypto.randomUUID(), momentStart, momentEnd, start, end, score:clampScore(c.score,70), title:String(c.title||`Local AI moment ${clips.length+1}`), hook:String(c.hook||''), reason:String(c.reason||'Selected by ClipBoost Quality Engine v2'), signals:{semantic:true,local:true,quality:true,boundaryAware:true,contextAware:true,section:section+1} }));
       }
     }catch(err){
       const message=String(err?.message||err||'Unknown Ollama error');
@@ -3145,6 +3176,18 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
       energy:Number(energy.toFixed(2))
     });
     lastEmphasis=cap.start;
+  }
+
+  // Protect the payoff: effects become quieter in the final seconds so the
+  // conclusion lands cleanly instead of being covered by a mechanical zoom.
+  const payoffZone=Math.max(0,clipDuration-3.2);
+  for(let i=events.length-1;i>=0;i--){
+    const e=events[i];
+    if((e.type==='dynamic-zoom'||e.type==='punch-in')&&Number(e.start||0)>=payoffZone)events.splice(i,1);
+  }
+  const candidateQualityData=candidate?.qualityBreakdown||candidate?.quality||{};
+  if(Number(candidateQualityData.hook||0)>=78&&clipDuration>5&&!events.some(e=>e.type==='punch-in')){
+    events.push({type:'punch-in',start:.16,end:.95,zoom:Number(Math.min(maxZoom,1.065).toFixed(3)),reason:'Quality Engine hook emphasis'});
   }
 
   return {
@@ -3918,7 +3961,7 @@ async function analyzeProject(projectId, options = {}) {
         repetitions: transcript.cleanup.repetitions || 0,
         fillers: transcript.cleanup.fillers || 0
       } : null,
-      qualityEngine: transcript ? 'v3-context' : null,
+      qualityEngine: transcript ? 'v4-quality' : null,
       stage: 'Ready',
       progress: 100,
       ollamaDiagnostics,
