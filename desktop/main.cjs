@@ -604,7 +604,12 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
     const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
     configureCampaignBrowser(worker);
     try{
-      try{await worker.loadURL(referer)}catch(err){if(Number(err?.errno)!==-3&&Number(err?.code)!==-3&&!/ERR_ABORTED|\(-3\)/i.test(String(err?.message||'')))throw err}
+      try{await worker.loadURL(referer)}catch(err){
+        const blocked=/ERR_BLOCKED_BY_CLIENT|ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))||Number(err?.errno)===-3||Number(err?.code)===-3;
+        if(!blocked)throw err;
+        // Canto viewer links can be intentionally blocked as top-level navigations.
+        // Keep using the authenticated session and inspect whatever document remained loaded.
+      }
       await sleep(1800);
       for(let attempt=0;attempt<3&&!target;attempt++){
         try{await worker.webContents.executeJavaScript(`(() => { const v=document.querySelector('video'); if(v){try{v.play()}catch{};return true} const b=[...document.querySelectorAll('button,[role="button"]')].find(el=>/play|preview|watch/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||''))); if(b){b.click();return true} return false })()`)}catch{}
