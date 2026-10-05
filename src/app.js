@@ -1011,11 +1011,14 @@
     const c=selectedCampaign(),b=state.campaignAssetBrowser;if(!c||!b||state.projectBusy)return;const item=(b.items||[])[Number(itemIndex)];if(!item||( !item.mediaUrl && !item.pageUrl))return;
     state.projectBusy=true;render();
     try{
-      const sourceUrl=item.mediaUrl||item.pageUrl||b.packUrl;
-      const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:sourceUrl,label:item.label||b.label||'Campaign asset'})});
+      const packUrl=b.packUrl||'',pageUrl=item.pageUrl||packUrl,label=item.label||b.label||'Campaign asset',mediaUrl=item.mediaUrl||'';
+      const sourceUrl=mediaUrl||pageUrl||packUrl;
+      const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:sourceUrl,label})});
       let data=await readJsonResponse(r,'Could not create campaign asset project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;state.campaignAssetBrowser=null;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}state.campaignEditorOpen=true;navigate('campaigns');
       if(window.clipboostDesktop?.importCampaignAsset){
-        const imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl:item.mediaUrl||'',pageUrl:item.pageUrl||b.packUrl,label:item.label||b.label||'Campaign asset'});
+        let imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl,pageUrl,label});
+        if(!imported?.ok&&!mediaUrl&&packUrl&&packUrl!==pageUrl&&/BLOCKED_BY_CLIENT|did not expose|navigation/i.test(String(imported?.error||''))) imported=await window.clipboostDesktop.importCampaignAsset({projectId:data.id,mediaUrl:'',pageUrl:packUrl,label});
+
         if(!imported?.ok)throw new Error(imported?.error||'Could not download the campaign asset from Canto.');
         if(imported.project)state.video=imported.project;render();pollProjectUntilSettled(data.id);
       }else if(item.mediaUrl)startProjectIngestion(data.id);
