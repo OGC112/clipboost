@@ -603,6 +603,14 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
   if(!target&&referer){
     const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
     configureCampaignBrowser(worker);
+    const observedMedia=[];
+    const observeRequest=(details)=>{
+      const url=String(details?.url||'');
+      if(!/^https?:/i.test(url))return;
+      if(/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|\/video(?:[/?#]|$)|\/media(?:[/?#]|$)|stream|playback|rendition|download/i.test(url)) observedMedia.push(url);
+    };
+    const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
+    ses.webRequest.onBeforeRequest(observeRequest);
     try{
       try{await worker.loadURL(referer)}catch(err){
         const blocked=/ERR_BLOCKED_BY_CLIENT|ERR_ABORTED|\(-3\)/i.test(String(err?.message||''))||Number(err?.errno)===-3||Number(err?.code)===-3;
@@ -618,9 +626,12 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
         const candidates=[];
         for(const v of (Array.isArray(snap?.videos)?snap.videos:[]))for(const u of [v?.src,...(v?.sources||[])])if(/^https?:/i.test(String(u||'')))candidates.push(String(u));
         if(!candidates.length){const info=resourceSnapshotKind(snap||{});for(const u of info.mediaUrls||[])if(/^https?:/i.test(String(u||'')))candidates.push(String(u))}
-        target=candidates[0]||'';
+        target=candidates[0]||observedMedia.find(u=>/^https?:/i.test(u))||'';
       }
-    }finally{if(!worker.isDestroyed())worker.destroy()}
+    }finally{
+      try{ses.webRequest.onBeforeRequest(null)}catch{}
+      if(!worker.isDestroyed())worker.destroy();
+    }
   }
   if(!target)throw new Error('Canto did not expose a downloadable video for this asset. Open the media in Canto once, then retry.');
   const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
