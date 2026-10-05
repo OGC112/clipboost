@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.26.0",
-  "description": "ClipBoost 21.26.0 — Campaign playback workspace",
+  "version": "21.26.1",
+  "description": "ClipBoost 21.26.1 — Reliable multi-asset Canto imports",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
