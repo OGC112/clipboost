@@ -666,16 +666,15 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
   if(!response.ok)throw new Error(`Canto media download failed (HTTP ${response.status}). Open the original pack once, then retry.`);
   const type=String(response.headers.get('content-type')||'').toLowerCase();
   if(type&&!type.startsWith('video/')&&!/octet-stream/.test(type))throw new Error(`Canto returned ${type} instead of a video file.`);
-  const bytes=Buffer.from(await response.arrayBuffer());
-  if(bytes.length<1024)throw new Error('Canto returned an empty media file.');
   const ext=type.includes('quicktime')?'.mov':type.includes('webm')?'.webm':'.mp4';
-  const form=new FormData();
-  form.append('projectId',id);
-  form.append('video',new Blob([bytes],{type:type.startsWith('video/')?type:'video/mp4'}),`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`);
-  const endpoint=backendRuntimeUrl('/api/videos');if(!endpoint)throw new Error('ClipBoost backend is not available.');
-  const uploaded=await fetch(endpoint,{method:'POST',body:form});
+  const fileName=`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`;
+  const endpoint=backendRuntimeUrl('/api/videos/campaign-stream');if(!endpoint)throw new Error('ClipBoost backend is not available.');
+  if(!response.body)throw new Error('Canto returned no media stream.');
+  // Pipe Canto directly into ClipBoost. Previously the whole video was buffered in
+  // Electron RAM and then uploaded a second time as multipart data.
+  const uploaded=await fetch(endpoint,{method:'POST',headers:{'Content-Type':type.startsWith('video/')?type:'video/mp4','X-ClipBoost-Project-Id':id,'X-ClipBoost-File-Name':encodeURIComponent(fileName)},body:response.body,duplex:'half'});
   const body=await uploaded.json().catch(()=>({}));
-  if(!uploaded.ok)throw new Error(body?.error||`Could not attach Canto media (HTTP ${uploaded.status}).`);
+  if(!uploaded.ok)throw new Error(body?.error||`Could not stream Canto media (HTTP ${uploaded.status}).`);
   const analyze=await fetch(backendRuntimeUrl(`/api/videos/${encodeURIComponent(id)}/analyze`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
   const analyzed=await analyze.json().catch(()=>({}));
   if(!analyze.ok)throw new Error(analyzed?.error||`Could not start campaign analysis (HTTP ${analyze.status}).`);
