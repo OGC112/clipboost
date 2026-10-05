@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.29.0",
-  "description": "ClipBoost 21.29.0 — Campaign-aware project library",
+  "version": "21.30.0",
+  "description": "ClipBoost 21.30.0 — Guaranteed selectable clip results",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

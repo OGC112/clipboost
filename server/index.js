@@ -2976,6 +2976,30 @@ ${inputText}`;
   ollamaDiagnostics.semanticAfterReview=semanticAfterReview;
   ollamaDiagnostics.semanticSelected=semanticSelected;
   ollamaDiagnostics.reviewRemovedSemantic=Math.max(0,semanticBeforeReview-semanticAfterReview);
+
+  // Never leave an analyzed source with no selectable result. For short assets
+  // the source itself is already the creative; for longer videos expose the
+  // best deterministic/semantic moments as fallback choices so the user, not
+  // the quality threshold, gets the final say.
+  if(!selected.length){
+    if(duration>0&&duration<=30){
+      const full=finalizeCandidate(meta,transcript,{
+        id:crypto.randomUUID(),start:0,end:duration,score:70,
+        title:'Full short asset',hook:String(blocks[0]?.text||'').slice(0,160),
+        reason:'Short Asset Mode: keep the complete source and optimize its edit.',
+        signals:{local:true,qualityFallback:true,shortAsset:true}
+      });
+      ollamaDiagnostics.fallbackSelected=1;
+      return [full];
+    }
+    const fallbackPool=[...clips,...heuristic,...fallback]
+      .filter(c=>Number(c?.end||0)>Number(c?.start||0))
+      .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+    const fallbackTarget=Math.min(3,Math.max(2,resolveClipTarget(duration,'3')));
+    const rescued=selectDiverseCandidates(fallbackPool,fallbackTarget,duration,'3').slice(0,3)
+      .map((c,i)=>finalizeCandidate(meta,transcript,{...c,title:c.title||`Best available clip ${i+1}`,reason:c.reason||'Best available moment after the strong-clip quality filter returned no results.',signals:{...(c.signals||{}),qualityFallback:true}}));
+    if(rescued.length){ollamaDiagnostics.fallbackSelected=rescued.length;return rescued}
+  }
   return selected;
 }
 
