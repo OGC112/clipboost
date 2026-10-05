@@ -604,10 +604,10 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
     const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
     configureCampaignBrowser(worker);
     const observedMedia=[];
-    const observeRequest=(details)=>{
+    const observeRequest=(details,callback)=>{
       const url=String(details?.url||'');
-      if(!/^https?:/i.test(url))return;
-      if(/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|\/video(?:[/?#]|$)|\/media(?:[/?#]|$)|stream|playback|rendition|download/i.test(url)) observedMedia.push(url);
+      if(/^https?:/i.test(url)&&/\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|\/video(?:[/?#]|$)|\/media(?:[/?#]|$)|stream|playback|rendition|download/i.test(url)) observedMedia.push(url);
+      callback({cancel:false});
     };
     const ses=session.fromPartition(CAMPAIGN_IMPORT_PARTITION);
     ses.webRequest.onBeforeRequest(observeRequest);
