@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.29",
-  "description": "ClipBoost 21.23.29 — Campaign asset loading polish",
+  "version": "21.23.30",
+  "description": "ClipBoost 21.23.30 — Reliable Canto analysis handoff",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
