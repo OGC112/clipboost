@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.35.0",
-  "description": "ClipBoost 21.35.0 — Publishing Center Redesign",
+  "version": "21.36.0",
+  "description": "ClipBoost 21.36.0 — Publish First Workflow",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

@@ -330,8 +330,7 @@
         </div>
         <div class="mint-studio-header-actions-v142">
           <span class="mint-editor-source-badge">${generalStudio?'AI Studio · General':'Campaign asset'}</span>
-          <button class="btn secondary mint-header-export-v131" id="exportAllBtn" ${hasLocal&&candidates.length&&!state.exportAllBusy?'':'disabled'}>${state.exportAllBusy?'Exporting all…':autoShorts?'Export strong clips':'Export all clips'}</button>
-          <button class="btn primary mint-header-export-v131" id="exportBtn" ${hasLocal&&!state.exportBusy?'':'disabled'}>${state.exportBusy?'Exporting…':'Export edited clip'}</button>
+          <button class="btn primary mint-header-export-v131" id="publishBtn" ${hasLocal&&!state.exportBusy?'':'disabled'}>${state.exportBusy?'Preparing…':'Publish clip'}</button>
         </div>
       </section>
 
@@ -368,7 +367,7 @@
               <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
               <span>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</span>
               <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
-              <button class="btn primary" type="button" id="previewExportBtn">Export clip</button>
+              <button class="btn primary" type="button" id="previewPublishBtn">Publish clip</button>
             </div>
           </section>`:''}
         </main>
@@ -448,8 +447,8 @@
     state.exportBusy=true;render();
     try{
       if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:'Review campaign requirements',message:'ClipBoost blocked this export because one or more campaign checks failed. Open the Campaign Mode card for details.'})}}
-      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export failed');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};if(window.clipboostDesktop?.openExportsFolder){await window.clipboostDesktop.openExportsFolder();showNotice({kind:'success',title:'Clip exported',message:`${data.filename||'Clip'} is ready in your Exports folder.`});}else{window.open(data.url,'_blank');}}
-    catch(e){showNotice({kind:'danger',title:'Export failed',message:e.message||'Export failed'})} finally {state.exportBusy=false;render()}
+      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};state.publishActivePlatform=state.publishActivePlatform||'tiktok';navigate('publish');}
+    catch(e){showNotice({kind:'danger',title:'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
@@ -472,7 +471,7 @@
       <header class="mint-pub-header-v135"><div><span class="eyebrow">DISTRIBUTION</span><h1>Publish</h1><p>One clip. Every channel. Customize the message for each audience.</p></div><div class="mint-pub-header-actions-v135"><button class="btn secondary" id="savePublishDraftsBtn">Save draft</button><button class="btn primary" id="publishSelectedBtn" ${clip&&selectedCount?'':'disabled'}>Publish to ${selectedCount||0} network${selectedCount===1?'':'s'}</button></div></header>
       <section class="mint-pub-source-v135">
         <div class="mint-pub-source-thumb-v135"><span>9:16</span><b>▶</b></div>
-        <div class="mint-pub-source-copy-v135"><span class="eyebrow">SELECTED CLIP</span><h3>${escapeHtml(clip?.title||clip?.filename||'No exported clip selected')}</h3><p>${clip?'Export ready · Customize the post before publishing.':'Export a selected clip from AI Studio to attach it here.'}</p></div>
+        <div class="mint-pub-source-copy-v135"><span class="eyebrow">SELECTED CLIP</span><h3>${escapeHtml(clip?.title||clip?.filename||'No clip selected')}</h3><p>${clip?'Clip ready · Customize the post before publishing.':'Choose a clip in AI Studio, then press Publish.'}</p></div>
         <button class="btn secondary" data-page="studio">${clip?'Change clip':'Open AI Studio'}</button>
       </section>
       <nav class="mint-pub-platforms-v135">${chips}</nav>
@@ -1338,13 +1337,13 @@
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
     const previousCandidateBtn=document.getElementById('previousCandidateBtn');if(previousCandidateBtn)previousCandidateBtn.onclick=()=>selectCandidatePreview(Math.max(0,(state.selectedCandidate||0)-1),{autoplay:true});
     const nextCandidateBtn=document.getElementById('nextCandidateBtn');if(nextCandidateBtn)nextCandidateBtn.onclick=()=>selectCandidatePreview(Math.min((state.video?.candidates?.length||1)-1,(state.selectedCandidate||0)+1),{autoplay:true});
-    const previewExportBtn=document.getElementById('previewExportBtn');if(previewExportBtn)previewExportBtn.onclick=exportCurrent;
+    const previewPublishBtn=document.getElementById('previewPublishBtn');if(previewPublishBtn)previewPublishBtn.onclick=exportCurrent;
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
       if(cand&&!cand.previewUrl&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false}),0);
     }
-    const ex=document.getElementById('exportBtn');if(ex)ex.onclick=exportCurrent;const exAll=document.getElementById('exportAllBtn');if(exAll)exAll.onclick=exportAll;
+    const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=exportCurrent;
     const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;persistEditorPrefs();invalidateRenderedPreviews();render();};document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';persistEditorPrefs();invalidateRenderedPreviews();render()});
     const liveCaptionChange=()=>{persistEditorPrefs();invalidateRenderedPreviews();render();const idx=Math.min(state.selectedCandidate||0,(state.video?.candidates?.length||1)-1);if(idx>=0&&state.video?.candidates?.[idx])setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:true}),0)};
     const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;liveCaptionChange()};
