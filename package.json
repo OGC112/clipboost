@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.33.0",
-  "description": "ClipBoost 21.33.0 — Complete Quality Engine",
+  "version": "21.34.0",
+  "description": "ClipBoost 21.34.0 — Live Captions and Publish",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
