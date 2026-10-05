@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.31.0",
-  "description": "ClipBoost 21.31.0 — Focused Campaign Studio",
+  "version": "21.32.0",
+  "description": "ClipBoost 21.32.0 — Quality Engine v1",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

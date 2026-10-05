@@ -2906,6 +2906,54 @@ async function contextualFinalReviewLocal(meta, transcript, candidates=[], prefe
   }
 }
 
+function qualityRerankCandidates(meta, transcript, candidates=[]) {
+  const words=(transcript?.words||[]).filter(w=>w?.word);
+  const duration=Number(meta?.details?.duration||0);
+  const questionWords=new Set(['why','how','what','when','where','who','which','pourquoi','comment','quoi','quand','où','qui','quel','quelle']);
+  const powerWords=/\b(secret|mistake|problem|truth|never|always|best|worst|important|million|thousand|percent|because|result|finally|secret|erreur|problème|vérité|jamais|toujours|meilleur|pire|important|million|mille|pourcent|parce que|résultat|finalement)\b/i;
+  const weakOpen=/^(and|but|so|then|because|it|that|this|he|she|they|et|mais|donc|alors|parce que|ça|cela|il|elle|ils|elles)\b/i;
+  const terminal=/[.!?…][\"'’)]?$/;
+  const clamp=n=>Math.max(0,Math.min(100,Math.round(n)));
+  return candidates.map(c=>{
+    const start=Number(c.start||0),end=Number(c.end||start);
+    const inside=words.filter(w=>Number(w.end||0)>=start&&Number(w.start||0)<=end);
+    if(!inside.length)return c;
+    const first=inside.slice(0,Math.min(16,inside.length));
+    const last=inside.slice(-Math.min(18,inside.length));
+    const opening=first.map(w=>w.word).join(' ').trim();
+    const closing=last.map(w=>w.word).join(' ').trim();
+    const firstLex=wordLexeme(first[0]?.word||'');
+    const clipDuration=Math.max(.1,end-start);
+    const speechSpan=Math.max(.1,Number(inside[inside.length-1]?.end||end)-Number(inside[0]?.start||start));
+    const wpm=inside.length/(speechSpan/60);
+    let hook=52;
+    if(questionWords.has(firstLex)||/[?]/.test(opening))hook+=16;
+    if(powerWords.test(opening))hook+=14;
+    if(/\d/.test(opening))hook+=8;
+    if(opening.split(/\s+/).length>=5)hook+=5;
+    if(weakOpen.test(opening))hook-=18;
+    const entryGap=Math.abs(Number(first[0]?.start||start)-start);
+    const exitGap=Math.abs(end-Number(last[last.length-1]?.end||end));
+    let boundary=92-Math.min(30,entryGap*12)-Math.min(28,exitGap*10);
+    if(Number(first[0]?.start||0)<start-.08)boundary-=18;
+    let standalone=70;
+    if(weakOpen.test(opening))standalone-=25;
+    if(/^(yes|no|yeah|exactly|right|oui|non|ouais|exactement)\b/i.test(opening))standalone-=16;
+    if(questionWords.has(firstLex))standalone+=8;
+    let payoff=terminal.test(closing)?82:62;
+    if(/\b(so|therefore|that's why|the result|in the end|donc|c'est pourquoi|résultat|au final|finalement)\b/i.test(closing))payoff+=10;
+    if(exitGap<.12&&!terminal.test(closing))payoff-=12;
+    let speech=78;
+    if(wpm<90)speech-=12;
+    else if(wpm>230)speech-=10;
+    else if(wpm>=125&&wpm<=205)speech+=8;
+    const prior=Number(c.score||70);
+    const quality=clamp(hook*.25+standalone*.20+payoff*.20+boundary*.20+speech*.15);
+    const finalScore=clamp(prior*.32+quality*.68);
+    return {...c,score:finalScore,qualityScore:quality,qualityBreakdown:{hook:clamp(hook),standalone:clamp(standalone),payoff:clamp(payoff),boundary:clamp(boundary),speech:clamp(speech)},signals:{...(c.signals||{}),qualityEngineV1:true}};
+  }).sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+}
+
 async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates = [], preference = 'auto') {
   const blocks = transcriptBlocks(transcript.words || []);
   const duration = Number(meta.details?.duration || 0);
@@ -2966,9 +3014,10 @@ ${inputText}`;
   meta.__ollamaDiagnostics=ollamaDiagnostics;
   const fallback=fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c));
   const heuristic=heuristicTranscriptCandidates(meta,transcript,[...clips,...fallback],preference);
-  const preReview=selectDiverseCandidates([...clips,...heuristic,...fallback],Math.max(10,target*2),duration,'review');
+  const qualityPool=qualityRerankCandidates(meta,transcript,[...clips,...heuristic,...fallback]);
+  const preReview=selectDiverseCandidates(qualityPool,Math.max(10,target*2),duration,'review');
   const reviewed=await contextualFinalReviewLocal(meta,transcript,preReview,preference);
-  const selected=selectDiverseCandidates(reviewed.length?reviewed:preReview,target,duration,preference);
+  const selected=selectDiverseCandidates(qualityRerankCandidates(meta,transcript,reviewed.length?reviewed:preReview),target,duration,preference);
   const semanticBeforeReview=clips.length;
   const semanticAfterReview=reviewed.filter(x=>x?.signals?.semantic).length;
   const semanticSelected=selected.filter(x=>x?.signals?.semantic).length;
