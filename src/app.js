@@ -350,18 +350,17 @@
 
       <div class="mint-studio-workspace-v142">
         <main class="mint-studio-main-v142">
-          <section class="card mint-studio-source-v142">
+          <section class="card mint-media-workspace-v127">
             <header class="mint-studio-source-head-v142">
-              <div><div class="eyebrow">DOWNLOADED MEDIA</div><h3>${escapeHtml(videoTitle)}</h3></div>
+              <div><div class="eyebrow">MEDIA WORKSPACE</div><h3>${escapeHtml(videoTitle)}</h3></div>
               <span class="mint-source-status-v142">${hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
             </header>
-            <div class="video mint-studio-video-v142">${realVideo}</div>
-          </section>
-
-          <section class="card mint-studio-timeline-card-v142">
+            <div class="video mint-studio-video-v142 mint-studio-video-compact-v127">${realVideo}</div>
+            <div class="mint-workspace-timeline-v127">
             <div class="section-head"><div><div class="eyebrow">${longVideo?'FULL SOURCE TIMELINE':'SMART TIMELINE'}</div><h3>${longVideo?'Long video timeline':'Timeline & detected moments'}</h3></div><span class="muted">${analyzing?`Local AI: ${escapeHtml(analysisStage||'analyzing')}${transcriptionDetail} · ${Math.round(ingestProgress)}%`:hasLocal?(v.candidates?.length||0)+' strong clip'+((v.candidates?.length||0)===1?'':'s')+' found':ingesting?'Automatic ingestion in progress':linked?'Source linked — ingest to analyze':'Upload a video to analyze it'}</span></div>
             <div class="timeline mint-studio-timeline-v142">${timelineMarkup}</div>
             <div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>
+            </div>
           </section>
         </main>
 
@@ -563,9 +562,10 @@
       const previousStatus=state.video?.id===data.id?state.video?.status:null;
       state.video=data;
       if(['ingesting','analyzing'].includes(data.status)){
-        render();
-        window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);
-        return;
+        const progressEl=document.querySelector('.mint-workspace-timeline-v127 .muted'),generateBtn=document.getElementById('generateVariationsBtn');
+        if(progressEl)progressEl.textContent=`Local AI: ${String(data.analysis?.stage||'analyzing').replace(/-/g,' ')} · ${Math.round(Number(data.analysis?.progress||0))}%`;
+        if(generateBtn){generateBtn.disabled=true;generateBtn.textContent='↻ Generating clips…'}
+        window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),1500);return;
       }
       window.__clipboostActiveProjectPoll='';
       window.__clipboostProjectPoll=null;
@@ -1292,7 +1292,7 @@
       syncCaption();
     }
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
-    if(state.page==='studio'&&state.video?.candidates?.length){
+    if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
       if(cand&&!cand.previewUrl&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false}),0);
@@ -1301,13 +1301,13 @@
     const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;persistEditorPrefs();invalidateRenderedPreviews();render();};document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';persistEditorPrefs();invalidateRenderedPreviews();render()});
     const generateVariationsBtn=document.getElementById('generateVariationsBtn');if(generateVariationsBtn)generateVariationsBtn.onclick=async()=>{
       if(!state.video?.id||state.regenerating)return;
-      state.regenerating=true;state.video={...state.video,status:'analyzing',analysis:{...(state.video.analysis||{}),stage:'semantic-clips',progress:72}};render();
+      state.regenerating=true;state.video={...state.video,status:'analyzing',analysis:{...(state.video.analysis||{}),stage:'semantic-clips',progress:72}};generateVariationsBtn.disabled=true;generateVariationsBtn.textContent='↻ Generating clips…';
       try{
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:state.studioMode==='shorts'?(state.shortsCount||10):'auto'})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
         state.video=data;state.selectedCandidate=0;pollProjectUntilSettled(state.video.id);
       }catch(e){showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
-      finally{state.regenerating=false;render()}
+      finally{state.regenerating=false;if(!['ingesting','analyzing'].includes(state.video?.status))render()}
     };
     const autoIngest=document.getElementById('autoIngestBtn');if(autoIngest)autoIngest.onclick=()=>state.video?.id&&startProjectIngestion(state.video.id);
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
