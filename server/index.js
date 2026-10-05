@@ -2913,7 +2913,15 @@ ${inputText}`;
   const heuristic=heuristicTranscriptCandidates(meta,transcript,[...clips,...fallback],preference);
   const preReview=selectDiverseCandidates([...clips,...heuristic,...fallback],Math.max(10,target*2),duration,'review');
   const reviewed=await contextualFinalReviewLocal(meta,transcript,preReview,preference);
-  return selectDiverseCandidates(reviewed.length?reviewed:preReview,target,duration,preference);
+  const selected=selectDiverseCandidates(reviewed.length?reviewed:preReview,target,duration,preference);
+  const semanticBeforeReview=clips.length;
+  const semanticAfterReview=reviewed.filter(x=>x?.signals?.semantic).length;
+  const semanticSelected=selected.filter(x=>x?.signals?.semantic).length;
+  ollamaDiagnostics.semanticGenerated=semanticBeforeReview;
+  ollamaDiagnostics.semanticAfterReview=semanticAfterReview;
+  ollamaDiagnostics.semanticSelected=semanticSelected;
+  ollamaDiagnostics.reviewRemovedSemantic=Math.max(0,semanticBeforeReview-semanticAfterReview);
+  return selected;
 }
 
 function captionsForRange(transcript, start, end) {
@@ -3746,7 +3754,12 @@ async function analyzeProject(projectId, options = {}) {
         else if(/model.*not found|pull model|not found.*model/i.test(first)) aiError=`Ollama model "${localAiConfig().ollamaModel}" is not installed. Pull the configured model or change it in Settings. Deterministic quality selection was used.`;
         else if(/invalid JSON/i.test(first)) aiError='Ollama responded, but its clip-selection response was invalid JSON. Try another local model. Deterministic quality selection was used.';
         else aiError=`Ollama clip selection failed: ${first.slice(0,280)}. Deterministic quality selection was used.`;
-      }else if(Number(diag.successes||0)>0) aiError='Ollama responded successfully but returned no usable semantic clips for this source. Deterministic quality selection was used.';
+      }else if(Number(diag.semanticGenerated||0)>0 && Number(diag.semanticSelected||0)===0){
+        // Ollama did generate semantic moments, but the final context/diversity pass preferred
+        // deterministic candidates. That is a valid quality decision, not an analysis failure.
+        aiError=null;
+      }else if(Number(diag.successes||0)>0 && Number(diag.emptyResponses||0)>=Number(diag.successes||0)) aiError='Ollama responded successfully but proposed no semantic moments for this source. Deterministic quality selection was used.';
+      else if(Number(diag.successes||0)>0) aiError=null;
       else aiError='Ollama semantic selection did not run. Deterministic quality selection was used.';
     }
     delete meta.__ollamaDiagnostics;
