@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.32",
-  "description": "ClipBoost 21.23.32 — Persistent campaign asset browser",
+  "version": "21.23.33",
+  "description": "ClipBoost 21.23.33 — Stream Canto media directly",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
