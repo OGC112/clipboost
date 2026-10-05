@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.23.17",
-  "description": "ClipBoost 21.23.17 — Fix Canto request interception",
+  "version": "21.23.18",
+  "description": "ClipBoost 21.23.18 — Stable campaign analysis progress",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
