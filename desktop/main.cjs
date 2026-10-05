@@ -660,11 +660,26 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
       const probeResponse=await ses.fetch(candidate,{method:'GET',headers,redirect:'follow'});
       if(!probeResponse.ok){lastError=new Error(`HTTP ${probeResponse.status}`);continue}
       const contentType=String(probeResponse.headers.get('content-type')||'').toLowerCase();
+      const contentRange=String(probeResponse.headers.get('content-range')||'').toLowerCase();
+      const contentLength=Number(probeResponse.headers.get('content-length')||0);
       if(contentType&&(contentType.includes('text/html')||contentType.includes('application/json')||contentType.startsWith('image/'))){lastError=new Error(`Canto candidate returned ${contentType}`);continue}
+      if(probeResponse.status===206||contentRange){lastError=new Error('Canto candidate returned only a partial media response');continue}
+      if(contentLength>0&&contentLength<64*1024){lastError=new Error('Canto candidate is too small to be the source video');continue}
       response=probeResponse;target=candidate;break;
     }catch(err){lastError=err;if(!isBlocked(err))console.warn('[Campaign asset] Candidate failed:',err?.message||err)}
   }
-  if(!response)throw new Error(`Canto did not expose a playable video stream.${lastError&&!isBlocked(lastError)?' '+String(lastError.message||lastError):''}`);
+  if(!response&&referer){
+    const worker=new BrowserWindow({width:1100,height:760,show:false,autoHideMenuBar:true,backgroundColor:'#0b1018',webPreferences:{partition:CAMPAIGN_IMPORT_PARTITION,contextIsolation:true,nodeIntegration:false,sandbox:true}});
+    configureCampaignBrowser(worker);const observed=[];
+    const observeRequest=(details,callback)=>{const u=String(details?.url||'');if(/^https?:/i.test(u)&&/\\.(?:mp4|mov|webm|m4v)(?:[?#]|$)|stream|playback|rendition|download|original/i.test(u))observed.push(u);callback({cancel:false})};
+    ses.webRequest.onBeforeRequest(observeRequest);
+    try{
+      try{await worker.loadURL(referer)}catch(err){if(!isBlocked(err))throw err}await sleep(1800);
+      for(let attempt=0;attempt<4;attempt++){try{await worker.webContents.executeJavaScript(`(() => {const v=document.querySelector('video');if(v){v.muted=true;try{v.currentTime=.01;v.play()}catch{};return true}const b=[...document.querySelectorAll('button,[role="button"],a')].find(el=>/play|preview|watch|open/i.test(String(el.getAttribute('aria-label')||el.title||el.innerText||'')));if(b){b.click();return true}return false})()`)}catch{}await sleep(750);try{const snap=await campaignBrowserSnapshot(worker);for(const v of (snap?.videos||[]))for(const u of [v?.src,...(v?.sources||[])])addCandidate(u);const info=resourceSnapshotKind(snap||{});for(const u of info.mediaUrls||[])addCandidate(u)}catch{}for(const u of observed)addCandidate(u)}
+    }finally{try{ses.webRequest.onBeforeRequest(null)}catch{}if(!worker.isDestroyed())worker.destroy()}
+    for(const candidate of candidates){if(candidate===target)continue;try{const retry=await ses.fetch(candidate,{method:'GET',headers,redirect:'follow'});if(!retry.ok||retry.status===206)continue;const ct=String(retry.headers.get('content-type')||'').toLowerCase(),cr=String(retry.headers.get('content-range')||''),cl=Number(retry.headers.get('content-length')||0);if(cr||(ct&&(ct.includes('text/html')||ct.includes('application/json')||ct.startsWith('image/')))||(cl>0&&cl<64*1024))continue;response=retry;target=candidate;break}catch{}}
+  }
+  if(!response)throw new Error(`Canto did not expose a complete playable video stream for this asset.${lastError&&!isBlocked(lastError)?' '+String(lastError.message||lastError):''}`);
   const type=String(response.headers.get('content-type')||'').toLowerCase();
   const ext=type.includes('quicktime')?'.mov':type.includes('webm')?'.webm':'.mp4';
   const fileName=`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`;
