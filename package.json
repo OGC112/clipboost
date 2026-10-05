@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.28.0",
-  "description": "ClipBoost 21.28.0 — Playable Canto media and selected clip preview",
+  "version": "21.29.0",
+  "description": "ClipBoost 21.29.0 — Campaign-aware project library",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
