@@ -324,28 +324,33 @@
 }
 .mint-caption-drag-handle-v222{
   position:absolute!important;
-  left:50%!important;
+  right:8px!important;
+  left:auto!important;
   z-index:8!important;
-  transform:translate(-50%,-50%)!important;
+  transform:translateY(-50%)!important;
   display:inline-flex!important;
   align-items:center!important;
-  gap:6px!important;
-  min-height:34px!important;
-  padding:6px 9px!important;
-  border:1px solid rgba(255,255,255,.38)!important;
-  border-radius:9px!important;
-  background:rgba(8,10,14,.78)!important;
+  justify-content:center!important;
+  width:30px!important;
+  height:30px!important;
+  min-height:30px!important;
+  padding:0!important;
+  border:1px solid rgba(255,255,255,.34)!important;
+  border-radius:8px!important;
+  background:rgba(8,10,14,.68)!important;
   color:#fff!important;
   cursor:grab!important;
   user-select:none!important;
   touch-action:none!important;
   backdrop-filter:blur(7px)!important;
-  box-shadow:0 6px 18px rgba(0,0,0,.28)!important;
+  box-shadow:0 4px 14px rgba(0,0,0,.22)!important;
+  opacity:.72!important;
 }
 .mint-caption-drag-handle-v222:hover,
 .mint-caption-drag-handle-v222:focus-visible{
   border-color:rgba(239,68,68,.78)!important;
   outline:none!important;
+  opacity:1!important;
 }
 .mint-caption-drag-handle-v222.dragging{
   cursor:grabbing!important;
@@ -356,19 +361,14 @@
   display:inline-flex!important;
   align-items:center!important;
   justify-content:center!important;
-  width:22px!important;
-  height:18px!important;
-  border-radius:5px!important;
+  width:20px!important;
+  height:16px!important;
+  border-radius:4px!important;
   background:#fff!important;
   color:#090b0f!important;
-  font-size:8px!important;
+  font-size:7px!important;
   font-weight:900!important;
   letter-spacing:.04em!important;
-}
-.mint-caption-drag-handle-v222 b{
-  font-size:8px!important;
-  line-height:1!important;
-  white-space:nowrap!important;
 }
 .mint-short-video-frame-v222 .ai-score-chip,
 .mint-short-video-frame-v222 .rendered-badge,
