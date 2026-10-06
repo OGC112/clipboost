@@ -56,3 +56,16 @@ test('campaign fit marks overlapping used moments', () => {
   assert.equal(fit.used,true);
   assert.ok(fit.score<=55);
 });
+
+
+test('campaign brief relevance is advisory and does not block publishing by itself', () => {
+  const campaign=normalizeCampaign({brief:'brand trailer launch',minDuration:5,maxDuration:60});
+  const meta={id:'p1',campaign};
+  const candidate={start:0,end:10,selectionText:'unrelated dialogue',campaignFit:{relevance:48,termsMatched:0,termsTotal:3}};
+  const result=campaignCompliance(meta,candidate,{captions:true});
+  const relevance=result.checks.find(x=>x.label==='Campaign brief relevance');
+  assert.equal(relevance.ok,false);
+  assert.equal(relevance.blocking,false);
+  assert.equal(result.passed,true);
+  assert.match(relevance.detail,/48 \/ 55 recommended/);
+});
