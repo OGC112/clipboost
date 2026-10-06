@@ -743,7 +743,7 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       }
       const key = `${currentUrl}|${String(snapshot.text || '').length}|${evidence}`;
       if (key !== stableKey) { stableKey = key; stableSince = Date.now(); }
-      if (!login && sameHost && evidence >= 2 && Date.now() - stableSince >= 1200) {
+      if (!login && sameHost && evidence >= 2 && Date.now() - stableSince >= 3000) {
         const reqUrl = campaignRequirementsUrl(snapshot);
         let requirementsSnapshot = null;
         if (reqUrl && reqUrl !== currentUrl) {
@@ -760,14 +760,17 @@ async function runAuthenticatedCampaignImport(rawUrl) {
         if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
         const parsed = await parseCampaignBrowserSnapshots(targetUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;
-        if (!win.isDestroyed()) win.close();
-        return { ok:true, authenticated:true, ...parsed };
+        // Keep the authenticated campaign browser open after detection. The user may still
+        // need to inspect/select the campaign and browse its asset packs. Detection is not
+        // equivalent to "finished importing"; only the user should close this window.
+        return { ok:true, authenticated:true, browserKeptOpen:true, ...parsed };
       }
     }
     if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign import window was closed before the campaign could be read.' : 'Timed out waiting for the campaign page. Sign in, then keep the campaign page open while ClipBoost imports it.');
   } finally {
-    if (campaignImportWindow === win) campaignImportWindow = null;
-    if (!resolved && !win.isDestroyed()) win.close();
+    // Never auto-close the visible authenticated browser. This prevents a detection,
+    // navigation race or timeout from interrupting campaign/asset selection.
+    if (campaignImportWindow === win && win.isDestroyed()) campaignImportWindow = null;
   }
 }
 
