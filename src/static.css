@@ -598,3 +598,12 @@
 .campaign-discover-actions-v143{position:relative}
 .campaign-discover-delete-v237{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(239,51,64,.24);border-radius:10px;background:rgba(239,51,64,.06);color:#f06b76;font-size:20px;line-height:1;cursor:pointer;transition:.16s ease}
 .campaign-discover-delete-v237:hover{background:rgba(239,51,64,.15);border-color:rgba(239,51,64,.55);color:#fff;transform:translateY(-1px)}
+
+/* ClipBoost 21.38.0 — multi-provider Smart Import */
+.mint-smart-import-v238{min-width:min(620px,100%);align-items:stretch!important}
+.mint-campaign-site-row-v238{display:grid;grid-template-columns:minmax(150px,1fr) auto auto;gap:8px}
+.mint-campaign-site-row-v238 select,.mint-campaign-url-fallback-v238 input{min-height:42px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#10151f;color:#eef2f8;padding:0 12px}
+.mint-campaign-url-fallback-v238{font-size:12px;color:#8e98aa}
+.mint-campaign-url-fallback-v238 summary{cursor:pointer;padding:4px 0}
+.mint-campaign-url-fallback-v238>div{display:flex;gap:8px;margin-top:7px}.mint-campaign-url-fallback-v238 input{flex:1}
+@media(max-width:760px){.mint-campaign-site-row-v238{grid-template-columns:1fr}.mint-campaign-url-fallback-v238>div{flex-direction:column}}

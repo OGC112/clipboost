@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.37.6",
-  "description": "ClipBoost 21.37.6 — Discover Campaign Management",
+  "version": "21.38.0",
+  "description": "ClipBoost 21.38.0 — Multi-Provider Smart Import",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
