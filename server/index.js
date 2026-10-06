@@ -1837,12 +1837,18 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     }
   }
 
-  const args = ['-y','-i',meta.sourcePath,'-filter_complex',filter.join(';'),'-map',`[${videoLabel}]`];
+  const filterScriptPath = path.join(previewsDir, `${meta.id}-filter-${crypto.randomUUID()}.txt`);
+  await fs.writeFile(filterScriptPath, filter.join(';'), 'utf8');
+  const args = ['-y','-i',meta.sourcePath,'-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`];
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
   args.push('-c:v','libx264','-preset',preview?'ultrafast':'veryfast','-crf',preview?'28':'21','-pix_fmt','yuv420p');
   if (hasAudio) args.push('-c:a','aac','-b:a',preview?'96k':'160k','-ac','2'); else args.push('-an');
   args.push('-movflags','+faststart',outputPath);
-  await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
+  try {
+    await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
+  } finally {
+    await fs.unlink(filterScriptPath).catch(() => {});
+  }
   return {
     outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
     output: { width, height, format: options.outputFormat, aspect: options.outputFormat==='shorts-9x16'?'9:16':'source' },
