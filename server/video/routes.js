@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import path from 'path';
 import { campaignFitForCandidate, campaignCompliance } from '../campaigns/core.js';
+import { renderDimensions } from './format.js';
 
 export function registerVideoRoutes(app, deps) {
   const {
@@ -73,7 +74,9 @@ export function registerVideoRoutes(app, deps) {
       const outPath = path.join(exportsDir, outName);
       const compliance=campaignCompliance(meta,candidate||{start,end,selectionText:clipTextAbsolute(meta.transcript,start,end),campaignFit:campaignFitForCandidate(meta,{start,end,selectionText:clipTextAbsolute(meta.transcript,start,end)},candidate?.quality||{})},req.body?.options||{});
       if(compliance.enabled&&!compliance.passed&&req.body?.force!==true)return res.status(409).json({error:'Campaign compliance check failed. Review the campaign checklist before export.',compliance});
-      const result = await renderEditedClip(meta, start, end, outPath, req.body?.options || {}, { preview:false, width:1080, height:1920 });
+      const options=req.body?.options||{};
+      const dimensions=renderDimensions(meta,options,{preview:false});
+      const result = await renderEditedClip(meta, start, end, outPath, options, { preview:false, width:dimensions.width, height:dimensions.height, outputFormat:dimensions.format });
       if(meta.campaignId){
         await updateCampaigns(data=>{const ci=data.campaigns.findIndex(c=>c.id===meta.campaignId);if(ci>=0){data.campaigns[ci].usedMoments=Array.isArray(data.campaigns[ci].usedMoments)?data.campaigns[ci].usedMoments:[];data.campaigns[ci].usedMoments.push({projectId:meta.id,start,end,exportedAt:new Date().toISOString(),filename:outName});data.campaigns[ci].updatedAt=new Date().toISOString();}});
       }
@@ -96,7 +99,8 @@ export function registerVideoRoutes(app, deps) {
         if(compliance.enabled&&!compliance.passed){blocked.push({index:i,title:c.title||`Clip ${i+1}`,compliance});continue;}
         const outName = `${meta.id}-clip-${String(i+1).padStart(2,'0')}-${Date.now()}.mp4`;
         const outPath = path.join(exportsDir, outName);
-        const rendered = await renderEditedClip(meta, Number(c.start||0), Number(c.end||0), outPath, options, { preview:false, width:1080, height:1920 });
+        const dimensions=renderDimensions(meta,options,{preview:false});
+        const rendered = await renderEditedClip(meta, Number(c.start||0), Number(c.end||0), outPath, options, { preview:false, width:dimensions.width, height:dimensions.height, outputFormat:dimensions.format });
         results.push({ index:i, url:`/media/exports/${outName}`, filename:outName, compliance, ...rendered });
         if(meta.campaignId)newlyUsed.push({projectId:meta.id,start:Number(c.start||0),end:Number(c.end||0),exportedAt:new Date().toISOString(),filename:outName});
       }

@@ -22,6 +22,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes } from './video/analysis.js';
+import { renderDimensions } from './video/format.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
 import { createExternalIngestion } from './integrations/ytdlp.js';
@@ -1256,8 +1257,9 @@ function normalizeRenderOptions(raw = {}) {
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
+  const outputFormat = String(raw.outputFormat||'shorts-9x16').toLowerCase()==='source' ? 'source' : 'shorts-9x16';
   return {
-    intensity,preset,captionStyle,captionPosition,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,
+    intensity,preset,captionStyle,captionPosition,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
     reactionDetection: raw.reactionDetection !== false,
@@ -1835,6 +1837,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
   return {
     outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
+    output: { width, height, format: options.outputFormat, aspect: options.outputFormat==='shorts-9x16'?'9:16':'source' },
     autoDirector: resolved.profile,
     editPlan: plan,
     tracking: tracking?.summary || { samples:0,faceCountMax:0,speakerSwitches:0,reactionPeaks:0,mode:options.trackingMode,movement:options.cameraMovement },
@@ -2039,7 +2042,8 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
       const tmpPath = `${filePath}.tmp.mp4`;
       await fs.rm(tmpPath, { force: true }).catch(() => {});
       try {
-        const renderInfo = await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:540, height:960 });
+        const dimensions = renderDimensions(meta, options, { preview:true });
+        const renderInfo = await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:dimensions.width, height:dimensions.height, outputFormat:dimensions.format });
         await fs.rename(tmpPath, filePath);
         await fs.writeFile(renderMetaFile,JSON.stringify(renderInfo),'utf8').catch(()=>{});
         return renderInfo;

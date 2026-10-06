@@ -350,19 +350,40 @@
 
       <div class="mint-studio-workspace-v142">
         <main class="mint-studio-main-v142">
-          <section class="card mint-media-workspace-v127">
-            <header class="mint-studio-source-head-v142">
-              <div><div class="eyebrow">MEDIA WORKSPACE</div><h3>${escapeHtml(videoTitle)}</h3></div>
-              <span class="mint-source-status-v142">${hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
+          ${autoShorts&&candidates.length?`<section class="card mint-shorts-review-v220">
+            <header class="mint-shorts-review-head-v220">
+              <div><div class="eyebrow">SELECTED SHORT</div><h2>${escapeHtml(c.title||c.reason||`Clip #${selected+1}`)}</h2><p>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</p></div>
+              <div class="mint-shorts-format-v220"><b>9:16</b><span>TikTok · Instagram Reels · YouTube Shorts</span></div>
             </header>
-            <div class="video mint-studio-video-v142 mint-studio-video-compact-v127">${realVideo}</div>
+            <div class="mint-shorts-preview-shell-v220">
+              <div class="mint-shorts-preview-stage-v220">${realPhone}</div>
+              <div class="mint-shorts-preview-side-v220">
+                <span class="eyebrow">AUTO SHORTS</span>
+                <strong>Social format applied automatically</strong>
+                <p>Mint reframes the source vertically, follows faces and speakers, and renders captions inside a 9:16 safe area.</p>
+                <div class="mint-shorts-preview-actions-v220">
+                  <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
+                  <span>Clip ${selected+1} / ${candidates.length}</span>
+                  <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
+                </div>
+                <button class="btn primary full" type="button" id="previewPublishBtn">Publish this short</button>
+              </div>
+            </div>
+            <div class="mint-shorts-candidate-rail-v220">${moments}</div>
+          </section>`:''}
+          <section class="card mint-media-workspace-v127 ${autoShorts&&candidates.length?'mint-source-secondary-v220':''}">
+            <header class="mint-studio-source-head-v142">
+              <div><div class="eyebrow">${autoShorts&&candidates.length?'SOURCE & TIMELINE':'MEDIA WORKSPACE'}</div><h3>${escapeHtml(videoTitle)}</h3></div>
+              <span class="mint-source-status-v142">${autoShorts&&candidates.length?'Shorts ready':hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
+            </header>
+            ${autoShorts&&candidates.length?'':`<div class="video mint-studio-video-v142 mint-studio-video-compact-v127">${realVideo}</div>`}
             <div class="mint-workspace-timeline-v127">
             <div class="section-head"><div><div class="eyebrow">${longVideo?'FULL SOURCE TIMELINE':'SMART TIMELINE'}</div><h3>${longVideo?'Long video timeline':'Timeline & detected moments'}</h3></div><span class="muted">${analyzing?`Local AI: ${escapeHtml(analysisStage||'analyzing')}${transcriptionDetail} · ${Math.round(ingestProgress)}%`:hasLocal?(v.candidates?.length||0)+' strong clip'+((v.candidates?.length||0)===1?'':'s')+' found':ingesting?'Automatic ingestion in progress':linked?'Source linked — ingest to analyze':'Upload a video to analyze it'}</span></div>
             <div class="timeline mint-studio-timeline-v142">${timelineMarkup}</div>
-            <div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>
+            ${autoShorts&&candidates.length?'':`<div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>`}
             </div>
           </section>
-          ${candidates.length?`<section class="card mint-selected-preview-v128 mint-selected-preview-compact-v131">
+          ${!autoShorts&&candidates.length?`<section class="card mint-selected-preview-v128 mint-selected-preview-compact-v131">
             <div class="section-head"><div><div class="eyebrow">SELECTED CLIP</div><h3>${escapeHtml(c.title||c.reason||`Clip #${selected+1}`)}</h3></div><span class="muted">Clip ${selected+1} / ${candidates.length}</span></div>
             <div class="mint-selected-preview-stage-v128">${realPhone}</div>
             <div class="mint-selected-preview-actions-v128">
@@ -441,7 +462,7 @@
     }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; showNotice({kind:'danger',title:'Upload failed',message:e.message||'Upload failed'}); render();}
   }
 
-  function currentRenderOptions(){return {autoDirector:true,captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom'}}
+  function currentRenderOptions(){const isLong=state.studioMode==='long'&&!state.video?.campaign?.id;return {autoDirector:true,outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom'}}
   function invalidateRenderedPreviews(){for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;}
   async function exportCurrent(){
     const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
@@ -1291,7 +1312,7 @@
     const assetOverlay=document.getElementById('campaignAssetBrowserBackdrop');if(assetOverlay)assetOverlay.addEventListener('click',e=>{if(e.target===assetOverlay){e.preventDefault();e.stopPropagation()}});
 
     document.querySelectorAll('[data-shorts-count]').forEach(el=>el.onclick=()=>{state.shortsCount=[5,10,20].includes(Number(el.dataset.shortsCount))?Number(el.dataset.shortsCount):10;persistEditorPrefs();render()});
-    document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{state.studioMode=el.dataset.studioMode==='long'?'long':'shorts';persistEditorPrefs();render()});
+    document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{const next=el.dataset.studioMode==='long'?'long':'shorts';if(next===state.studioMode)return;state.studioMode=next;invalidateRenderedPreviews();persistEditorPrefs();render();if(state.video?.candidates?.length&&state.video?.sourceUrl)setTimeout(()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true}),0)});
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaign-discover')});
