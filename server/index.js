@@ -1837,6 +1837,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
   return {
     outputDuration: Number(timeline.keep.reduce((sum,x)=>sum+(x.end-x.start),0).toFixed(2)),
+    output: { width, height, format: options.outputFormat, aspect: options.outputFormat==='shorts-9x16'?'9:16':'source' },
     autoDirector: resolved.profile,
     editPlan: plan,
     tracking: tracking?.summary || { samples:0,faceCountMax:0,speakerSwitches:0,reactionPeaks:0,mode:options.trackingMode,movement:options.cameraMovement },
