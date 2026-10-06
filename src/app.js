@@ -309,7 +309,7 @@
     const trackingInfo=c.previewMeta?.tracking||null;
     const trackingWarning=c.previewMeta?.trackingWarning||'';
     const trackingBadge=trackingInfo?`<div class="tracking-badge ${trackingWarning?'warning':''}"><span>◉</span><b>${trackingWarning?'Tracking fallback':`${trackingInfo.faceCountMax||0} face${Number(trackingInfo.faceCountMax||0)===1?'':'s'}`}</b><small>${trackingWarning?'Full source preserved':`${trackingInfo.speakerSwitches||0} switches · ${trackingInfo.reactionPeaks||0} reactions`}</small></div>`:'';
-    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video>${state.captionPreference==='off'?'':`<button type="button" class="mint-caption-drag-handle-v222" id="captionDragHandle" style="top:${Math.round(currentCaptionY()*100)}%" aria-label="Drag captions vertically" title="Drag captions"><span>CC</span></button>`}<div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
+    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video><div id="liveCaption" class="${liveCaptionClass()}" style="top:${Math.round(currentCaptionY()*100)}%;${state.captionPreference==='off'?'display:none;':''}" role="button" tabindex="0" aria-label="Drag subtitles vertically">${escapeHtml(firstCaption||'Captions')}</div><div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
     const moments=candidates.length?`<div class="moments-head"><strong>${candidates.length} clip${candidates.length===1?'':'s'} generated</strong><span>Click any clip to preview it</span></div>${candidates.slice(0,40).map((m,i)=>`<button class="clip candidate-btn ${i===selected?'candidate-active':''}" data-candidate="${i}"><div class="clip-thumb">${m.thumbnailUrl?`<img src="${m.thumbnailUrl}" alt="clip thumbnail">`:mediaThumb(i)}<div class="score">${Math.round(m.score||0)}</div><span class="clip-tag">#${i+1} · ${m.editPlan?'AI edit plan':m.signals?.semantic?'Local AI':'AI pick'}</span></div><div class="clip-info"><strong>${escapeHtml(m.title||m.reason||'Candidate clip')}</strong><small>${formatTime(m.start||0)} – ${formatTime(m.end||0)} · ${Math.round(m.duration||0)}s</small>${m.quality?`<div class="quality-mini"><span>Hook ${Math.round(m.quality.hook||0)}</span><span>Story ${Math.round(m.quality.story||0)}</span><span>Complete ${Math.round(m.quality.completeness||0)}</span><span>Retention ${Math.round(m.quality.retention||0)}</span><span>View ${Math.round(m.viewPotential||m.quality.retention||0)}</span>${m.campaignFit?`<span class="campaign-fit-mini">Campaign ${Math.round(m.campaignFit.score||0)}</span>`:''}</div>`:''}${m.hook?`<em>${escapeHtml(m.hook)}</em>`:''}<p>${escapeHtml(m.reason||'')}</p></div></button>`).join('')}`:`<div class="studio-empty-moments">${analyzing?'Local AI is still analyzing this video. Only clips that pass the quality bar will appear.':linked?'Upload the linked source file to detect moments.':'Upload a video and ClipBoost will keep only moments that pass the quality bar.'}</div>`;
     const ai=v?.analysis||{};
     const transcriptPreview=(v?.transcript?.captions||[]).slice(0,10).map(x=>`<div class="transcript-line"><span>${formatTime(x.start)}</span><p>${escapeHtml(x.text)}</p></div>`).join('');
@@ -474,6 +474,9 @@
   function currentCaptionY(){
     const y=Number(state.captionY);
     return Number.isFinite(y)?Math.max(.12,Math.min(.88,y)):captionPresetY();
+  }
+  function liveCaptionClass(){
+    return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`,`color-${state.captionColor||'auto'}`].join(' ');
   }
   function currentRenderOptions(){const isLong=state.studioMode==='long'&&!state.video?.campaign?.id;return {autoDirector:true,outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY()}}
   function invalidateRenderedPreviews(){for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;}
@@ -1356,7 +1359,7 @@
     const requestId=++state.candidatePreviewRequestId;
     state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
     try{
-      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:currentRenderOptions()})});
+      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:{...currentRenderOptions(),captionPreference:'off',captions:false}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
       if(requestId!==state.candidatePreviewRequestId)return;
       cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=autoplay;render();
@@ -1432,7 +1435,7 @@
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const line=captions.find(x=>rel>=Number(x.start||0)&&rel<=Number(x.end||0));
-        liveCaption.textContent=(line?.text||cand?.hook||'').toUpperCase();
+        liveCaption.textContent=state.captionStyle==='minimal'?(line?.text||cand?.hook||''):(line?.text||cand?.hook||'').toUpperCase();
       };
       shortVideo.addEventListener('timeupdate',syncCaption);
       shortVideo.addEventListener('seeked',syncCaption);
@@ -1451,29 +1454,36 @@
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
-      if(cand&&!cand.previewUrl&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false}),0);
+      if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
     }
     const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=exportCurrent;
-    const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;persistEditorPrefs();invalidateRenderedPreviews();render();};document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';persistEditorPrefs();invalidateRenderedPreviews();render()});
-    const liveCaptionChange=()=>{persistEditorPrefs();invalidateRenderedPreviews();render();const idx=Math.min(state.selectedCandidate||0,(state.video?.candidates?.length||1)-1);if(idx>=0&&state.video?.candidates?.[idx])setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:true}),0)};
-    const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;liveCaptionChange()};
-    const captionSizeSelect=document.getElementById('captionSizeSelect');if(captionSizeSelect)captionSizeSelect.onchange=e=>{state.captionSize=e.target.value;liveCaptionChange()};
-    const captionPositionSelect=document.getElementById('captionPositionSelect');if(captionPositionSelect)captionPositionSelect.onchange=e=>{if(e.target.value==='custom')return;state.captionPosition=e.target.value;state.captionY=null;liveCaptionChange()};
-    const captionDragHandle=document.getElementById('captionDragHandle');
-    if(captionDragHandle){
-      const frame=captionDragHandle.closest('.mint-short-video-frame-v222');
+    const applyLiveCaptionStyle=()=>{
+      const live=document.getElementById('liveCaption');
+      if(!live)return;
+      live.className=liveCaptionClass();
+      live.style.top=(currentCaptionY()*100)+'%';
+      live.style.display=state.captionPreference==='off'?'none':'';
+      document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.classList.toggle('active',(btn.dataset.captionColor||'auto')===(state.captionColor||'auto')));
+    };
+    const saveLiveCaptionSettings=()=>{persistEditorPrefs();applyLiveCaptionStyle()};
+    const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;saveLiveCaptionSettings()};
+    document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';saveLiveCaptionSettings()});
+    const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;saveLiveCaptionSettings()};
+    const captionSizeSelect=document.getElementById('captionSizeSelect');if(captionSizeSelect)captionSizeSelect.onchange=e=>{state.captionSize=e.target.value;saveLiveCaptionSettings()};
+    const captionPositionSelect=document.getElementById('captionPositionSelect');if(captionPositionSelect)captionPositionSelect.onchange=e=>{if(e.target.value==='custom')return;state.captionPosition=e.target.value;state.captionY=null;saveLiveCaptionSettings()};
+    if(liveCaption){
+      const frame=liveCaption.closest('.mint-short-video-frame-v222');
       let dragging=false,lastY=currentCaptionY();
-      const updateDrag=e=>{
+      const updateCaptionDrag=e=>{
         if(!dragging||!frame)return;
         const rect=frame.getBoundingClientRect();if(!rect.height)return;
         lastY=Math.max(.12,Math.min(.88,(e.clientY-rect.top)/rect.height));
-        captionDragHandle.style.top=(lastY*100)+'%';
-        captionDragHandle.setAttribute('aria-valuetext',Math.round(lastY*100)+'% from top');
+        liveCaption.style.top=(lastY*100)+'%';
       };
-      captionDragHandle.addEventListener('pointerdown',e=>{e.preventDefault();dragging=true;captionDragHandle.setPointerCapture?.(e.pointerId);captionDragHandle.classList.add('dragging')});
-      captionDragHandle.addEventListener('pointermove',updateDrag);
-      captionDragHandle.addEventListener('pointerup',e=>{if(!dragging)return;updateDrag(e);dragging=false;captionDragHandle.classList.remove('dragging');state.captionY=Number(lastY.toFixed(4));state.captionPosition='custom';persistEditorPrefs();invalidateRenderedPreviews();render();const idx=Math.min(state.selectedCandidate||0,(state.video?.candidates?.length||1)-1);if(idx>=0&&state.video?.candidates?.[idx])setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:true}),0)});
-      captionDragHandle.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;state.captionY=Math.max(.12,Math.min(.88,currentCaptionY()+delta));state.captionPosition='custom';persistEditorPrefs();invalidateRenderedPreviews();render();const idx=Math.min(state.selectedCandidate||0,(state.video?.candidates?.length||1)-1);if(idx>=0&&state.video?.candidates?.[idx])setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:true}),0)});
+      liveCaption.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();dragging=true;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
+      liveCaption.addEventListener('pointermove',updateCaptionDrag);
+      liveCaption.addEventListener('pointerup',e=>{if(!dragging)return;updateCaptionDrag(e);dragging=false;liveCaption.classList.remove('dragging');state.captionY=Number(lastY.toFixed(4));state.captionPosition='custom';persistEditorPrefs();const select=document.getElementById('captionPositionSelect');if(select&&!Array.from(select.options).some(o=>o.value==='custom'))select.add(new Option('Custom','custom'));if(select)select.value='custom'});
+      liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;state.captionY=Math.max(.12,Math.min(.88,currentCaptionY()+delta));state.captionPosition='custom';persistEditorPrefs();applyLiveCaptionStyle()});
     }
         document.querySelectorAll('[data-publish-network]').forEach(el=>el.onchange=()=>{state.publishNetworks[el.dataset.publishNetwork]=el.checked});
     document.querySelectorAll('[data-publish-tab]').forEach(el=>el.onclick=()=>{state.publishActivePlatform=el.dataset.publishTab;render()});
