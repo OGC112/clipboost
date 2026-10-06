@@ -1867,8 +1867,8 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   }
   if (watermarkPath) {
     const wmWidth = Math.max(32, Math.round(width * options.watermarkScale));
-    const xExpr = `(W-w)*${options.watermarkX.toFixed(4)}`;
-    const yExpr = `(H-h)*${options.watermarkY.toFixed(4)}`;
+    const xExpr = `max(0,min(W-w,W*${options.watermarkX.toFixed(4)}-w/2))`;
+    const yExpr = `max(0,min(H-h,H*${options.watermarkY.toFixed(4)}-h/2))`;
     filter.push(`[1:v]scale=${wmWidth}:-1:flags=lanczos,format=rgba,colorchannelmixer=aa=${options.watermarkOpacity.toFixed(3)}[wm]`);
     filter.push(`[${videoLabel}][wm]overlay=x='${xExpr}':y='${yExpr}':shortest=1[wmout]`);
     videoLabel = 'wmout';
