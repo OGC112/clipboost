@@ -323,7 +323,7 @@
     const longVideo=generalStudio&&studioMode==='long';
     const shortsCountControl='';
     const workflowSwitcher=generalStudio?`<section class="mint-editor-workflow-switcher"><div><span class="eyebrow">CREATION MODE</span><b>What do you want to make?</b><small>Library and uploads stay in AI Studio. Campaign media never enters this workspace.</small></div><div class="mint-editor-workflow-actions"><button type="button" data-studio-mode="shorts" class="${studioMode==='shorts'?'active':''}"><span>✦</span><b>Auto Shorts</b><small>Find, edit and export the strongest short-form moments.</small></button><button type="button" data-studio-mode="long" class="${studioMode==='long'?'active':''}"><span>▰</span><b>Long Video</b><small>Work from the full source with transcript, cleanup and AI editing.</small></button></div></section>`:'';
-    return `<div class="content mint-studio-page-v142 ${generalStudio?'mint-general-editor-v216':'mint-campaign-source-editor-v216'}">${workflowSwitcher}
+    return `<div class="content mint-studio-page-v142 ${generalStudio?'mint-general-editor-v216':'mint-campaign-source-editor-v216'} ${!v?'mint-studio-empty-v221':''}">${workflowSwitcher}
       <section class="mint-studio-header-v142">
         <div>
           <div class="eyebrow">AI VIDEO EDITOR</div>
@@ -345,10 +345,10 @@
         <article><span>◎</span><div><b>AI Highlights</b><small>Score key moments</small></div></article>
       </section>
 
-      ${analysisStatus}
-      ${!hasLocal||working||ingestError?uploader:`<div class="mint-source-change-v131"><span>Source ready · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`}
+      ${autoShorts&&candidates.length?'':analysisStatus}
+      ${autoShorts&&candidates.length?'':(!hasLocal||working||ingestError?uploader:`<div class="mint-source-change-v131"><span>Source ready · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`)}
 
-      <div class="mint-studio-workspace-v142">
+      ${v?`<div class="mint-studio-workspace-v142">
         <main class="mint-studio-main-v142">
           ${autoShorts&&candidates.length?`<section class="card mint-shorts-review-v220">
             <header class="mint-shorts-review-head-v220">
@@ -410,7 +410,9 @@
             <button class="btn primary full generate" id="generateVariationsBtn" ${hasLocal&&!analyzing&&!state.regenerating?'':'disabled title="Wait for analysis to finish"'}>${state.regenerating?'↻ Generating clips…':analyzing?'↻ Local AI analyzing…':hasLocal?(longVideo?'✦ Refresh AI highlights':'✦ Generate variations'):ingesting?'↻ Processing source…':'⇧ Ingest source first'}</button>
           </section>
         </aside>
-      </div>
+      </div>`:`<section class="mint-studio-empty-flow-v221"><span><b>1</b> Upload source</span><i>→</i><span><b>2</b> Local AI analysis</span><i>→</i><span><b>3</b> Review Shorts</span><i>→</i><span><b>4</b> Publish</span></section>`}
+      ${autoShorts&&candidates.length?analysisStatus:''}
+      ${autoShorts&&candidates.length?(hasLocal?`<div class="mint-source-change-v131 mint-source-change-after-review-v221"><span>Source · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`:uploader):''}
 
       ${campaignStudio}
       ${transcriptPanel}
