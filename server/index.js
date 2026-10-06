@@ -10,6 +10,9 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { AsyncLocalStorage } from 'async_hooks';
+import dns from 'dns/promises';
+import net from 'net';
+import { createAppStorage, writeJsonAtomic } from './storage/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -117,10 +120,15 @@ async function recoverInterruptedProject(meta) {
   return { meta:recovered, recovered:true };
 }
 
-const libraryFile = path.join(storageRoot, 'library.json');
-const campaignsFile = path.join(storageRoot, 'campaigns.json');
-const platformProfilesFile = path.join(storageRoot, 'campaign-platform-profiles.json');
 const dataDir = storageRoot;
+const {
+  readLibrary,
+  writeLibrary,
+  readCampaigns,
+  updateCampaigns,
+  readPlatformProfiles,
+  updatePlatformProfiles
+} = createAppStorage(storageRoot);
 
 const settingsEnvPath = process.env.DOTENV_CONFIG_PATH ? path.resolve(process.env.DOTENV_CONFIG_PATH) : path.join(root, '.env');
 const SETTINGS_KEYS = [
@@ -223,30 +231,6 @@ function runtimeCommand(command) {
 }
 
 
-async function readLibrary() {
-  try { return JSON.parse(await fs.readFile(libraryFile, 'utf8')); }
-  catch { return { creators: [] }; }
-}
-async function writeLibrary(data) {
-  await fs.writeFile(libraryFile, JSON.stringify(data, null, 2));
-}
-
-async function readCampaigns() {
-  try {
-    const parsed = JSON.parse(await fs.readFile(campaignsFile, 'utf8'));
-    return Array.isArray(parsed?.campaigns) ? parsed : { campaigns: [] };
-  } catch { return { campaigns: [] }; }
-}
-async function writeCampaigns(data) {
-  await fs.writeFile(campaignsFile, JSON.stringify({ campaigns: Array.isArray(data?.campaigns) ? data.campaigns : [] }, null, 2));
-}
-async function readPlatformProfiles() {
-  try { const parsed=JSON.parse(await fs.readFile(platformProfilesFile,'utf8')); return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed:{}; }
-  catch { return {}; }
-}
-async function writePlatformProfiles(data) {
-  await fs.writeFile(platformProfilesFile, JSON.stringify(data&&typeof data==='object'?data:{}, null, 2));
-}
 function platformProfileKey(provider='') { return String(provider||'').trim().toLowerCase().replace(/^www\./,'').slice(0,120); }
 function campaignArray(value) {
   if (Array.isArray(value)) return value.map(x=>String(x||'').trim()).filter(Boolean);
@@ -936,6 +920,68 @@ async function fetchTwitchCreator(input) {
 }
 
 const app = express();
+
+function unsafeNetworkAddress(address='') {
+  const value=String(address||'').trim().toLowerCase();
+  if(!value)return true;
+  if(value.startsWith('::ffff:'))return unsafeNetworkAddress(value.slice(7));
+  const family=net.isIP(value);
+  if(family===4){
+    const parts=value.split('.').map(Number);
+    if(parts.length!==4||parts.some(x=>!Number.isInteger(x)||x<0||x>255))return true;
+    const [a,b,c]=parts;
+    return a===0||a===10||a===127||(a===100&&b>=64&&b<=127)||(a===169&&b===254)||
+      (a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===192&&b===0)||
+      (a===192&&b===0&&c===2)||(a===198&&(b===18||b===19))||
+      (a===198&&b===51&&c===100)||(a===203&&b===0&&c===113)||a>=224;
+  }
+  if(family===6){
+    return value==='::'||value==='::1'||value.startsWith('fc')||value.startsWith('fd')||
+      /^fe[89ab]/.test(value)||value.startsWith('ff')||value.startsWith('2001:db8:');
+  }
+  return true;
+}
+
+async function validatePublicHttpUrl(rawUrl) {
+  let parsed;
+  try { parsed=new URL(String(rawUrl||'').trim()); }
+  catch { throw Object.assign(new Error('Enter a valid public campaign URL.'),{status:400}); }
+  if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password){
+    throw Object.assign(new Error('Enter a valid public http or https campaign URL.'),{status:400});
+  }
+  const hostname=parsed.hostname.replace(/\.$/,'').toLowerCase();
+  if(!hostname||hostname==='localhost'||hostname.endsWith('.localhost')){
+    throw Object.assign(new Error('Local or private network URLs are not allowed.'),{status:400});
+  }
+  let addresses;
+  try { addresses=await dns.lookup(hostname,{all:true,verbatim:true}); }
+  catch { throw Object.assign(new Error('The campaign hostname could not be resolved.'),{status:400}); }
+  if(!addresses.length||addresses.some(item=>unsafeNetworkAddress(item.address))){
+    throw Object.assign(new Error('Local or private network URLs are not allowed.'),{status:400});
+  }
+  return parsed;
+}
+
+async function fetchPublicCampaignPage(rawUrl) {
+  let current=(await validatePublicHttpUrl(rawUrl)).toString();
+  for(let redirectCount=0;redirectCount<=5;redirectCount++){
+    const response=await fetch(current,{
+      headers:{'User-Agent':'Mozilla/5.0 ClipBoost/21.5 Campaign Importer','Accept':'text/html,application/xhtml+xml'},
+      redirect:'manual',
+      signal:AbortSignal.timeout(12000)
+    });
+    if([301,302,303,307,308].includes(response.status)){
+      const location=response.headers.get('location');
+      if(!location)throw Object.assign(new Error('Campaign redirect did not include a destination.'),{status:400});
+      if(redirectCount>=5)throw Object.assign(new Error('Campaign page redirected too many times.'),{status:400});
+      current=(await validatePublicHttpUrl(new URL(location,current).toString())).toString();
+      continue;
+    }
+    return {response,finalUrl:current};
+  }
+  throw Object.assign(new Error('Campaign page redirected too many times.'),{status:400});
+}
+
 app.use(express.json({ limit: '2mb' }));
 app.use('/media', express.static(storageRoot, { acceptRanges: true }));
 
@@ -1101,6 +1147,7 @@ async function downloadExternalSource(projectId) {
   if (!source?.url) throw new Error('This project does not have a downloadable source URL.');
   if (meta.sourcePath && fsSync.existsSync(meta.sourcePath)) return meta;
 
+  await validatePublicHttpUrl(source.url);
   const cfg = externalIngestionConfig();
   meta.status = 'ingesting';
   meta.ingestion = { stage: 'starting', progress: 3, engine: 'yt-dlp', startedAt: new Date().toISOString(), error: null };
@@ -1208,7 +1255,7 @@ async function writeMeta(meta) {
     const error = Object.assign(new Error('Project was deleted while processing.'), { code:'PROJECT_DELETED', status:410 });
     throw error;
   }
-  await fs.writeFile(path.join(metaDir, `${meta.id}.json`), JSON.stringify(meta, null, 2));
+  await writeJsonAtomic(path.join(metaDir, `${meta.id}.json`), meta);
 }
 
 
@@ -1222,9 +1269,8 @@ app.get('/api/campaigns', async (req,res,next) => {
 });
 app.post('/api/campaigns', async (req,res,next) => {
   try {
-    const data=await readCampaigns();
     const campaign=normalizeCampaign(req.body||{});
-    data.campaigns.unshift(campaign); await writeCampaigns(data);
+    await updateCampaigns(data=>{data.campaigns.unshift(campaign);});
     res.json({ ...campaign, totals:campaignTotals(campaign) });
   } catch(e){ next(e); }
 });
@@ -1239,67 +1285,92 @@ app.post('/api/campaigns/import-snapshot', async (req,res,next) => {
     const resourceInspections=Array.isArray(req.body?.resourceInspections)?req.body.resourceInspections:[];
     const draft=extractAuthenticatedCampaignSnapshots(campaign,requirements,url,listing,resourceInspections);
     if(!draft.name||draft.name==='Imported campaign')return res.status(422).json({error:'ClipBoost could not identify a campaign on this page. Keep the campaign page open after signing in and try again.'});
-    const profile=extractPlatformTermsProfile(terms,draft.provider);if(profile&&profile.sections.length){const profiles=await readPlatformProfiles();profiles[profile.key]=profile;await writePlatformProfiles(profiles);draft.platformProfileKey=profile.key;}
+    const profile=extractPlatformTermsProfile(terms,draft.provider);if(profile&&profile.sections.length){await updatePlatformProfiles(profiles=>{profiles[profile.key]=profile;});draft.platformProfileKey=profile.key;}
     res.json({draft,summary:{name:draft.name,sources:draft.sourceUrls.length,resources:draft.resourceUrls.length,references:draft.referenceAssets.length,requirements:draft.requirements.length,violations:draft.violations.length,audience:draft.audience||'',paymentModel:draft.paymentModel||'custom',qualificationViews:Number(draft.qualificationViews||0),platformRules:Boolean(profile&&profile.sections.length)}});
   } catch(e){next(e)}
 });
 app.post('/api/campaigns/import', async (req,res,next) => {
   try {
     const url=String(req.body?.url||'').trim();
-    if(!/^https?:\/\//i.test(url))return res.status(400).json({error:'Enter a valid public campaign URL.'});
-    const response=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0 ClipBoost/21.5 Campaign Importer','Accept':'text/html,application/xhtml+xml'},redirect:'follow',signal:AbortSignal.timeout(12000)});
+    const {response,finalUrl}=await fetchPublicCampaignPage(url);
     if(!response.ok)throw Object.assign(new Error(`Campaign page returned HTTP ${response.status}. You can still add it manually.`),{status:400});
     const type=String(response.headers.get('content-type')||'');
     if(!type.includes('text/html'))throw Object.assign(new Error('This campaign URL is not a public HTML page. Add the campaign manually.'),{status:400});
     const html=(await response.text()).slice(0,2_000_000);
-    const wall=detectCampaignAccessWall(html,url);
+    const wall=detectCampaignAccessWall(html,finalUrl);
     if(wall.blocked){
       return res.status(409).json({error:wall.reason==='login'?'Campaign details unavailable — login required. The URL was kept so you can enter the terms manually.':'Campaign details unavailable — this page is protected by anti-bot verification. The URL was kept so you can enter the terms manually.',manual:true,url,reason:wall.reason});
     }
-    const draft=extractCampaignPage(html,url);
-    const data=await readCampaigns();
-    const campaign=normalizeCampaign(draft); data.campaigns.unshift(campaign); await writeCampaigns(data);
+    const draft=extractCampaignPage(html,finalUrl);
+    const campaign=normalizeCampaign(draft);
+    await updateCampaigns(data=>{data.campaigns.unshift(campaign);});
     res.json({ ...campaign, totals:campaignTotals(campaign), imported:true });
   } catch(e){ next(e); }
 });
 app.put('/api/campaigns/:id', async (req,res,next) => {
   try {
-    const data=await readCampaigns(); const i=data.campaigns.findIndex(c=>c.id===req.params.id);
-    if(i<0)return res.status(404).json({error:'Campaign not found.'});
-    const campaign=normalizeCampaign(req.body||{},data.campaigns[i]); data.campaigns[i]=campaign; await writeCampaigns(data);
+    let campaign=null;
+    await updateCampaigns(data=>{
+      const i=data.campaigns.findIndex(c=>c.id===req.params.id);
+      if(i<0)return;
+      campaign=normalizeCampaign(req.body||{},data.campaigns[i]);
+      data.campaigns[i]=campaign;
+    });
+    if(!campaign)return res.status(404).json({error:'Campaign not found.'});
     res.json({ ...campaign, totals:campaignTotals(campaign) });
   } catch(e){ next(e); }
 });
 app.delete('/api/campaigns/:id', async (req,res,next) => {
   try {
-    const data=await readCampaigns(); const before=data.campaigns.length;
-    data.campaigns=data.campaigns.filter(c=>c.id!==req.params.id); if(data.campaigns.length===before)return res.status(404).json({error:'Campaign not found.'});
-    await writeCampaigns(data); res.json({ok:true});
+    let removed=false;
+    await updateCampaigns(data=>{
+      const before=data.campaigns.length;
+      data.campaigns=data.campaigns.filter(c=>c.id!==req.params.id);
+      removed=data.campaigns.length!==before;
+    });
+    if(!removed)return res.status(404).json({error:'Campaign not found.'});
+    res.json({ok:true});
   } catch(e){ next(e); }
 });
 app.post('/api/campaigns/:id/posts', async (req,res,next) => {
   try {
-    const data=await readCampaigns(); const i=data.campaigns.findIndex(c=>c.id===req.params.id); if(i<0)return res.status(404).json({error:'Campaign not found.'});
-    const c=data.campaigns[i]; const body=req.body||{};
-    c.posts=Array.isArray(c.posts)?c.posts:[];
-    c.posts.unshift({id:crypto.randomUUID(),url:String(body.url||'').trim(),platform:String(body.platform||'').trim(),views:Math.max(0,Number(body.views||0)||0),publishedAt:String(body.publishedAt||new Date().toISOString()),notes:String(body.notes||'').slice(0,2000),editingMinutes:Math.max(0,Number(body.editingMinutes||0)||0),clipDuration:Math.max(0,Number(body.clipDuration||0)||0),payoutConfirmed:Math.max(0,Number(body.payoutConfirmed||0)||0),submissionStatus:['pending','accepted','rejected'].includes(String(body.submissionStatus||''))?String(body.submissionStatus):'pending',paid:Boolean(body.paid),createdAt:new Date().toISOString()});
-    c.updatedAt=new Date().toISOString(); await writeCampaigns(data); res.json({...c,totals:campaignTotals(c)});
+    const body=req.body||{}; let c=null;
+    await updateCampaigns(data=>{
+      const i=data.campaigns.findIndex(campaign=>campaign.id===req.params.id); if(i<0)return;
+      c=data.campaigns[i]; c.posts=Array.isArray(c.posts)?c.posts:[];
+      c.posts.unshift({id:crypto.randomUUID(),url:String(body.url||'').trim(),platform:String(body.platform||'').trim(),views:Math.max(0,Number(body.views||0)||0),publishedAt:String(body.publishedAt||new Date().toISOString()),notes:String(body.notes||'').slice(0,2000),editingMinutes:Math.max(0,Number(body.editingMinutes||0)||0),clipDuration:Math.max(0,Number(body.clipDuration||0)||0),payoutConfirmed:Math.max(0,Number(body.payoutConfirmed||0)||0),submissionStatus:['pending','accepted','rejected'].includes(String(body.submissionStatus||''))?String(body.submissionStatus):'pending',paid:Boolean(body.paid),createdAt:new Date().toISOString()});
+      c.updatedAt=new Date().toISOString();
+    });
+    if(!c)return res.status(404).json({error:'Campaign not found.'});
+    res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
 app.put('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
   try {
-    const data=await readCampaigns();const ci=data.campaigns.findIndex(c=>c.id===req.params.id);if(ci<0)return res.status(404).json({error:'Campaign not found.'});
-    const c=data.campaigns[ci];c.posts=Array.isArray(c.posts)?c.posts:[];const pi=c.posts.findIndex(p=>p.id===req.params.postId);if(pi<0)return res.status(404).json({error:'Tracked post not found.'});
-    const current=c.posts[pi],body=req.body||{};
-    c.posts[pi]={...current,url:body.url!==undefined?String(body.url||'').trim():current.url,platform:body.platform!==undefined?String(body.platform||'').trim():current.platform,views:body.views!==undefined?Math.max(0,Number(body.views||0)||0):current.views,clipDuration:body.clipDuration!==undefined?Math.max(0,Number(body.clipDuration||0)||0):current.clipDuration,editingMinutes:body.editingMinutes!==undefined?Math.max(0,Number(body.editingMinutes||0)||0):current.editingMinutes,payoutConfirmed:body.payoutConfirmed!==undefined?Math.max(0,Number(body.payoutConfirmed||0)||0):Math.max(0,Number(current.payoutConfirmed||0)||0),submissionStatus:body.submissionStatus!==undefined&&['pending','accepted','rejected'].includes(String(body.submissionStatus))?String(body.submissionStatus):String(current.submissionStatus||'pending'),paid:body.paid!==undefined?Boolean(body.paid):current.paid,updatedAt:new Date().toISOString()};
-    c.updatedAt=new Date().toISOString();await writeCampaigns(data);res.json({...c,totals:campaignTotals(c)});
+    const body=req.body||{}; let c=null; let missingPost=false;
+    await updateCampaigns(data=>{
+      const ci=data.campaigns.findIndex(campaign=>campaign.id===req.params.id);if(ci<0)return;
+      c=data.campaigns[ci];c.posts=Array.isArray(c.posts)?c.posts:[];const pi=c.posts.findIndex(p=>p.id===req.params.postId);if(pi<0){missingPost=true;return;}
+      const current=c.posts[pi];
+      c.posts[pi]={...current,url:body.url!==undefined?String(body.url||'').trim():current.url,platform:body.platform!==undefined?String(body.platform||'').trim():current.platform,views:body.views!==undefined?Math.max(0,Number(body.views||0)||0):current.views,clipDuration:body.clipDuration!==undefined?Math.max(0,Number(body.clipDuration||0)||0):current.clipDuration,editingMinutes:body.editingMinutes!==undefined?Math.max(0,Number(body.editingMinutes||0)||0):current.editingMinutes,payoutConfirmed:body.payoutConfirmed!==undefined?Math.max(0,Number(body.payoutConfirmed||0)||0):Math.max(0,Number(current.payoutConfirmed||0)||0),submissionStatus:body.submissionStatus!==undefined&&['pending','accepted','rejected'].includes(String(body.submissionStatus))?String(body.submissionStatus):String(current.submissionStatus||'pending'),paid:body.paid!==undefined?Boolean(body.paid):current.paid,updatedAt:new Date().toISOString()};
+      c.updatedAt=new Date().toISOString();
+    });
+    if(!c)return res.status(404).json({error:'Campaign not found.'});
+    if(missingPost)return res.status(404).json({error:'Tracked post not found.'});
+    res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
 app.delete('/api/campaigns/:id/posts/:postId', async (req,res,next) => {
   try {
-    const data=await readCampaigns();const ci=data.campaigns.findIndex(c=>c.id===req.params.id);if(ci<0)return res.status(404).json({error:'Campaign not found.'});
-    const c=data.campaigns[ci];const before=(c.posts||[]).length;c.posts=(c.posts||[]).filter(p=>p.id!==req.params.postId);if(c.posts.length===before)return res.status(404).json({error:'Tracked post not found.'});
-    c.updatedAt=new Date().toISOString();await writeCampaigns(data);res.json({...c,totals:campaignTotals(c)});
+    let c=null; let removed=false;
+    await updateCampaigns(data=>{
+      const ci=data.campaigns.findIndex(campaign=>campaign.id===req.params.id);if(ci<0)return;
+      c=data.campaigns[ci];const before=(c.posts||[]).length;c.posts=(c.posts||[]).filter(p=>p.id!==req.params.postId);removed=c.posts.length!==before;
+      if(removed)c.updatedAt=new Date().toISOString();
+    });
+    if(!c)return res.status(404).json({error:'Campaign not found.'});
+    if(!removed)return res.status(404).json({error:'Tracked post not found.'});
+    res.json({...c,totals:campaignTotals(c)});
   } catch(e){next(e)}
 });
 app.post('/api/campaigns/:id/source-project', async (req,res,next) => {
@@ -1798,12 +1869,30 @@ app.post('/api/videos/campaign-stream', async (req,res,next)=>{
     if(!existingProject)return res.status(404).json({error:'Campaign project not found.'});
     const contentType=String(req.headers['content-type']||'video/mp4').toLowerCase();
     const ext=contentType.includes('quicktime')?'.mov':contentType.includes('webm')?'.webm':path.extname(originalName)||'.mp4';
+    const defaultMaxBytes=5*1024*1024*1024;
+    const configuredMaxBytes=Number(process.env.CAMPAIGN_STREAM_MAX_BYTES||defaultMaxBytes);
+    const maxBytes=Number.isFinite(configuredMaxBytes)&&configuredMaxBytes>0?configuredMaxBytes:defaultMaxBytes;
+    const declaredBytes=Number(req.headers['content-length']||0);
+    if(Number.isFinite(declaredBytes)&&declaredBytes>maxBytes)return res.status(413).json({error:'Campaign media file is too large.'});
     let filename=`${crypto.randomUUID()}${ext}`;
     outPath=path.join(uploadsDir,filename);
     await new Promise((resolve,reject)=>{
       const output=fsSync.createWriteStream(outPath);
-      req.on('aborted',()=>output.destroy(new Error('Campaign media transfer aborted.')));
-      req.on('error',reject);output.on('error',reject);output.on('finish',resolve);
+      let received=0,settled=false;
+      const finish=(err)=>{
+        if(settled)return;settled=true;
+        if(err)reject(err);else resolve();
+      };
+      req.on('data',chunk=>{
+        received+=chunk.length;
+        if(received<=maxBytes)return;
+        req.unpipe(output);
+        req.resume();
+        output.destroy();
+        finish(Object.assign(new Error('Campaign media file is too large.'),{status:413}));
+      });
+      req.on('aborted',()=>finish(new Error('Campaign media transfer aborted.')));
+      req.on('error',finish);output.on('error',finish);output.on('finish',()=>finish());
       req.pipe(output);
     });
     const stat=await fs.stat(outPath);
@@ -3927,8 +4016,9 @@ async function analyzeProject(projectId, options = {}) {
       candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced', 'dynamic', 'natural');
     }
     const semanticUsed=Boolean(candidates.some(x=>x?.signals?.semantic));
+    const shortAssetMode=Boolean(candidates.some(x=>x?.signals?.shortAsset));
     const contextReviewed=Boolean(candidates.some(x=>x?.signals?.contextReviewed));
-    if(!aiError && transcript?.words?.length && !semanticUsed){
+    if(!aiError && transcript?.words?.length && !semanticUsed && !shortAssetMode){
       const diag=meta.__ollamaDiagnostics||{};
       const errors=Array.isArray(diag.errors)?diag.errors.filter(Boolean):[];
       const first=String(errors[0]||'');
@@ -4128,8 +4218,7 @@ app.post('/api/videos/:id/export', async (req, res, next) => {
     if(compliance.enabled&&!compliance.passed&&req.body?.force!==true)return res.status(409).json({error:'Campaign compliance check failed. Review the campaign checklist before export.',compliance});
     const result = await renderEditedClip(meta, start, end, outPath, req.body?.options || {}, { preview:false, width:1080, height:1920 });
     if(meta.campaignId){
-      const data=await readCampaigns().catch(()=>({campaigns:[]})); const ci=data.campaigns.findIndex(c=>c.id===meta.campaignId);
-      if(ci>=0){data.campaigns[ci].usedMoments=Array.isArray(data.campaigns[ci].usedMoments)?data.campaigns[ci].usedMoments:[];data.campaigns[ci].usedMoments.push({projectId:meta.id,start,end,exportedAt:new Date().toISOString(),filename:outName});data.campaigns[ci].updatedAt=new Date().toISOString();await writeCampaigns(data);}
+      await updateCampaigns(data=>{const ci=data.campaigns.findIndex(c=>c.id===meta.campaignId);if(ci>=0){data.campaigns[ci].usedMoments=Array.isArray(data.campaigns[ci].usedMoments)?data.campaigns[ci].usedMoments:[];data.campaigns[ci].usedMoments.push({projectId:meta.id,start,end,exportedAt:new Date().toISOString(),filename:outName});data.campaigns[ci].updatedAt=new Date().toISOString();}});
     }
     res.json({ url: `/media/exports/${outName}`, filename: outName, compliance, ...result });
   } catch (e) { next(e); }
@@ -4154,7 +4243,7 @@ app.post('/api/videos/:id/export-all', async (req, res, next) => {
       results.push({ index:i, url:`/media/exports/${outName}`, filename:outName, compliance, ...rendered });
       if(meta.campaignId)newlyUsed.push({projectId:meta.id,start:Number(c.start||0),end:Number(c.end||0),exportedAt:new Date().toISOString(),filename:outName});
     }
-    if(meta.campaignId&&newlyUsed.length){const data=await readCampaigns().catch(()=>({campaigns:[]}));const ci=data.campaigns.findIndex(c=>c.id===meta.campaignId);if(ci>=0){data.campaigns[ci].usedMoments=Array.isArray(data.campaigns[ci].usedMoments)?data.campaigns[ci].usedMoments:[];data.campaigns[ci].usedMoments.push(...newlyUsed);data.campaigns[ci].updatedAt=new Date().toISOString();await writeCampaigns(data);}}
+    if(meta.campaignId&&newlyUsed.length){await updateCampaigns(data=>{const ci=data.campaigns.findIndex(c=>c.id===meta.campaignId);if(ci>=0){data.campaigns[ci].usedMoments=Array.isArray(data.campaigns[ci].usedMoments)?data.campaigns[ci].usedMoments:[];data.campaigns[ci].usedMoments.push(...newlyUsed);data.campaigns[ci].updatedAt=new Date().toISOString();}});}
     res.json({ exports: results, count: results.length, blocked, blockedCount:blocked.length, exportDir: exportsDir });
   } catch (e) { next(e); }
 });
@@ -4189,4 +4278,4 @@ if (process.env.NODE_ENV === 'production') {
   const vite = await createViteServer({ root, server: { middlewareMode: true }, appType: 'spa' });
   app.use(vite.middlewares);
 }
-app.listen(port, () => console.log(`ClipBoost running at http://localhost:${port}`));
+app.listen(port, '127.0.0.1', () => console.log(`ClipBoost running at http://127.0.0.1:${port}`));
