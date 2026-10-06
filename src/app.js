@@ -864,6 +864,7 @@
         <div class="campaign-discover-actions-v143">
           <button class="btn campaign-details-btn-v223" data-campaign-discover-select="${escapeHtml(c.id)}">View details</button>
           <button class="btn primary" data-campaign-open-studio="${escapeHtml(c.id)}">Edit in Campaign →</button>
+          <button class="campaign-discover-delete-v237" data-campaign-discover-delete="${escapeHtml(c.id)}" type="button" title="Delete campaign" aria-label="Delete ${escapeHtml(c.name||'campaign')}">×</button>
         </div>
       </article>`;
     }).join(''):`<div class="campaign-discover-empty-v143"><b>No campaigns yet</b><span>Paste a campaign page or create one manually.</span></div>`;
@@ -1287,6 +1288,15 @@
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaign-discover')});
     document.querySelectorAll('[data-campaign-open-studio]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignOpenStudio;state.campaignDetailsOpen=false;state.campaignEditorOpen=true;navigate('campaigns')});
     document.querySelectorAll('[data-campaign-discover-select]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignDiscoverSelect;state.campaignTab='overview';state.campaignDetailsOpen=true;state.campaignFormOpen=false;render()});
+    document.querySelectorAll('[data-campaign-discover-delete]').forEach(el=>el.onclick=async e=>{
+      e.preventDefault();e.stopPropagation();
+      const id=el.dataset.campaignDiscoverDelete,c=(state.campaigns?.campaigns||[]).find(x=>String(x.id)===String(id));if(!id||!c||state.campaignBusy)return;
+      const ok=await confirmAction({kind:'danger',eyebrow:'Discover',title:`Delete ${c.name||'this campaign'}?`,message:'This removes the campaign from Mint. External campaign pages and provider files are not deleted.',confirmLabel:'Delete campaign'});if(!ok)return;
+      state.campaignBusy=true;
+      try{const r=await fetch(`/api/campaigns/${encodeURIComponent(id)}`,{method:'DELETE'});await readJsonResponse(r,'Could not delete campaign');if(String(state.campaignSelected||'')===String(id)){state.campaignSelected=null;state.campaignDetailsOpen=false}state.campaigns=null;await loadCampaigns()}
+      catch(err){showNotice({kind:'danger',eyebrow:'Discover',title:'Could not delete campaign',message:err.message||'The campaign could not be deleted.'})}
+      finally{state.campaignBusy=false;render()}
+    });
     const closeCampaignDetails=()=>{state.campaignDetailsOpen=false;render()};
     const closeCampaignDetailsBtn=document.getElementById('closeCampaignDetails');if(closeCampaignDetailsBtn)closeCampaignDetailsBtn.onclick=closeCampaignDetails;
     const campaignDetailsBackdrop=document.getElementById('campaignDetailsBackdrop');if(campaignDetailsBackdrop)campaignDetailsBackdrop.onclick=e=>{if(e.target===campaignDetailsBackdrop)closeCampaignDetails()};

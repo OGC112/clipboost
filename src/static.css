@@ -593,3 +593,8 @@
 
 /* ClipBoost 21.36 — Publish-first workflow */
 .mint-studio-header-actions-v142 #publishBtn,.mint-selected-preview-actions-v128 #previewPublishBtn{min-width:112px}
+
+/* ClipBoost 21.37.6 — Discover campaign deletion */
+.campaign-discover-actions-v143{position:relative}
+.campaign-discover-delete-v237{width:34px;height:34px;flex:0 0 34px;border:1px solid rgba(239,51,64,.24);border-radius:10px;background:rgba(239,51,64,.06);color:#f06b76;font-size:20px;line-height:1;cursor:pointer;transition:.16s ease}
+.campaign-discover-delete-v237:hover{background:rgba(239,51,64,.15);border-color:rgba(239,51,64,.55);color:#fff;transform:translateY(-1px)}
