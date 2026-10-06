@@ -851,6 +851,7 @@
       const readiness=campaignReadiness(c);
       const q=campaignQualification(c);
       return `<article class="campaign-discover-card-v143">
+        <button class="campaign-discover-delete-v239" data-campaign-discover-delete="${escapeHtml(c.id)}" type="button" title="Delete campaign" aria-label="Delete ${escapeHtml(c.name||'campaign')}">×</button>
         <div class="campaign-discover-card-top-v143">
           <div><span class="campaign-state ${escapeHtml(c.status||'active')}">${escapeHtml(c.status||'active')}</span><small>${escapeHtml(c.provider||'Campaign')}</small></div>
           <span class="campaign-discover-score-v143">${readiness.score}% setup</span>
@@ -866,7 +867,6 @@
         <div class="campaign-discover-actions-v143">
           <button class="btn campaign-details-btn-v223" data-campaign-discover-select="${escapeHtml(c.id)}">View details</button>
           <button class="btn primary" data-campaign-open-studio="${escapeHtml(c.id)}">Edit in Campaign →</button>
-          <button class="campaign-discover-delete-v237" data-campaign-discover-delete="${escapeHtml(c.id)}" type="button" title="Delete campaign" aria-label="Delete ${escapeHtml(c.name||'campaign')}">×</button>
         </div>
       </article>`;
     }).join(''):`<div class="campaign-discover-empty-v143"><b>No campaigns yet</b><span>Paste a campaign page or create one manually.</span></div>`;

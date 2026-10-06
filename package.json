@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.38.0",
-  "description": "ClipBoost 21.38.0 — Multi-Provider Smart Import",
+  "version": "21.38.1",
+  "description": "ClipBoost 21.38.1 — Clean Discover Layout",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
