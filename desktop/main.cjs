@@ -659,7 +659,7 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
     }finally{try{ses.webRequest.onBeforeRequest(null)}catch{}if(!worker.isDestroyed())worker.destroy()}
   }
 
-  if(!candidates.length)throw new Error('Canto did not expose a downloadable video for this asset.');
+  if(!candidates.length)throw new Error('The asset provider did not expose a downloadable video stream for this asset.');
   const headers={Accept:'video/*,application/octet-stream;q=0.9,*/*;q=0.2'};if(referer)headers.Referer=referer;
   let response=null,lastError=null;
   for(const candidate of candidates){
@@ -686,15 +686,15 @@ async function importCampaignAssetToProject(projectId, mediaUrl, pageUrl, label=
     }finally{try{ses.webRequest.onBeforeRequest(null)}catch{}if(!worker.isDestroyed())worker.destroy()}
     for(const candidate of candidates){if(candidate===target)continue;try{const retry=await ses.fetch(candidate,{method:'GET',headers,redirect:'follow'});if(!retry.ok||retry.status===206)continue;const ct=String(retry.headers.get('content-type')||'').toLowerCase(),cr=String(retry.headers.get('content-range')||''),cl=Number(retry.headers.get('content-length')||0);if(cr||(ct&&(ct.includes('text/html')||ct.includes('application/json')||ct.startsWith('image/')))||(cl>0&&cl<64*1024))continue;response=retry;target=candidate;break}catch{}}
   }
-  if(!response)throw new Error(`Canto did not expose a complete playable video stream for this asset.${lastError&&!isBlocked(lastError)?' '+String(lastError.message||lastError):''}`);
+  if(!response)throw new Error(`The asset provider did not expose a complete playable video stream for this asset.${lastError&&!isBlocked(lastError)?' '+String(lastError.message||lastError):''}`);
   const type=String(response.headers.get('content-type')||'').toLowerCase();
   const ext=type.includes('quicktime')?'.mov':type.includes('webm')?'.webm':'.mp4';
   const fileName=`${String(label||'campaign-asset').replace(/[^a-z0-9._-]+/gi,'-').slice(0,80)||'campaign-asset'}${ext}`;
   const endpoint=backendRuntimeUrl('/api/videos/campaign-stream');if(!endpoint)throw new Error('ClipBoost backend is not available.');
-  if(!response.body)throw new Error('Canto returned no media stream.');
+  if(!response.body)throw new Error('The asset provider returned no media stream.');
   const uploaded=await fetch(endpoint,{method:'POST',headers:{'Content-Type':type.startsWith('video/')?type:'video/mp4','X-ClipBoost-Project-Id':id,'X-ClipBoost-File-Name':encodeURIComponent(fileName)},body:response.body,duplex:'half'});
   const body=await uploaded.json().catch(()=>({}));
-  if(!uploaded.ok)throw new Error(body?.error||`Could not stream Canto media (HTTP ${uploaded.status}).`);
+  if(!uploaded.ok)throw new Error(body?.error||`Could not stream campaign media (HTTP ${uploaded.status}).`);
   return {ok:true,project:body,mediaUrl:target};
 }
 

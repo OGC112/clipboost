@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.37.4",
-  "description": "ClipBoost 21.37.4 — Reliable Campaign Confirmation",
+  "version": "21.37.5",
+  "description": "ClipBoost 21.37.5 — Campaign Media and Watermark Detection",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
