@@ -125,10 +125,8 @@ const {
   readLibrary,
   writeLibrary,
   readCampaigns,
-  writeCampaigns,
   updateCampaigns,
   readPlatformProfiles,
-  writePlatformProfiles,
   updatePlatformProfiles
 } = createAppStorage(storageRoot);
 
