@@ -23,6 +23,8 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 import { validatePublicHttpUrl } from './security/network.js';
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes } from './video/analysis.js';
+import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
+import { createRuntimeTools } from './runtime/tools.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,106 +142,9 @@ const {
   updatePlatformProfiles
 } = createAppStorage(storageRoot);
 
-const settingsEnvPath = process.env.DOTENV_CONFIG_PATH ? path.resolve(process.env.DOTENV_CONFIG_PATH) : path.join(root, '.env');
-const SETTINGS_KEYS = [
-  'YOUTUBE_API_KEY','TWITCH_CLIENT_ID','TWITCH_CLIENT_SECRET',
-  'PYTHON_BIN','LOCAL_WHISPER_MODEL','LOCAL_WHISPER_DEVICE','LOCAL_WHISPER_COMPUTE_TYPE',
-  'LOCAL_WHISPER_CHUNK_SECONDS','LOCAL_WHISPER_WORKERS','LOCAL_WHISPER_CPU_THREADS','LOCAL_WHISPER_SKIP_SILENCE',
-  'OLLAMA_URL','OLLAMA_MODEL','CLIPBOOST_EXPORT_DIR','CLIPBOOST_UPDATE_OWNER','CLIPBOOST_UPDATE_REPO',
-  'YOUTUBE_AUTH_BROWSER','NODE_BIN','FFMPEG_BIN'
-];
-function parseEnvText(text='') {
-  const out = {};
-  for (const raw of String(text).split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const idx = line.indexOf('=');
-    if (idx < 0) continue;
-    const key = line.slice(0,idx).trim();
-    let value = line.slice(idx+1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1,-1);
-    out[key] = value;
-  }
-  return out;
-}
-function serializeEnv(map) {
-  return Object.entries(map).map(([k,v]) => `${k}=${String(v ?? '').replace(/\r?\n/g,'')}`).join('\n') + '\n';
-}
-async function readSettingsEnv() {
-  try { return parseEnvText(await fs.readFile(settingsEnvPath, 'utf8')); }
-  catch { return {}; }
-}
-async function writeSettingsEnv(nextValues) {
-  const current = await readSettingsEnv();
-  for (const key of SETTINGS_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(nextValues, key)) current[key] = String(nextValues[key] ?? '').trim();
-  }
-  await fs.writeFile(settingsEnvPath, serializeEnv(current), 'utf8');
-  for (const key of SETTINGS_KEYS) if (Object.prototype.hasOwnProperty.call(current, key)) process.env[key] = current[key];
-  return current;
-}
-function maskSecret(value='') {
-  const v = String(value || '');
-  if (!v) return '';
-  if (v.length <= 8) return '••••••••';
-  return `${v.slice(0,4)}••••••••${v.slice(-4)}`;
-}
+const { settingsEnvPath, readSettingsEnv, writeSettingsEnv } = createSettingsEnv(root);
 
-function resolveWindowsTool(name, envKey, common = []) {
-  const raw = String(process.env[envKey] || '').trim();
-  const candidates = [];
-  if (raw) {
-    try {
-      if (fsSync.existsSync(raw) && fsSync.statSync(raw).isDirectory()) candidates.push(path.join(raw, `${name}.exe`));
-      else if (fsSync.existsSync(raw)) {
-        if (path.basename(raw).toLowerCase() === `${name}.exe`) candidates.push(raw);
-        else candidates.push(path.join(path.dirname(raw), `${name}.exe`));
-      }
-    } catch {}
-  }
-  candidates.push(...common);
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    try { if (fsSync.existsSync(candidate) && fsSync.statSync(candidate).isFile()) return candidate; } catch {}
-  }
-  return null;
-}
-
-const windowsTools = process.platform === 'win32' ? {
-  node: resolveWindowsTool('node','NODE_BIN',[
-    'D:\\Apps\\NodeJS\\node.exe',
-    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe')
-  ]),
-  ffmpeg: resolveWindowsTool('ffmpeg','FFMPEG_BIN',[
-    'D:\\Apps\\FFmpeg\\bin\\ffmpeg.exe'
-  ]),
-  ffprobe: resolveWindowsTool('ffprobe','FFMPEG_BIN',[
-    'D:\\Apps\\FFmpeg\\bin\\ffprobe.exe'
-  ])
-} : { node:null, ffmpeg:null, ffprobe:null };
-
-if (process.platform === 'win32') {
-  const extraDirs = [windowsTools.node, windowsTools.ffmpeg, windowsTools.ffprobe, path.join(root,'.venv','Scripts')]
-    .filter(Boolean).map(x => fsSync.existsSync(x) && fsSync.statSync(x).isDirectory() ? x : path.dirname(x));
-  const key = Object.prototype.hasOwnProperty.call(process.env,'Path') ? 'Path' : 'PATH';
-  const current = String(process.env[key] || '');
-  const unique = [...new Set(extraDirs.filter(Boolean))];
-  if (unique.length) {
-    process.env[key] = `${unique.join(path.delimiter)}${current ? path.delimiter + current : ''}`;
-    process.env.PATH = process.env[key];
-    process.env.Path = process.env[key];
-  }
-}
-
-function runtimeCommand(command) {
-  if (process.platform !== 'win32') return command;
-  const base = String(path.basename(command || '')).toLowerCase().replace(/\.exe$/,'');
-  if (base === 'ffmpeg' && windowsTools.ffmpeg) return windowsTools.ffmpeg;
-  if (base === 'ffprobe' && windowsTools.ffprobe) return windowsTools.ffprobe;
-  if (base === 'node' && windowsTools.node) return windowsTools.node;
-  return command;
-}
-
+const { windowsTools, runtimeCommand } = createRuntimeTools(root);
 
 const app = express();
 
