@@ -34,7 +34,11 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm test
+
 
       - name: Choose release version
         id: version
