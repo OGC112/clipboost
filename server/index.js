@@ -4016,8 +4016,9 @@ async function analyzeProject(projectId, options = {}) {
       candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced', 'dynamic', 'natural');
     }
     const semanticUsed=Boolean(candidates.some(x=>x?.signals?.semantic));
+    const shortAssetMode=Boolean(candidates.some(x=>x?.signals?.shortAsset));
     const contextReviewed=Boolean(candidates.some(x=>x?.signals?.contextReviewed));
-    if(!aiError && transcript?.words?.length && !semanticUsed){
+    if(!aiError && transcript?.words?.length && !semanticUsed && !shortAssetMode){
       const diag=meta.__ollamaDiagnostics||{};
       const errors=Array.isArray(diag.errors)?diag.errors.filter(Boolean):[];
       const first=String(errors[0]||'');
