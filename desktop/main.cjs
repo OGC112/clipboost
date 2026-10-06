@@ -462,6 +462,13 @@ async function inspectCampaignResource(item={}) {
     const top=await loadCampaignWorkerSnapshot(url);const topInfo=resourceSnapshotKind(top||{});
     let host='';try{host=new URL(url).hostname}catch{}
     const isCanto=/canto\.global$/i.test(host);
+    const isFrame=/(?:^|\.)frame\.io$/i.test(host);
+    if(isFrame&&!Number(topInfo.videoCount||0)){
+      const frameTitle=String(top?.title||'');
+      if(/\.(?:mp4|mov|webm|m4v)\b/i.test(frameTitle)||/télécharger|download/i.test(String(top?.text||''))){
+        topInfo.videoCount=1;topInfo.mediaCount=Math.max(1,Number(topInfo.mediaCount||0));topInfo.kind='video-pack';
+      }
+    }
     const declaredItemCount=isCanto?cantoDeclaredItemCount(top||{}):0;
     const visibleAssetCount=isCanto?cantoVisibleAssetCount(top||{}):0;
     const rawChildren=(Array.isArray(top?.links)?top.links:[]).map(x=>({url:String(x?.href||''),label:String(x?.text||'').trim()})).filter(x=>{try{const u=new URL(x.url);return u.hostname===host&&x.url!==url&&!/\.(?:jpg|jpeg|png|gif|webp|svg)(?:[?#]|$)/i.test(x.url)&&!/^downloads?$/i.test(x.label)}catch{return false}});
@@ -723,6 +730,7 @@ async function runAuthenticatedCampaignImport(rawUrl) {
   let confirmed = false;
   let confirmCampaignName = '';
   let selectedCampaign = null;
+  const visitedAssets = new Map();
   let stableKey = '';
   let stableSince = 0;
   const started = Date.now();
@@ -751,6 +759,16 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       const login = campaignSnapshotIsLogin(snapshot);
       const evidence = campaignSnapshotEvidence(snapshot);
       const sameHost = current.hostname === target.hostname;
+      // Remember external asset viewers opened after a campaign was selected. Frame.io
+      // commonly exposes the asset through its player/download UI rather than a direct MP4 link.
+      if(selectedCampaign&&!sameHost){
+        const host=String(current.hostname||'').toLowerCase();
+        const info=resourceSnapshotKind(snapshot||{});
+        const title=String(snapshot.title||'').replace(/\s*-\s*Frame\.io.*$/i,'').trim();
+        const isFrame=/frame\.io$/i.test(host)||/\.frame\.io$/i.test(host);
+        const looksMedia=isFrame||info.videoCount>0||/\.(?:mp4|mov|webm|m4v)\b/i.test(String(snapshot.title||''));
+        if(looksMedia)visitedAssets.set(currentUrl,{url:currentUrl,label:title||'Campaign asset',kind:info.videoCount?'video-pack':'asset-pack',videoCount:Math.max(isFrame?1:0,Number(info.videoCount||0)),imageCount:Number(info.imageCount||0),mediaCount:Math.max(1,Number(info.mediaCount||0)),mediaUrls:info.mediaUrls||[],inspectStatus:'visited'});
+      }
       // The initial URL may be a creator/listing page containing several campaigns.
       // Never force navigation back: the user's current page is the source of truth.
       const key = `${currentUrl}|${String(snapshot.text || '').length}|${evidence}`;
@@ -788,6 +806,14 @@ async function runAuthenticatedCampaignImport(rawUrl) {
         let providerHost='';try{providerHost=new URL(campaignUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
         const resourceLinks=resourceLinksFromRequirements(requirementsSnapshot||{},providerHost);
         const resourceInspections=[];for(const item of resourceLinks){resourceInspections.push(await inspectCampaignResource(item))}
+        // Merge asset viewers the user actually opened. This catches Frame.io review/player
+        // pages whose playable stream is not present in the original campaign HTML.
+        for(const asset of visitedAssets.values()){
+          if(resourceInspections.some(x=>String(x?.url||'')===asset.url))continue;
+          let inspected=asset;
+          try{const deep=await inspectCampaignResource(asset);if(Number(deep?.mediaCount||0)>0||Number(deep?.videoCount||0)>0)inspected={...asset,...deep}}catch{}
+          resourceInspections.push(inspected);
+        }
         if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
         const parsed = await parseCampaignBrowserSnapshots(campaignUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;

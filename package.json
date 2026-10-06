@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.37.2",
-  "description": "ClipBoost 21.37.2 — Persistent Campaign Confirmation",
+  "version": "21.37.3",
+  "description": "ClipBoost 21.37.3 — Frame.io Campaign Assets",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
