@@ -1257,8 +1257,9 @@ function normalizeRenderOptions(raw = {}) {
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
+  const outputFormat = String(raw.outputFormat||'shorts-9x16').toLowerCase()==='source' ? 'source' : 'shorts-9x16';
   return {
-    intensity,preset,captionStyle,captionPosition,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,
+    intensity,preset,captionStyle,captionPosition,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
     reactionDetection: raw.reactionDetection !== false,
