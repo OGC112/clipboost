@@ -454,3 +454,88 @@
 
 /* Legacy handle is no longer used by the social caption editor. */
 .mint-caption-drag-handle-v222{display:none!important}
+
+
+/* AI Studio 21.44 — live image watermark editor */
+.mint-live-watermark-v224{
+  position:absolute!important;
+  z-index:7!important;
+  transform:translate(-50%,-50%)!important;
+  height:auto!important;
+  max-width:42%!important;
+  max-height:42%!important;
+  object-fit:contain!important;
+  cursor:grab!important;
+  user-select:none!important;
+  touch-action:none!important;
+  filter:drop-shadow(0 3px 8px rgba(0,0,0,.34))!important;
+  border:1px solid transparent!important;
+  border-radius:6px!important;
+  transition:border-color .12s ease,transform .08s ease!important;
+}
+.mint-live-watermark-v224:hover{
+  border-color:rgba(255,255,255,.45)!important;
+}
+.mint-live-watermark-v224.dragging{
+  cursor:grabbing!important;
+  border-color:rgba(239,68,68,.9)!important;
+  transform:translate(-50%,-50%) scale(1.02)!important;
+}
+.mint-watermark-controls-v224{
+  display:grid!important;
+  gap:9px!important;
+  padding:12px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:12px!important;
+  background:rgba(255,255,255,.012)!important;
+}
+.mint-watermark-controls-v224>small{
+  color:#7f8590!important;
+  font-size:7px!important;
+}
+.mint-watermark-file-v224{
+  display:grid!important;
+  grid-template-columns:36px minmax(0,1fr) auto!important;
+  gap:9px!important;
+  align-items:center!important;
+}
+.mint-watermark-file-v224 img{
+  width:36px!important;
+  height:36px!important;
+  object-fit:contain!important;
+  border-radius:7px!important;
+  background:#090b0f!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+}
+.mint-watermark-file-v224 span{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#d8dbe2!important;
+  font-size:8px!important;
+}
+.mint-watermark-file-v224 .btn{
+  padding:6px 8px!important;
+  min-height:0!important;
+  font-size:7px!important;
+}
+.mint-watermark-sliders-v224{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:10px!important;
+}
+.mint-watermark-sliders-v224 label{
+  display:grid!important;
+  gap:5px!important;
+  color:#9da2ad!important;
+  font-size:7px!important;
+}
+.mint-watermark-sliders-v224 input[type="range"]{
+  width:100%!important;
+  accent-color:#ef4444!important;
+}
+.mint-watermark-upload-v224{
+  justify-content:center!important;
+  cursor:pointer!important;
+}
