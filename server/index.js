@@ -1344,13 +1344,16 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     ? String(raw.captionPreference).toLowerCase()
     : 'auto';
   const captions = captionPreference === 'off' ? false : Boolean(transcript?.captions?.length || words.length);
-  const captionStyle = contentType === 'podcast' || contentType === 'talking' ? 'clean' : (contentType === 'visual' ? 'minimal' : 'bold');
+  // Caption presentation is user-controlled. Auto Director may decide whether
+  // captions are useful, but it must not overwrite the editor's Style / Size /
+  // Position choices on every preview render.
+  const captionStyle = base.captionStyle;
   const captionColorPreference = ['auto','white','yellow','lime','cyan','pink','red'].includes(String(raw.captionColor||'').toLowerCase())
     ? String(raw.captionColor).toLowerCase()
     : 'auto';
   const automaticCaptionColor = contentType === 'gaming' || contentType === 'reaction' ? 'yellow' : 'white';
   const captionColor = captionColorPreference === 'auto' ? automaticCaptionColor : captionColorPreference;
-  const captionSize = wordsPerMinute > 175 ? 'small' : wordsPerMinute < 85 ? 'large' : 'medium';
+  const captionSize = base.captionSize;
 
   const sceneAwareCuts = scenes.length > 0;
   const silenceRemoval = silenceSeconds >= .55 && silenceRatio >= .018;
@@ -1362,7 +1365,8 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     intensity,
     preset,
     captionStyle,
-    captionPosition:'bottom',
+    captionPosition:base.captionPosition,
+    captionY:base.captionY,
     captionSize,
     captionColor,
     cleanupMode,
