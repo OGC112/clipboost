@@ -37,7 +37,8 @@ const metaDir = path.join(storageRoot, 'meta');
 const exportsDir = process.env.CLIPBOOST_EXPORT_DIR ? path.resolve(process.env.CLIPBOOST_EXPORT_DIR) : path.join(storageRoot, 'exports');
 const previewsDir = path.join(storageRoot, 'previews');
 const trackingDir = path.join(storageRoot, 'tracking');
-for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir, trackingDir]) fsSync.mkdirSync(dir, { recursive: true });
+const watermarksDir = path.join(storageRoot, 'watermarks');
+for (const dir of [uploadsDir, metaDir, exportsDir, previewsDir, trackingDir, watermarksDir]) fsSync.mkdirSync(dir, { recursive: true });
 
 // Project task lifecycle.
 // Keep processing tied to the project that started it so a stuck/obsolete job can
@@ -167,6 +168,30 @@ const upload = multer({
     if ((file.mimetype || '').startsWith('video/')) cb(null, true);
     else cb(new Error('Only video files are supported.'));
   }
+});
+
+const watermarkUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_, __, cb) => cb(null, watermarksDir),
+    filename: (_, file, cb) => {
+      const ext = ({'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'})[String(file.mimetype||'').toLowerCase()] || '.png';
+      cb(null, `${crypto.randomUUID()}${ext}`);
+    }
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    if (['image/png','image/jpeg','image/webp'].includes(String(file.mimetype||'').toLowerCase())) cb(null, true);
+    else cb(new Error('Watermark must be a PNG, JPG, or WebP image.'));
+  }
+});
+
+app.post('/api/watermarks', watermarkUpload.single('watermark'), (req,res) => {
+  if (!req.file) return res.status(400).json({error:'Watermark image is required.'});
+  res.json({
+    url: `/media/watermarks/${req.file.filename}`,
+    filename: req.file.filename,
+    originalName: req.file.originalname || 'watermark'
+  });
 });
 
 function run(command, args, { timeout = 15 * 60 * 1000 } = {}) {
@@ -1260,8 +1285,14 @@ function normalizeRenderOptions(raw = {}) {
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
   const outputFormat = String(raw.outputFormat||'shorts-9x16').toLowerCase()==='source' ? 'source' : 'shorts-9x16';
+  const watermarkUrl = /^\/media\/watermarks\/[a-zA-Z0-9._-]+$/.test(String(raw.watermarkUrl||'')) ? String(raw.watermarkUrl) : '';
+  const watermarkX = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkX))?Number(raw.watermarkX):.86));
+  const watermarkY = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkY))?Number(raw.watermarkY):.12));
+  const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
+  const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
     intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,
+    watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
     reactionDetection: raw.reactionDetection !== false,
@@ -1828,6 +1859,21 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     else filter.push(`${timeline.pieces.map((_,i)=>`[v${i}]`).join('')}concat=n=${timeline.pieces.length}:v=1:a=0[${videoLabel}]`);
   }
 
+  let watermarkPath = null;
+  if (options.watermarkUrl) {
+    const filename = path.basename(options.watermarkUrl);
+    const candidatePath = path.join(watermarksDir, filename);
+    if (fsSync.existsSync(candidatePath)) watermarkPath = candidatePath;
+  }
+  if (watermarkPath) {
+    const wmWidth = Math.max(32, Math.round(width * options.watermarkScale));
+    const xExpr = `(W-w)*${options.watermarkX.toFixed(4)}`;
+    const yExpr = `(H-h)*${options.watermarkY.toFixed(4)}`;
+    filter.push(`[1:v]scale=${wmWidth}:-1:flags=lanczos,format=rgba,colorchannelmixer=aa=${options.watermarkOpacity.toFixed(3)}[wm]`);
+    filter.push(`[${videoLabel}][wm]overlay=x='${xExpr}':y='${yExpr}':shortest=1[wmout]`);
+    videoLabel = 'wmout';
+  }
+
   let assFile = null;
   if (options.captions && meta.transcript?.captions?.length) {
     assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height, options).catch(() => null);
@@ -1839,7 +1885,9 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
 
   const filterScriptPath = path.join(previewsDir, `${meta.id}-filter-${crypto.randomUUID()}.txt`);
   await fs.writeFile(filterScriptPath, filter.join(';'), 'utf8');
-  const args = ['-y','-i',meta.sourcePath,'-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`];
+  const args = ['-y','-i',meta.sourcePath];
+  if (watermarkPath) args.push('-loop','1','-i',watermarkPath);
+  args.push('-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`);
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
   args.push('-c:v','libx264','-preset',preview?'ultrafast':'veryfast','-crf',preview?'28':'21','-pix_fmt','yuv420p');
   if (hasAudio) args.push('-c:a','aac','-b:a',preview?'96k':'160k','-ac','2'); else args.push('-an');
@@ -1874,7 +1922,14 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       trackingMode: options.trackingMode,
       cameraMovement: options.cameraMovement,
       captionStyle: options.captionStyle,
-      captionColor: options.captionColor
+      captionColor: options.captionColor,
+      watermark: watermarkPath ? {
+        url: options.watermarkUrl,
+        x: options.watermarkX,
+        y: options.watermarkY,
+        scale: options.watermarkScale,
+        opacity: options.watermarkOpacity
+      } : null
     }
   };
 }
