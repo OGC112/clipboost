@@ -731,6 +731,14 @@ async function runAuthenticatedCampaignImport(rawUrl) {
   let confirmCampaignName = '';
   let selectedCampaign = null;
   const visitedAssets = new Map();
+  let electronConfirmed = false;
+  const confirmNavigationHandler=(event,url)=>{
+    if(String(url||'').startsWith('clipboost-confirm://campaign')){
+      event.preventDefault();
+      electronConfirmed=true;
+    }
+  };
+  win.webContents.on('will-navigate',confirmNavigationHandler);
   let stableKey = '';
   let stableSince = 0;
   const started = Date.now();
@@ -742,7 +750,7 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       const label=JSON.stringify(`Confirmer : ${selectedCampaign.name}`);
       try{await win.webContents.executeJavaScript(`(() => {
         let btn=document.getElementById('clipboost-confirm-campaign');
-        if(!btn){btn=document.createElement('button');btn.id='clipboost-confirm-campaign';btn.type='button';Object.assign(btn.style,{position:'fixed',right:'24px',bottom:'24px',zIndex:'2147483647',padding:'14px 20px',border:'0',borderRadius:'12px',background:'#ef3340',color:'#fff',font:'600 14px system-ui,sans-serif',boxShadow:'0 12px 32px rgba(0,0,0,.35)',cursor:'pointer'});btn.addEventListener('click',()=>{btn.textContent='Campagne confirmée ✓';btn.disabled=true;btn.dataset.confirmed='1';});document.body.appendChild(btn)}
+        if(!btn){btn=document.createElement('button');btn.id='clipboost-confirm-campaign';btn.type='button';Object.assign(btn.style,{position:'fixed',right:'24px',bottom:'24px',zIndex:'2147483647',padding:'14px 20px',border:'0',borderRadius:'12px',background:'#ef3340',color:'#fff',font:'600 14px system-ui,sans-serif',boxShadow:'0 12px 32px rgba(0,0,0,.35)',cursor:'pointer'});btn.addEventListener('click',()=>{btn.textContent='Validation…';btn.disabled=true;btn.dataset.confirmed='1';location.href='clipboost-confirm://campaign';});document.body.appendChild(btn)}
         if(btn.dataset.confirmed!=='1')btn.textContent=${label};
         return btn.dataset.confirmed==='1';
       })()`)}catch{}
@@ -788,8 +796,9 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       // subsequent page, including external asset galleries.
       if(selectedCampaign){
         await injectConfirmButton();
-        try{confirmed=Boolean(await win.webContents.executeJavaScript(`document.getElementById('clipboost-confirm-campaign')?.dataset.confirmed==='1'`))}catch{confirmed=false}
+        try{const domConfirmed=Boolean(await win.webContents.executeJavaScript(`document.getElementById('clipboost-confirm-campaign')?.dataset.confirmed==='1'`));confirmed=electronConfirmed||domConfirmed}catch{confirmed=electronConfirmed}
       }
+      confirmed=confirmed||electronConfirmed;
       if (selectedCampaign && confirmed) {
         const campaignSnapshot=selectedCampaign.snapshot;
         const campaignUrl=selectedCampaign.url;
@@ -823,6 +832,7 @@ async function runAuthenticatedCampaignImport(rawUrl) {
     }
     if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign selection was closed before confirmation.' : 'Timed out waiting for confirmation. Open the campaign you want, then click “Confirmer cette campagne”.');
   } finally {
+    try{if(!win.isDestroyed())win.webContents.removeListener('will-navigate',confirmNavigationHandler)}catch{}
     if (campaignImportWindow === win) campaignImportWindow = null;
     if (resolved && !win.isDestroyed()) win.close();
   }

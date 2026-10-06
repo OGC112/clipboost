@@ -604,6 +604,19 @@ function extractAuthenticatedCampaignSnapshots(campaignSnapshot={}, requirements
     if(referenceDownload&&host){if(!seenReference.has(href)){seenReference.add(href);draft.referenceAssets.push({url:href,label:`Reference image ${draft.referenceAssets.length+1}`,kind:'reference-image'})};continue}
     if(assetPack&&host&&host!==provider&&!/clipping\.net$/i.test(host)){if(!seenResource.has(href)){seenResource.add(href);const info=inspectionByUrl.get(href)||{};draft.resourceUrls.push({url:href,label:label.slice(0,160),kind:String(info.kind||'asset-pack'),videoCount:Number(info.videoCount||0),imageCount:Number(info.imageCount||0),mediaCount:Number(info.mediaCount||0),declaredItemCount:Number(info.declaredItemCount||0),visibleAssetCount:Number(info.visibleAssetCount||0),observedItemCount:Number(info.observedItemCount||0),videoCountExact:Boolean(info.videoCountExact),multipleVideoEvidence:Boolean(info.multipleVideoEvidence),inspectStatus:String(info.inspectStatus||''),items:Array.isArray(info.items)?info.items:[]})}}
   }
+  // Asset viewers visited by the user are authoritative campaign resources too. This is
+  // required for providers such as Frame.io where the campaign page may expose a generic
+  // reference download separately from the actual video viewer.
+  for(const info of resourceInspections){
+    const href=String(info?.url||'').trim();if(!/^https?:\/\//i.test(href)||seenResource.has(href))continue;
+    let host='';try{host=new URL(href).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+    if(!host||host===provider||/clipping\.net$/i.test(host))continue;
+    const kind=String(info?.kind||'asset-pack');
+    const videoCount=Number(info?.videoCount||0),mediaCount=Number(info?.mediaCount||0);
+    if(videoCount<=0&&mediaCount<=0&&!/(?:^|\.)frame\.io$/i.test(host))continue;
+    seenResource.add(href);
+    draft.resourceUrls.push({url:href,label:String(info?.label||'Campaign asset').slice(0,160),kind,videoCount,imageCount:Number(info?.imageCount||0),mediaCount:Math.max(mediaCount,videoCount),declaredItemCount:Number(info?.declaredItemCount||0),visibleAssetCount:Number(info?.visibleAssetCount||0),observedItemCount:Number(info?.observedItemCount||0),videoCountExact:Boolean(info?.videoCountExact),multipleVideoEvidence:Boolean(info?.multipleVideoEvidence),inspectStatus:String(info?.inspectStatus||'visited'),items:Array.isArray(info?.items)?info.items:[]});
+  }
   const reqList=(Array.isArray(requirementsSnapshot?.listItems)?requirementsSnapshot.listItems:[]).filter(x=>/clip requirements/i.test(String(x?.section||''))).map(x=>x.text);
   const vioList=(Array.isArray(requirementsSnapshot?.listItems)?requirementsSnapshot.listItems:[]).filter(x=>/violations/i.test(String(x?.section||''))).map(x=>x.text);
   draft.requirements=snapshotCleanRuleLines(reqList.length?reqList:snapshotSection(reqLines,/^clip requirements$/i,/^violations$/i));
