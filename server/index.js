@@ -22,6 +22,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes } from './video/analysis.js';
+import { renderDimensions } from './video/format.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
 import { createExternalIngestion } from './integrations/ytdlp.js';
@@ -2039,7 +2040,8 @@ async function ensureCandidatePreview(meta, start, end, options = {}) {
       const tmpPath = `${filePath}.tmp.mp4`;
       await fs.rm(tmpPath, { force: true }).catch(() => {});
       try {
-        const renderInfo = await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:540, height:960 });
+        const dimensions = renderDimensions(meta, options, { preview:true });
+        const renderInfo = await renderEditedClip(meta, safeStart, safeEnd, tmpPath, options, { preview:true, width:dimensions.width, height:dimensions.height, outputFormat:dimensions.format });
         await fs.rename(tmpPath, filePath);
         await fs.writeFile(renderMetaFile,JSON.stringify(renderInfo),'utf8').catch(()=>{});
         return renderInfo;
