@@ -3,7 +3,7 @@
   "productName": "ClipBoost",
   "private": true,
   "version": "21.38.1",
-  "description": "ClipBoost 21.38.1 — Clean Discover Layout",
+  "description": "ClipBoost — Clean Discover Layout",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
