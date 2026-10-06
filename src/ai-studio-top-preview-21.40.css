@@ -233,3 +233,73 @@
   .mint-shorts-preview-side-v220{min-height:150px!important}
   .mint-general-editor-v216 .mint-studio-side-v142 .mint-ai-tools-v142{position:static!important}
 }
+
+
+/* AI Studio 21.41 — state-aware vertical density */
+.mint-studio-empty-v221 .mint-studio-header-v142{
+  padding-bottom:10px!important;
+  margin-bottom:10px!important;
+}
+.mint-studio-empty-v221 .upload-card{
+  min-height:0!important;
+  padding:18px 20px!important;
+  grid-template-columns:44px minmax(0,1fr) auto!important;
+  align-items:center!important;
+}
+.mint-studio-empty-v221 .upload-copy{
+  gap:3px!important;
+}
+.mint-studio-empty-v221 .upload-copy strong{font-size:11px!important}
+.mint-studio-empty-v221 .upload-copy span{font-size:8px!important}
+.mint-studio-empty-v221 .upload-ready-hint{margin-top:2px!important}
+.mint-studio-empty-flow-v221{
+  margin-top:12px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:12px!important;
+  padding:11px 14px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:12px!important;
+  background:rgba(255,255,255,.012)!important;
+  color:#858b96!important;
+  font-size:8px!important;
+}
+.mint-studio-empty-flow-v221 span{
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  white-space:nowrap!important;
+}
+.mint-studio-empty-flow-v221 b{
+  width:18px!important;
+  height:18px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border-radius:50%!important;
+  border:1px solid rgba(239,68,68,.32)!important;
+  background:rgba(239,68,68,.08)!important;
+  color:#fff!important;
+  font-size:7px!important;
+}
+.mint-studio-empty-flow-v221 i{
+  color:#4f5560!important;
+  font-style:normal!important;
+}
+.mint-source-change-after-review-v221{
+  margin-top:10px!important;
+  opacity:.72!important;
+}
+
+@media(max-width:820px){
+  .mint-studio-empty-v221 .upload-card{
+    grid-template-columns:40px 1fr!important;
+  }
+  .mint-studio-empty-v221 .upload-actions{
+    grid-column:1/-1!important;
+  }
+  .mint-studio-empty-flow-v221{
+    flex-wrap:wrap!important;
+  }
+}
