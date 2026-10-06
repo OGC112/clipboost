@@ -1170,7 +1170,44 @@
     if(vid===c.id)return navigate('campaigns');
     navigate('campaigns');
   }
-  async function openCampaignSource(sourceId){const c=selectedCampaign();if(!c||state.projectBusy)return;state.projectBusy=true;render();try{const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceId})});const data=await readJsonResponse(r,'Could not create campaign project');state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;state.campaignEditorOpen=true;try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}navigate('campaigns');startProjectIngestion(data.id)}catch(e){showNotice({kind:'danger',title:'Could not open campaign source',message:e.message||'Could not create campaign project'})}finally{state.projectBusy=false}}
+  async function openCampaignSource(sourceId){
+    const c=selectedCampaign();if(!c||state.projectBusy)return;
+    state.projectBusy=true;
+    state.uiModal={mode:'progress',kind:'info',eyebrow:'Campaign Studio',title:'Preparing campaign asset…',progressLabel:'Creating project…',progress:2};
+    render();
+    try{
+      const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceId})});
+      let data=await readJsonResponse(r,'Could not create campaign project');
+      state.video=data;state.selectedCandidate=0;state.campaignVariants=null;state.campaignCompliance=null;
+      try{localStorage.setItem('clipboost:lastProjectId',data.id)}catch{}
+      state.uiModal={...state.uiModal,title:'Downloading campaign asset…',progressLabel:'Starting automatic ingestion…',progress:5};
+      render();
+
+      if(!data.sourceUrl&&!['ready','degraded','analyzing'].includes(String(data.status||''))){
+        if(!(await ensureStudioPreflight({needsDownload:true})))throw new Error('Local ingestion tools are not ready.');
+        const ingestRes=await fetch(`/api/projects/${encodeURIComponent(data.id)}/ingest`,{method:'POST'});
+        data=await readJsonResponse(ingestRes,'Automatic ingestion could not start');
+        state.video=data;
+      }
+
+      if(data.status==='uploaded'){
+        state.uiModal={...state.uiModal,title:'Analyzing campaign asset…',progressLabel:'Starting Local AI…',progress:5};render();
+        const analyzeRes=await fetch(`/api/videos/${encodeURIComponent(data.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
+        data=await readJsonResponse(analyzeRes,'Campaign analysis could not start');
+        state.video=data;
+      }
+
+      const settled=['ready','degraded'].includes(String(data.status||''))?data:await waitForCampaignProjectResult(data.id);
+      state.video=settled;state.selectedCandidate=0;state.projects=null;state.campaignAssetBrowser=null;state.campaignEditorOpen=true;
+      state.uiModal=null;
+      navigate('campaigns');
+      if(settled.status==='degraded')showNotice({kind:'warning',eyebrow:'Campaign Studio',title:'Analysis completed with fallback',message:settled.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
+    }catch(e){
+      state.uiModal=null;
+      showNotice({kind:'danger',eyebrow:'Campaign Studio',title:'Could not prepare campaign asset',message:e.message||'Could not prepare this campaign asset.'});
+      render();
+    }finally{state.projectBusy=false}
+  }
   async function deleteCampaign(){const c=selectedCampaign();if(!c)return;const ok=await confirmAction({kind:'danger',eyebrow:'Campaigns',title:`Delete ${c.name}?`,message:'This removes the campaign workspace and its view tracking. Existing AI Studio projects and exported videos are kept.',confirmLabel:'Delete campaign'});if(!ok)return;const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}`,{method:'DELETE'});await readJsonResponse(r,'Could not delete campaign');state.campaignSelected=null;state.campaigns=null;await loadCampaigns()}
   async function runCampaignCheck(){const v=state.video;if(!v?.campaign?.id)return;const ci=state.selectedCandidate||0,base=v.candidates?.[ci]||{};const start=Number(document.getElementById('clipStart')?.value??base.start??0),end=Number(document.getElementById('clipEnd')?.value??base.end??start+30);const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci,start,end,options:currentRenderOptions()})});state.campaignCompliance=await readJsonResponse(r,'Campaign check failed');render()}
   async function generateCampaignVariants(){const v=state.video;if(!v?.campaign?.id)return;const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/variants`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:state.selectedCandidate||0})});const data=await readJsonResponse(r,'Could not generate variants');state.campaignVariants=data.variants||[];render()}
