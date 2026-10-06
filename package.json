@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.37.1",
-  "description": "ClipBoost 21.37.1 — Confirmed Campaign Selection",
+  "version": "21.37.2",
+  "description": "ClipBoost 21.37.2 — Persistent Campaign Confirmation",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {

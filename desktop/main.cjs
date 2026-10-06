@@ -722,6 +722,7 @@ async function runAuthenticatedCampaignImport(rawUrl) {
   let confirmReady = false;
   let confirmed = false;
   let confirmCampaignName = '';
+  let selectedCampaign = null;
   let stableKey = '';
   let stableSince = 0;
   const started = Date.now();
@@ -729,18 +730,13 @@ async function runAuthenticatedCampaignImport(rawUrl) {
     // Add an explicit confirmation action inside the authenticated browser. The button is
     // injected locally by Electron and never depends on the campaign provider's markup.
     const injectConfirmButton=async()=>{
-      if(win.isDestroyed())return;
+      if(win.isDestroyed()||!selectedCampaign)return;
+      const label=JSON.stringify(`Confirmer : ${selectedCampaign.name}`);
       try{await win.webContents.executeJavaScript(`(() => {
-        const existing=document.getElementById('clipboost-confirm-campaign');
-        if(existing)return true;
-        const btn=document.createElement('button');
-        btn.id='clipboost-confirm-campaign';
-        btn.type='button';
-        btn.textContent='Confirmer cette campagne';
-        Object.assign(btn.style,{position:'fixed',right:'24px',bottom:'24px',zIndex:'2147483647',padding:'14px 20px',border:'0',borderRadius:'12px',background:'#ef3340',color:'#fff',font:'600 14px system-ui,sans-serif',boxShadow:'0 12px 32px rgba(0,0,0,.35)',cursor:'pointer'});
-        btn.addEventListener('click',()=>{btn.textContent='Campagne confirmée ✓';btn.disabled=true;btn.dataset.confirmed='1';});
-        document.body.appendChild(btn);
-        return true;
+        let btn=document.getElementById('clipboost-confirm-campaign');
+        if(!btn){btn=document.createElement('button');btn.id='clipboost-confirm-campaign';btn.type='button';Object.assign(btn.style,{position:'fixed',right:'24px',bottom:'24px',zIndex:'2147483647',padding:'14px 20px',border:'0',borderRadius:'12px',background:'#ef3340',color:'#fff',font:'600 14px system-ui,sans-serif',boxShadow:'0 12px 32px rgba(0,0,0,.35)',cursor:'pointer'});btn.addEventListener('click',()=>{btn.textContent='Campagne confirmée ✓';btn.disabled=true;btn.dataset.confirmed='1';});document.body.appendChild(btn)}
+        if(btn.dataset.confirmed!=='1')btn.textContent=${label};
+        return btn.dataset.confirmed==='1';
       })()`)}catch{}
     };
     await win.loadURL(targetUrl);
@@ -767,28 +763,36 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       confirmReady=!login&&sameHost&&!isCampaignListing&&Boolean(currentCampaignName)&&evidence>=2&&Date.now()-stableSince>=3000;
       if(confirmReady){
         confirmCampaignName=currentCampaignName;
+        // Freeze the last valid campaign snapshot. Navigating to Assets/Canto must not replace it.
+        selectedCampaign={name:currentCampaignName,url:currentUrl,snapshot};
+      }
+      // Once a campaign has been detected, keep the confirmation action available on every
+      // subsequent page, including external asset galleries.
+      if(selectedCampaign){
         await injectConfirmButton();
         try{confirmed=Boolean(await win.webContents.executeJavaScript(`document.getElementById('clipboost-confirm-campaign')?.dataset.confirmed==='1'`))}catch{confirmed=false}
       }
-      if (confirmReady && confirmed) {
-        const reqUrl = campaignRequirementsUrl(snapshot);
+      if (selectedCampaign && confirmed) {
+        const campaignSnapshot=selectedCampaign.snapshot;
+        const campaignUrl=selectedCampaign.url;
+        const reqUrl = campaignRequirementsUrl(campaignSnapshot);
         let requirementsSnapshot = null;
-        if (reqUrl && reqUrl !== currentUrl) {
+        if (reqUrl && reqUrl !== campaignUrl) {
           try { requirementsSnapshot = await loadCampaignWorkerSnapshot(reqUrl); } catch (err) { console.warn('[Campaign import] Requirements page could not be read:', err?.message || err); }
-        } else if (/\/campaigns\/doc\//i.test(currentUrl)) requirementsSnapshot = snapshot;
-        const campaignName=campaignNameFromSnapshot(snapshot);
-        let listingSnapshot=null;const listingUrl=campaignListingUrl(currentUrl);
+        } else if (/\/campaigns\/doc\//i.test(campaignUrl)) requirementsSnapshot = campaignSnapshot;
+        const campaignName=selectedCampaign.name;
+        let listingSnapshot=null;const listingUrl=campaignListingUrl(campaignUrl);
         if(listingUrl){try{listingSnapshot=await loadCampaignWorkerSnapshot(listingUrl)}catch(err){console.warn('[Campaign import] Campaign listing could not be read:',err?.message||err)}}
         let termsSnapshot=null;const termsUrl=campaignTermsUrl(requirementsSnapshot||{});
         if(termsUrl){try{termsSnapshot=await loadCampaignWorkerSnapshot(termsUrl)}catch(err){console.warn('[Campaign import] Platform terms could not be read:',err?.message||err)}}
-        let providerHost='';try{providerHost=new URL(currentUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+        let providerHost='';try{providerHost=new URL(campaignUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
         const resourceLinks=resourceLinksFromRequirements(requirementsSnapshot||{},providerHost);
         const resourceInspections=[];for(const item of resourceLinks){resourceInspections.push(await inspectCampaignResource(item))}
         if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
-        const parsed = await parseCampaignBrowserSnapshots(currentUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
+        const parsed = await parseCampaignBrowserSnapshots(campaignUrl, campaignSnapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;
         if (!win.isDestroyed()) win.close();
-        return { ok:true, authenticated:true, confirmed:true, selectedCampaign:confirmCampaignName, ...parsed };
+        return { ok:true, authenticated:true, confirmed:true, selectedCampaign:selectedCampaign.name, ...parsed };
       }
     }
     if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign selection was closed before confirmation.' : 'Timed out waiting for confirmation. Open the campaign you want, then click “Confirmer cette campagne”.');
