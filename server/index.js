@@ -12,7 +12,7 @@ import { createServer as createViteServer } from 'vite';
 import { AsyncLocalStorage } from 'async_hooks';
 import dns from 'dns/promises';
 import net from 'net';
-import { createAppStorage } from './storage/index.js';
+import { createAppStorage, writeJsonAtomic } from './storage/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1149,6 +1149,7 @@ async function downloadExternalSource(projectId) {
   if (!source?.url) throw new Error('This project does not have a downloadable source URL.');
   if (meta.sourcePath && fsSync.existsSync(meta.sourcePath)) return meta;
 
+  await validatePublicHttpUrl(source.url);
   const cfg = externalIngestionConfig();
   meta.status = 'ingesting';
   meta.ingestion = { stage: 'starting', progress: 3, engine: 'yt-dlp', startedAt: new Date().toISOString(), error: null };
@@ -1256,7 +1257,7 @@ async function writeMeta(meta) {
     const error = Object.assign(new Error('Project was deleted while processing.'), { code:'PROJECT_DELETED', status:410 });
     throw error;
   }
-  await fs.writeFile(path.join(metaDir, `${meta.id}.json`), JSON.stringify(meta, null, 2));
+  await writeJsonAtomic(path.join(metaDir, `${meta.id}.json`), meta);
 }
 
 
