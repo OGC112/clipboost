@@ -1435,7 +1435,7 @@
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const line=captions.find(x=>rel>=Number(x.start||0)&&rel<=Number(x.end||0));
-        liveCaption.textContent=state.captionStyle==='minimal'?(line?.text||cand?.hook||''):(line?.text||cand?.hook||'').toUpperCase();
+        liveCaption.textContent=(line?.text||cand?.hook||'');
       };
       shortVideo.addEventListener('timeupdate',syncCaption);
       shortVideo.addEventListener('seeked',syncCaption);
