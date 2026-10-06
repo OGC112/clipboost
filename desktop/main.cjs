@@ -55,6 +55,18 @@ function readDesktopEnv() {
   try { return dotenv.parse(fs.readFileSync(envPath, 'utf8')); } catch { return {}; }
 }
 function desktopSettingsPath() { return path.join(userRoot(), 'desktop-settings.json'); }
+function updateInstallMarkerPath() { return path.join(userRoot(), 'update-install.json'); }
+function writeUpdateInstallMarker(version) {
+  try {
+    fs.writeFileSync(updateInstallMarkerPath(), JSON.stringify({version:String(version||''), requestedAt:new Date().toISOString()}, null, 2), 'utf8');
+  } catch {}
+}
+function readUpdateInstallMarker() {
+  try { return JSON.parse(fs.readFileSync(updateInstallMarkerPath(),'utf8')); } catch { return null; }
+}
+function clearUpdateInstallMarker() {
+  try { fs.unlinkSync(updateInstallMarkerPath()); } catch {}
+}
 function readDesktopSettings() {
   const defaults = { startWithWindows:false, closeToTray:true, ecoMode:true, idleTimeoutMinutes:5, checkUpdatesOnStartup:true, autoDownloadUpdates:true };
   try { return { ...defaults, ...JSON.parse(fs.readFileSync(desktopSettingsPath(),'utf8')) }; } catch { return defaults; }
@@ -188,6 +200,7 @@ function setupUpdater(owner, repo) {
   if (updater) return updater;
   updater = require('electron-updater').autoUpdater;
   updater.autoDownload = Boolean(readDesktopSettings().autoDownloadUpdates);
+  try { updater.autoRunAppAfterInstall = true; } catch {}
   // Keep installation strictly manual. electron-updater v26 uses
   // autoInstallOnAppQuit while newer releases use autoInstallEvent.
   try { updater.autoInstallOnAppQuit = false; } catch {}
@@ -1006,11 +1019,12 @@ ipcMain.handle('desktop:install-update', async () => {
   try {
     await shutdownBackendGracefully();
     allowImmediateQuit = true;
-    // electron-updater 6.x:
-    //   isSilent=true        -> NSIS /S (no installer window)
-    //   isForceRunAfter=true -> NSIS --force-run (relaunch ClipBoost)
-    updater.quitAndInstall(true, true);
-    return { ok:true, silent:true, restart:true, method:'electron-updater' };
+    writeUpdateInstallMarker(updateState.version);
+    // Keep the NSIS installer visible on Windows. Silent installs made the app
+    // disappear with no user feedback and could leave the relaunch unnoticed.
+    // isForceRunAfter=true asks NSIS to reopen ClipBoost after installation.
+    updater.quitAndInstall(false, true);
+    return { ok:true, silent:false, restart:true, method:'electron-updater-visible' };
   } catch (err) {
     installUpdateInProgress = false;
     isQuitting = false;
@@ -1031,7 +1045,15 @@ else {
   app.on('second-instance', () => showMainWindow());
 }
 
-app.whenReady().then(createWindow).catch(err => { dialog.showErrorBox('ClipBoost could not start', err?.stack || String(err)); app.quit(); });
+app.whenReady().then(async () => {
+  const marker=readUpdateInstallMarker();
+  if(marker?.version){
+    const current=String(app.getVersion()||'');
+    if(current===String(marker.version)) clearUpdateInstallMarker();
+    else console.warn('[ClipBoost Updater] Previous install request did not update the app.', {requested:marker.version,current});
+  }
+  return createWindow();
+}).catch(err => { dialog.showErrorBox('ClipBoost could not start', err?.stack || String(err)); app.quit(); });
 app.on('before-quit', (event) => {
   isQuitting = true;
   if (allowImmediateQuit || backendCleanupComplete) return;
