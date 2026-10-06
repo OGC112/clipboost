@@ -16,6 +16,7 @@
   function loadCampaignSites(){try{const saved=JSON.parse(localStorage.getItem('clipboost:campaignSites')||'[]');return Array.isArray(saved)&&saved.length?saved:[{id:'clipping',name:'Clipping',url:'https://clipping.net/dashboard/campaigns'}]}catch{return [{id:'clipping',name:'Clipping',url:'https://clipping.net/dashboard/campaigns'}]}}
   function persistCampaignSites(){try{localStorage.setItem('clipboost:campaignSites',JSON.stringify(state.campaignSites||[]))}catch{}}
   const state={page:pageFromHash(), video:null, studioMode:editorPrefs.studioMode||'shorts', shortsCount:[5,10,20].includes(Number(editorPrefs.shortsCount))?Number(editorPrefs.shortsCount):10, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, livePlayer:null, libraryLoadMoreBusy:false, libraryRefreshBusy:false, libraryRefreshMessage:'', youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, captionPreference:editorPrefs.captionPreference||'auto', captionColor:editorPrefs.captionColor||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionPosition:editorPrefs.captionPosition||'bottom', captionSize:editorPrefs.captionSize||'medium', captionColor:editorPrefs.captionColor||'white', cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},lastExport:null,uiModal:null};
+  const autoIngestAttempted=new Set();
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom',studioMode:state.studioMode||'shorts'}))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
   function clearCampaignImportReview(){state.campaignImportDraft=null;state.campaignDraftUrl='';try{localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
@@ -321,6 +322,9 @@
     const studioMode=state.studioMode||'shorts';
     const autoShorts=generalStudio&&studioMode==='shorts';
     const longVideo=generalStudio&&studioMode==='long';
+    const shortReview=Boolean(candidates.length&&!longVideo);
+    const sourcePending=Boolean(v&&!candidates.length&&((linked&&!hasLocal)||working));
+    const showEditorWorkspace=Boolean(v&&!sourcePending);
     const shortsCountControl='';
     const workflowSwitcher=generalStudio?`<section class="mint-editor-workflow-switcher"><div><span class="eyebrow">CREATION MODE</span><b>What do you want to make?</b><small>Library and uploads stay in AI Studio. Campaign media never enters this workspace.</small></div><div class="mint-editor-workflow-actions"><button type="button" data-studio-mode="shorts" class="${studioMode==='shorts'?'active':''}"><span>✦</span><b>Auto Shorts</b><small>Find, edit and export the strongest short-form moments.</small></button><button type="button" data-studio-mode="long" class="${studioMode==='long'?'active':''}"><span>▰</span><b>Long Video</b><small>Work from the full source with transcript, cleanup and AI editing.</small></button></div></section>`:'';
     return `<div class="content mint-studio-page-v142 ${generalStudio?'mint-general-editor-v216':'mint-campaign-source-editor-v216'} ${!v?'mint-studio-empty-v221':''}">${workflowSwitcher}
@@ -345,12 +349,12 @@
         <article><span>◎</span><div><b>AI Highlights</b><small>Score key moments</small></div></article>
       </section>
 
-      ${autoShorts&&candidates.length?'':analysisStatus}
-      ${autoShorts&&candidates.length?'':(!hasLocal||working||ingestError?uploader:`<div class="mint-source-change-v131"><span>Source ready · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`)}
+      ${shortReview?'':analysisStatus}
+      ${shortReview?'':(!hasLocal||working||ingestError?uploader:`<div class="mint-source-change-v131"><span>Source ready · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`)}
 
-      ${v?`<div class="mint-studio-workspace-v142">
+      ${showEditorWorkspace?`<div class="mint-studio-workspace-v142">
         <main class="mint-studio-main-v142">
-          ${autoShorts&&candidates.length?`<section class="card mint-shorts-review-v220">
+          ${shortReview?`<section class="card mint-shorts-review-v220">
             <header class="mint-shorts-review-head-v220">
               <div><div class="eyebrow">SELECTED SHORT</div><h2>${escapeHtml(c.title||c.reason||`Clip #${selected+1}`)}</h2><p>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</p></div>
               <div class="mint-shorts-format-v220"><b>9:16</b><span>TikTok · Instagram Reels · YouTube Shorts</span></div>
@@ -371,19 +375,19 @@
             </div>
             <div class="mint-shorts-candidate-rail-v220">${moments}</div>
           </section>`:''}
-          <section class="card mint-media-workspace-v127 ${autoShorts&&candidates.length?'mint-source-secondary-v220':''}">
+          <section class="card mint-media-workspace-v127 ${shortReview?'mint-source-secondary-v220':''}">
             <header class="mint-studio-source-head-v142">
-              <div><div class="eyebrow">${autoShorts&&candidates.length?'SOURCE & TIMELINE':'MEDIA WORKSPACE'}</div><h3>${escapeHtml(videoTitle)}</h3></div>
-              <span class="mint-source-status-v142">${autoShorts&&candidates.length?'Shorts ready':hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
+              <div><div class="eyebrow">${shortReview?'SOURCE & TIMELINE':'MEDIA WORKSPACE'}</div><h3>${escapeHtml(videoTitle)}</h3></div>
+              <span class="mint-source-status-v142">${shortReview?'Shorts ready':hasLocal?'Ready for AI':linked?'Linked':'No media'}</span>
             </header>
-            ${autoShorts&&candidates.length?'':`<div class="video mint-studio-video-v142 mint-studio-video-compact-v127">${realVideo}</div>`}
+            ${shortReview?'':`<div class="video mint-studio-video-v142 mint-studio-video-compact-v127">${realVideo}</div>`}
             <div class="mint-workspace-timeline-v127">
             <div class="section-head"><div><div class="eyebrow">${longVideo?'FULL SOURCE TIMELINE':'SMART TIMELINE'}</div><h3>${longVideo?'Long video timeline':'Timeline & detected moments'}</h3></div><span class="muted">${analyzing?`Local AI: ${escapeHtml(analysisStage||'analyzing')}${transcriptionDetail} · ${Math.round(ingestProgress)}%`:hasLocal?(v.candidates?.length||0)+' strong clip'+((v.candidates?.length||0)===1?'':'s')+' found':ingesting?'Automatic ingestion in progress':linked?'Source linked — ingest to analyze':'Upload a video to analyze it'}</span></div>
             <div class="timeline mint-studio-timeline-v142">${timelineMarkup}</div>
-            ${autoShorts&&candidates.length?'':`<div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>`}
+            ${shortReview?'':`<div class="moments mint-studio-moments-v142">${autoShorts?moments:`<div class="mint-long-video-guide"><b>AI detected ${candidates.length} highlight${candidates.length===1?'':'s'}</b><span>Highlights stay available as navigation markers, but Long Video keeps the full source as the primary edit.</span></div>${moments}`}</div>`}
             </div>
           </section>
-          ${!autoShorts&&candidates.length?`<section class="card mint-selected-preview-v128 mint-selected-preview-compact-v131">
+          ${!shortReview&&candidates.length?`<section class="card mint-selected-preview-v128 mint-selected-preview-compact-v131">
             <div class="section-head"><div><div class="eyebrow">SELECTED CLIP</div><h3>${escapeHtml(c.title||c.reason||`Clip #${selected+1}`)}</h3></div><span class="muted">Clip ${selected+1} / ${candidates.length}</span></div>
             <div class="mint-selected-preview-stage-v128">${realPhone}</div>
             <div class="mint-selected-preview-actions-v128">
@@ -411,8 +415,8 @@
           </section>
         </aside>
       </div>`:`<section class="mint-studio-empty-flow-v221"><span><b>1</b> Upload source</span><i>→</i><span><b>2</b> Local AI analysis</span><i>→</i><span><b>3</b> Review Shorts</span><i>→</i><span><b>4</b> Publish</span></section>`}
-      ${autoShorts&&candidates.length?analysisStatus:''}
-      ${autoShorts&&candidates.length?(hasLocal?`<div class="mint-source-change-v131 mint-source-change-after-review-v221"><span>Source · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`:uploader):''}
+      ${shortReview?analysisStatus:''}
+      ${shortReview?(hasLocal?`<div class="mint-source-change-v131 mint-source-change-after-review-v221"><span>Source · ${escapeHtml(videoTitle)}</span><label class="btn secondary upload-file-label" for="videoFile">Change video</label><input id="videoFile" class="native-file-input" type="file" accept=".mp4,video/mp4,video/*"></div>`:uploader):''}
 
       ${campaignStudio}
       ${transcriptPanel}
@@ -654,15 +658,22 @@
   }
   async function startProjectIngestion(id){
     try{
-      if(!(await ensureStudioPreflight({needsDownload:true})))return;
+      if(!(await ensureStudioPreflight({needsDownload:true})))return false;
       const r=await fetch(`/api/projects/${encodeURIComponent(id)}/ingest`,{method:'POST'});
       const data=await readJsonResponse(r,'Automatic ingestion could not start');
-      state.video=data;render();pollProjectUntilSettled(id);
+      state.video=data;render();pollProjectUntilSettled(id);return true;
     }catch(e){
       if(state.video){state.video={...state.video,ingestion:{...(state.video.ingestion||{}),error:e.message||'Automatic ingestion failed'}}}
-      render();
+      render();return false;
     }
   }
+  function maybeAutoIngestCurrentProject(){
+    const v=state.video;
+    if(!v?.id||v.sourceUrl||v.status!=='linked'||!v.externalSource||autoIngestAttempted.has(v.id))return;
+    autoIngestAttempted.add(v.id);
+    setTimeout(async()=>{const ok=await startProjectIngestion(v.id);if(!ok)autoIngestAttempted.delete(v.id)},0);
+  }
+
   async function sendLibraryItemToStudio(platform,creatorId,mediaType,mediaId,mode='shorts'){
     state.studioMode=mode==='long'?'long':'shorts';persistEditorPrefs();
     if(state.projectBusy)return;state.projectBusy=true;state.libraryError='';render();
@@ -1409,6 +1420,7 @@
       finally{state.regenerating=false;if(!['ingesting','analyzing'].includes(state.video?.status))render()}
     };
     const autoIngest=document.getElementById('autoIngestBtn');if(autoIngest)autoIngest.onclick=()=>state.video?.id&&startProjectIngestion(state.video.id);
+    if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.status==='linked'&&!state.video?.sourceUrl&&state.video?.externalSource)maybeAutoIngestCurrentProject();
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
     document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
     if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
