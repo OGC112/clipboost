@@ -370,7 +370,7 @@
                   <span>Clip ${selected+1} / ${candidates.length}</span>
                   <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
                 </div>
-                <button class="btn primary full" type="button" id="previewPublishBtn">Publish this short</button>
+                <button class="btn primary full" type="button" id="previewPublishBtn">Publish</button>
               </div>
             </div>
             <div class="mint-shorts-candidate-rail-v220">${moments}</div>
@@ -482,7 +482,7 @@
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     state.exportBusy=true;render();
     try{
-      if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:'Review campaign requirements',message:'ClipBoost blocked this export because one or more campaign checks failed. Open the Campaign Mode card for details.'})}}
+      if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
       const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};state.publishActivePlatform=state.publishActivePlatform||'tiktok';navigate('publish');}
     catch(e){showNotice({kind:'danger',title:'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }
