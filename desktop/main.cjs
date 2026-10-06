@@ -719,7 +719,6 @@ async function runAuthenticatedCampaignImport(rawUrl) {
   campaignImportWindow = win;
   configureCampaignBrowser(win);
   let resolved = false;
-  let returnedToTarget = false;
   let stableKey = '';
   let stableSince = 0;
   const started = Date.now();
@@ -736,29 +735,31 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       const login = campaignSnapshotIsLogin(snapshot);
       const evidence = campaignSnapshotEvidence(snapshot);
       const sameHost = current.hostname === target.hostname;
-      if (!login && sameHost && evidence === 0 && current.pathname !== target.pathname && !returnedToTarget) {
-        returnedToTarget = true;
-        try { await win.loadURL(targetUrl); } catch {}
-        continue;
-      }
+      // The initial URL may be a creator/listing page containing several campaigns.
+      // Never force navigation back: the user's current page is the source of truth.
       const key = `${currentUrl}|${String(snapshot.text || '').length}|${evidence}`;
       if (key !== stableKey) { stableKey = key; stableSince = Date.now(); }
-      if (!login && sameHost && evidence >= 2 && Date.now() - stableSince >= 3000) {
+      const currentCampaignName=campaignNameFromSnapshot(snapshot);
+      let isCampaignListing=false;
+      try{isCampaignListing=/^\/dashboard\/campaigns\/?$/i.test(current.pathname)||/\/(?:creator|creators|profile)\/?$/i.test(current.pathname)}catch{}
+      // A creator/listing can expose campaign-like text for several campaigns. Only resolve
+      // after the user has opened one concrete campaign page with its own identifiable name.
+      if (!login && sameHost && !isCampaignListing && currentCampaignName && evidence >= 2 && Date.now() - stableSince >= 3000) {
         const reqUrl = campaignRequirementsUrl(snapshot);
         let requirementsSnapshot = null;
         if (reqUrl && reqUrl !== currentUrl) {
           try { requirementsSnapshot = await loadCampaignWorkerSnapshot(reqUrl); } catch (err) { console.warn('[Campaign import] Requirements page could not be read:', err?.message || err); }
         } else if (/\/campaigns\/doc\//i.test(currentUrl)) requirementsSnapshot = snapshot;
         const campaignName=campaignNameFromSnapshot(snapshot);
-        let listingSnapshot=null;const listingUrl=campaignListingUrl(targetUrl);
+        let listingSnapshot=null;const listingUrl=campaignListingUrl(currentUrl);
         if(listingUrl){try{listingSnapshot=await loadCampaignWorkerSnapshot(listingUrl)}catch(err){console.warn('[Campaign import] Campaign listing could not be read:',err?.message||err)}}
         let termsSnapshot=null;const termsUrl=campaignTermsUrl(requirementsSnapshot||{});
         if(termsUrl){try{termsSnapshot=await loadCampaignWorkerSnapshot(termsUrl)}catch(err){console.warn('[Campaign import] Platform terms could not be read:',err?.message||err)}}
-        let providerHost='';try{providerHost=new URL(targetUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
+        let providerHost='';try{providerHost=new URL(currentUrl).hostname.replace(/^www\./,'').toLowerCase()}catch{}
         const resourceLinks=resourceLinksFromRequirements(requirementsSnapshot||{},providerHost);
         const resourceInspections=[];for(const item of resourceLinks){resourceInspections.push(await inspectCampaignResource(item))}
         if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
-        const parsed = await parseCampaignBrowserSnapshots(targetUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
+        const parsed = await parseCampaignBrowserSnapshots(currentUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;
         // Keep the authenticated campaign browser open after detection. The user may still
         // need to inspect/select the campaign and browse its asset packs. Detection is not
