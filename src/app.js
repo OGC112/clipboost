@@ -1140,7 +1140,13 @@
       state.video=data;
       const status=String(data?.status||'');
       if(['ready','degraded'].includes(status)){if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}return data}
-      if(status==='failed')throw new Error(data?.analysis?.error||data?.ingestion?.error||'Campaign video analysis failed.');
+      const ingestionStage=String(data?.ingestion?.stage||'').toLowerCase();
+      const analysisStage=String(data?.analysis?.stage||'').toLowerCase();
+      const ingestionError=String(data?.ingestion?.error||'').trim();
+      const analysisError=String(data?.analysis?.error||'').trim();
+      if(status==='failed'||ingestionStage==='error'||analysisStage==='error'||ingestionError){
+        throw new Error(analysisError||ingestionError||'Campaign video processing failed.');
+      }
       const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'Working').replace(/-/g,' ');
       const reported=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
       const previous=Math.max(0,Number(state.uiModal?.progress||0));
@@ -1204,7 +1210,14 @@
       if(settled.status==='degraded')showNotice({kind:'warning',eyebrow:'Campaign Studio',title:'Analysis completed with fallback',message:settled.analysis?.aiError||'ClipBoost completed the analysis with its deterministic fallback engine.'});
     }catch(e){
       state.uiModal=null;
-      showNotice({kind:'danger',eyebrow:'Campaign Studio',title:'Could not prepare campaign asset',message:e.message||'Could not prepare this campaign asset.'});
+      const message=String(e?.message||'Could not prepare this campaign asset.');
+      showNotice({
+        kind:'danger',
+        eyebrow:'Campaign Studio',
+        title:/download|yt-dlp|youtube|source|ingest/i.test(message)?'Campaign asset download failed':'Could not prepare campaign asset',
+        message,
+        detail:'The loading process has stopped. Retry the asset to attempt automatic download again, or use a local file if the source cannot be fetched automatically.'
+      });
       render();
     }finally{state.projectBusy=false}
   }
