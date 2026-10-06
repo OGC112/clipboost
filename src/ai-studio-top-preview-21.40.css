@@ -375,3 +375,82 @@
 .mint-short-video-frame-v222 .tracking-badge{
   z-index:9!important;
 }
+
+
+/* AI Studio 21.43 — social-style live caption editor */
+.mint-social-caption-v223{
+  position:absolute!important;
+  left:50%!important;
+  z-index:8!important;
+  transform:translate(-50%,-50%)!important;
+  width:max-content!important;
+  max-width:82%!important;
+  padding:5px 8px!important;
+  border-radius:8px!important;
+  color:#fff!important;
+  text-align:center!important;
+  line-height:1.08!important;
+  cursor:grab!important;
+  user-select:none!important;
+  touch-action:none!important;
+  pointer-events:auto!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere!important;
+  text-wrap:balance!important;
+  font-family:Arial,sans-serif!important;
+  font-weight:900!important;
+  text-transform:uppercase!important;
+  letter-spacing:0!important;
+  border:1px solid transparent!important;
+  transition:border-color .12s ease,background .12s ease,box-shadow .12s ease,transform .08s ease!important;
+}
+.mint-social-caption-v223:hover,
+.mint-social-caption-v223:focus-visible{
+  outline:none!important;
+  border-color:rgba(255,255,255,.5)!important;
+  background:rgba(0,0,0,.18)!important;
+}
+.mint-social-caption-v223.dragging{
+  cursor:grabbing!important;
+  border-color:rgba(239,68,68,.9)!important;
+  background:rgba(15,15,18,.3)!important;
+  transform:translate(-50%,-50%) scale(1.02)!important;
+}
+.mint-social-caption-v223.size-small{font-size:clamp(13px,2.7vh,27px)!important}
+.mint-social-caption-v223.size-medium{font-size:clamp(16px,3.35vh,34px)!important}
+.mint-social-caption-v223.size-large{font-size:clamp(20px,4.05vh,42px)!important}
+
+.mint-social-caption-v223.style-bold{
+  font-weight:900!important;
+  text-shadow:
+    -2px -2px 0 #000,
+     2px -2px 0 #000,
+    -2px  2px 0 #000,
+     2px  2px 0 #000,
+     0 3px 4px rgba(0,0,0,.55)!important;
+}
+.mint-social-caption-v223.style-clean{
+  font-weight:800!important;
+  text-shadow:0 2px 5px rgba(0,0,0,.9),0 0 2px #111!important;
+}
+.mint-social-caption-v223.style-neon{
+  font-weight:900!important;
+  text-shadow:0 0 3px currentColor,0 0 8px currentColor,0 2px 3px #000!important;
+}
+.mint-social-caption-v223.style-minimal{
+  font-weight:500!important;
+  text-transform:none!important;
+  text-shadow:0 2px 4px rgba(0,0,0,.88)!important;
+  background:rgba(0,0,0,.16)!important;
+}
+
+.mint-social-caption-v223.color-auto,
+.mint-social-caption-v223.color-white{color:#fff!important}
+.mint-social-caption-v223.color-yellow{color:#ffd54a!important}
+.mint-social-caption-v223.color-lime{color:#75ff5c!important}
+.mint-social-caption-v223.color-cyan{color:#35e7ff!important}
+.mint-social-caption-v223.color-pink{color:#ff4fd8!important}
+.mint-social-caption-v223.color-red{color:#ff4b55!important}
+
+/* Legacy handle is no longer used by the social caption editor. */
+.mint-caption-drag-handle-v222{display:none!important}
