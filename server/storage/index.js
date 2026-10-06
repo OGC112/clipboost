@@ -38,6 +38,10 @@ function enqueueFile(filePath, task) {
   });
 }
 
+export function writeJsonAtomic(filePath, data) {
+  return enqueueFile(filePath, () => atomicWriteJson(filePath, data));
+}
+
 export function createAppStorage(storageRoot) {
   const libraryFile = path.join(storageRoot, 'library.json');
   const campaignsFile = path.join(storageRoot, 'campaigns.json');
