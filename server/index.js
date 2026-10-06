@@ -1839,7 +1839,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
 
   const filterScriptPath = path.join(previewsDir, `${meta.id}-filter-${crypto.randomUUID()}.txt`);
   await fs.writeFile(filterScriptPath, filter.join(';'), 'utf8');
-  const args = ['-y','-i',meta.sourcePath,'-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`];
+  const args = ['-y','-i',meta.sourcePath,'-/filter_complex',filterScriptPath,'-map',`[${videoLabel}]`];
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
   args.push('-c:v','libx264','-preset',preview?'ultrafast':'veryfast','-crf',preview?'28':'21','-pix_fmt','yuv420p');
   if (hasAudio) args.push('-c:a','aac','-b:a',preview?'96k':'160k','-ac','2'); else args.push('-an');
