@@ -188,16 +188,23 @@ export function campaignCompliance(meta, candidate, options={}) {
   const duration=Math.max(0,Number(candidate?.end||0)-Number(candidate?.start||0));
   const text=String(candidate?.selectionText||candidate?.hook||'').toLowerCase();
   const checks=[];
-  const add=(label,ok,detail)=>checks.push({label,ok:Boolean(ok),detail});
+  const add=(label,ok,detail,{blocking=true,severity=null}={})=>checks.push({label,ok:Boolean(ok),detail,blocking:Boolean(blocking),severity:severity||(!ok?(blocking?'error':'warning'):'success')});
   add('Duration', duration>=Number(campaign.minDuration||0)&&duration<=Number(campaign.maxDuration||60), `${Math.round(duration)}s · required ${Number(campaign.minDuration||0)}–${Number(campaign.maxDuration||60)}s`);
   const forbidden=(campaign.forbiddenTerms||[]).filter(x=>text.includes(String(x).toLowerCase()));
   add('Forbidden terms', forbidden.length===0, forbidden.length?`Found: ${forbidden.join(', ')}`:'No blocked terms detected');
-  add('Campaign brief relevance', Number(candidate?.campaignFit?.relevance||0)>=55, `${Math.round(candidate?.campaignFit?.relevance||0)} relevance score`);
+  const relevance=Math.round(Number(candidate?.campaignFit?.relevance||0));
+  const relevanceTarget=55;
+  const termsMatched=Number(candidate?.campaignFit?.termsMatched||0);
+  const termsTotal=Number(candidate?.campaignFit?.termsTotal||0);
+  add('Campaign brief relevance', relevance>=relevanceTarget, relevance>=relevanceTarget
+    ? `${relevance} / ${relevanceTarget} recommended · ${termsMatched}/${termsTotal||0} brief terms matched`
+    : `${relevance} / ${relevanceTarget} recommended · advisory only · ${termsMatched}/${termsTotal||0} brief terms matched`,
+    {blocking:false,severity:relevance>=relevanceTarget?'success':'warning'});
   add('Vertical export', true, '1080×1920 final render');
   add('Captions', options?.captions!==false, options?.captions===false?'Captions disabled':'Captions enabled');
-  if((campaign.requiredHashtags||[]).length)add('Required hashtags', true, `${campaign.requiredHashtags.join(' ')} saved for publishing`);
-  if(campaign.requiredCTA)add('CTA', true, 'CTA saved in campaign publishing checklist');
-  return { enabled:true, passed:checks.every(x=>x.ok), checks };
+  if((campaign.requiredHashtags||[]).length)add('Required hashtags', true, `${campaign.requiredHashtags.join(' ')} saved for publishing`,{blocking:false});
+  if(campaign.requiredCTA)add('CTA', true, 'CTA saved in campaign publishing checklist',{blocking:false});
+  return { enabled:true, passed:checks.every(x=>x.ok||x.blocking===false), checks };
 }
 export function parseCampaignSourceUrl(raw='') {
   const url=String(raw||'').trim();
