@@ -719,10 +719,30 @@ async function runAuthenticatedCampaignImport(rawUrl) {
   campaignImportWindow = win;
   configureCampaignBrowser(win);
   let resolved = false;
+  let confirmReady = false;
+  let confirmed = false;
+  let confirmCampaignName = '';
   let stableKey = '';
   let stableSince = 0;
   const started = Date.now();
   try {
+    // Add an explicit confirmation action inside the authenticated browser. The button is
+    // injected locally by Electron and never depends on the campaign provider's markup.
+    const injectConfirmButton=async()=>{
+      if(win.isDestroyed())return;
+      try{await win.webContents.executeJavaScript(`(() => {
+        const existing=document.getElementById('clipboost-confirm-campaign');
+        if(existing)return true;
+        const btn=document.createElement('button');
+        btn.id='clipboost-confirm-campaign';
+        btn.type='button';
+        btn.textContent='Confirmer cette campagne';
+        Object.assign(btn.style,{position:'fixed',right:'24px',bottom:'24px',zIndex:'2147483647',padding:'14px 20px',border:'0',borderRadius:'12px',background:'#ef3340',color:'#fff',font:'600 14px system-ui,sans-serif',boxShadow:'0 12px 32px rgba(0,0,0,.35)',cursor:'pointer'});
+        btn.addEventListener('click',()=>{btn.textContent='Campagne confirmée ✓';btn.disabled=true;btn.dataset.confirmed='1';});
+        document.body.appendChild(btn);
+        return true;
+      })()`)}catch{}
+    };
     await win.loadURL(targetUrl);
     while (!win.isDestroyed() && Date.now() - started < 5 * 60_000) {
       await sleep(900);
@@ -744,7 +764,13 @@ async function runAuthenticatedCampaignImport(rawUrl) {
       try{isCampaignListing=/^\/dashboard\/campaigns\/?$/i.test(current.pathname)||/\/(?:creator|creators|profile)\/?$/i.test(current.pathname)}catch{}
       // A creator/listing can expose campaign-like text for several campaigns. Only resolve
       // after the user has opened one concrete campaign page with its own identifiable name.
-      if (!login && sameHost && !isCampaignListing && currentCampaignName && evidence >= 2 && Date.now() - stableSince >= 3000) {
+      confirmReady=!login&&sameHost&&!isCampaignListing&&Boolean(currentCampaignName)&&evidence>=2&&Date.now()-stableSince>=3000;
+      if(confirmReady){
+        confirmCampaignName=currentCampaignName;
+        await injectConfirmButton();
+        try{confirmed=Boolean(await win.webContents.executeJavaScript(`document.getElementById('clipboost-confirm-campaign')?.dataset.confirmed==='1'`))}catch{confirmed=false}
+      }
+      if (confirmReady && confirmed) {
         const reqUrl = campaignRequirementsUrl(snapshot);
         let requirementsSnapshot = null;
         if (reqUrl && reqUrl !== currentUrl) {
@@ -761,17 +787,14 @@ async function runAuthenticatedCampaignImport(rawUrl) {
         if(listingSnapshot&&campaignName)listingSnapshot.focusName=campaignName;
         const parsed = await parseCampaignBrowserSnapshots(currentUrl, snapshot, requirementsSnapshot, listingSnapshot, termsSnapshot, resourceInspections);
         resolved = true;
-        // Keep the authenticated campaign browser open after detection. The user may still
-        // need to inspect/select the campaign and browse its asset packs. Detection is not
-        // equivalent to "finished importing"; only the user should close this window.
-        return { ok:true, authenticated:true, browserKeptOpen:true, ...parsed };
+        if (!win.isDestroyed()) win.close();
+        return { ok:true, authenticated:true, confirmed:true, selectedCampaign:confirmCampaignName, ...parsed };
       }
     }
-    if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign import window was closed before the campaign could be read.' : 'Timed out waiting for the campaign page. Sign in, then keep the campaign page open while ClipBoost imports it.');
+    if (!resolved) throw new Error(win.isDestroyed() ? 'Campaign selection was closed before confirmation.' : 'Timed out waiting for confirmation. Open the campaign you want, then click “Confirmer cette campagne”.');
   } finally {
-    // Never auto-close the visible authenticated browser. This prevents a detection,
-    // navigation race or timeout from interrupting campaign/asset selection.
-    if (campaignImportWindow === win && win.isDestroyed()) campaignImportWindow = null;
+    if (campaignImportWindow === win) campaignImportWindow = null;
+    if (resolved && !win.isDestroyed()) win.close();
   }
 }
 

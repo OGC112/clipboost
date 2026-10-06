@@ -2,8 +2,8 @@
   "name": "clipboost",
   "productName": "ClipBoost",
   "private": true,
-  "version": "21.37.0",
-  "description": "ClipBoost 21.37.0 — Multi-Campaign Smart Import",
+  "version": "21.37.1",
+  "description": "ClipBoost 21.37.1 — Confirmed Campaign Selection",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
