@@ -1280,6 +1280,7 @@ function normalizeRenderOptions(raw = {}) {
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
   const captionSize = ['small','medium','large'].includes(String(raw.captionSize || '').toLowerCase()) ? String(raw.captionSize).toLowerCase() : 'medium';
+  const captionScale = Math.max(.6,Math.min(1.6,Number.isFinite(Number(raw.captionScale))?Number(raw.captionScale):1));
   const captionColor = ['white','yellow','lime','cyan','pink','red','green','blue','purple','orange','black'].includes(String(raw.captionColor || '').toLowerCase()) ? String(raw.captionColor).toLowerCase() : 'white';
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
@@ -1293,7 +1294,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,
+    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1738,7 +1739,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if (!captions.length) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
   const sizeScale = options.captionSize === 'large' ? 0.082 : options.captionSize === 'small' ? 0.054 : 0.068;
-  const fontSize = Math.max(34, Math.round(width * sizeScale));
+  const fontSize = Math.max(26, Math.round(width * sizeScale * options.captionScale));
   const outline = options.captionStyle === 'minimal' ? Math.max(2, Math.round(width*.0028)) : Math.max(3, Math.round(width * .0046));
   const customCaptionY=Number.isFinite(Number(options.captionY))?Math.max(.12,Math.min(.88,Number(options.captionY))):null;
   const alignment = customCaptionY!==null ? 5 : options.captionPosition === 'top' ? 8 : options.captionPosition === 'center' ? 5 : 2;
@@ -1964,6 +1965,8 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       trackingMode: options.trackingMode,
       cameraMovement: options.cameraMovement,
       captionStyle: options.captionStyle,
+      captionSize: options.captionSize,
+      captionScale: options.captionScale,
       captionColor: options.captionColor,
       watermark: watermarkPath ? {
         url: options.watermarkUrl,
