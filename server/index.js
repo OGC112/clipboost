@@ -784,7 +784,7 @@ function repairCandidateOpening(transcript,start,end,duration){
 
   if(!words.length)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-words'};
 
-  const firstIndex=words.findIndex(w=>w.end>=start-.06&&w.start<=end+.06);
+  const firstIndex=words.findIndex(w=>w.end>start+.02&&w.start<end-.01);
   if(firstIndex<0)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-overlap'};
 
   const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
