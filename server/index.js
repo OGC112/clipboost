@@ -1400,6 +1400,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     ? false
     : (zoomStyle !== 'minimal' && sceneRate < 10 && hasSpeech);
 
+  const generalStudio = base.editorContext === 'general';
   const options = {
     ...base,
     intensity,
@@ -1411,14 +1412,14 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     captionColor,
     cleanupMode,
     zoomStyle,
-    trackingMode,
-    cameraMovement,
+    trackingMode:generalStudio?'center':trackingMode,
+    cameraMovement:generalStudio?'low':cameraMovement,
     autoReframe,
-    speakerTracking:autoReframe,
-    reactionDetection,
+    speakerTracking:generalStudio?false:autoReframe,
+    reactionDetection:generalStudio?false:reactionDetection,
     sceneAwareCuts,
     silenceRemoval,
-    dynamicZoom,
+    dynamicZoom:generalStudio?false:dynamicZoom,
     captions
   };
 
@@ -1543,6 +1544,26 @@ function nearestTrackingFrame(tracking, time) {
 function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
   const generalStudio=options.editorContext==='general';
+  if(generalStudio){
+    const pieces=(timeline?.pieces||[]).map(part=>({
+      ...part,
+      focusX:.5,
+      focusY:.46,
+      trackingConfidence:0,
+      speakerConfidence:0,
+      activeFaceId:null,
+      faceCount:0,
+      faceWidth:0,
+      faceHeight:0,
+      spreadX:0,
+      safeFrame:false,
+      trackingFallback:false,
+      frameMode:'speaker',
+      speakerZoom:1,
+      switchBridge:false
+    }));
+    return {...timeline,pieces};
+  }
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
   const frames=tracking?.keyframes||[];
   const switchTimes=(tracking?.summary?.speakerSwitchTimes||[]).map(Number).filter(Number.isFinite);
