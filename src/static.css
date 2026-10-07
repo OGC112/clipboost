@@ -626,3 +626,26 @@
 .campaign-discover-actions-v143 .btn{min-width:0!important}
 @media(max-width:980px){.campaign-discover-import-v143{grid-template-columns:1fr!important}.mint-campaign-site-row-v238{grid-template-columns:minmax(150px,1fr) auto auto!important}}
 @media(max-width:650px){.mint-campaign-site-row-v238,.mint-campaign-url-fallback-v238>div{grid-template-columns:1fr!important}}
+
+
+/* ClipBoost 21.46 — Publish choices & platform OAuth connections */
+.mint-export-choice-v225{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+.mint-export-choice-v225 .btn{width:100%;justify-content:center}
+.mint-pub-destination-connected-v226{grid-template-columns:30px minmax(90px,1fr) auto!important;gap:10px!important;opacity:.8!important}
+.mint-pub-destination-connected-v226.connected{opacity:1!important}
+.mint-pub-destination-connected-v226.connected>span{box-shadow:0 0 0 1px rgba(34,197,94,.25);background:rgba(34,197,94,.08)!important}
+.mint-pub-destination-copy-v226{min-width:0}
+.mint-pub-destination-copy-v226 small{white-space:nowrap}
+.mint-pub-destination-connected-v226.connected .mint-pub-destination-copy-v226 small{color:#73d89b!important}
+.mint-pub-destination-controls-v226{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:7px!important}
+.mint-pub-connect-btn-v226{min-width:86px!important;padding:7px 9px!important;font-size:8px!important}
+.mint-pub-connection-actions-v226{display:flex!important;align-items:center!important;gap:5px!important}
+.mint-pub-connection-actions-v226 .btn{padding:6px 8px!important;min-height:0!important;font-size:7px!important}
+.mint-pub-disconnect-v226{border:0;background:transparent;color:#7f8794;font-size:7px;cursor:pointer;padding:4px}
+.mint-pub-disconnect-v226:hover{color:#f87171}
+.mint-pub-status-v135.connected{color:#73d89b!important;border-color:rgba(34,197,94,.22)!important;background:rgba(34,197,94,.07)!important}
+@media(max-width:720px){
+  .mint-export-choice-v225{grid-template-columns:1fr}
+  .mint-pub-destination-connected-v226{grid-template-columns:30px 1fr!important}
+  .mint-pub-destination-controls-v226{grid-column:1/-1!important;justify-content:space-between!important;padding-left:39px}
+}
