@@ -54,3 +54,23 @@ test('does not extend a caption before the first spoken word',()=>{
   assert.equal(rows[0].start,1.2);
   assert.equal(rows[0].end,1.7);
 });
+
+
+test('deduplicates tightly repeated caption words',()=>{
+  const rows=compactCaptionWords([
+    {word:'trade',start:.10,end:.34},
+    {word:'trade',start:.35,end:.56},
+    {word:'bro',start:.58,end:.82}
+  ],{maxWords:4,maxChars:22,maxGap:.14});
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].text,'trade bro');
+  assert.equal(rows[0].words.length,2);
+});
+
+test('keeps intentional repeated words separated by a pause',()=>{
+  const rows=compactCaptionWords([
+    {word:'go',start:.10,end:.28},
+    {word:'go',start:.58,end:.76}
+  ],{maxWords:4,maxChars:22,maxGap:.14});
+  assert.deepEqual(rows.map(x=>x.text),['go','go']);
+});

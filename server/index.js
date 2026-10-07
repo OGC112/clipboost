@@ -1432,6 +1432,8 @@ function normalizeRenderOptions(raw = {}) {
   const hookTitleText = String(raw.hookTitleText || '').replace(/\s+/g,' ').trim().slice(0,120);
   const hookTitleDurationRaw = String(raw.hookTitleDuration || '5').toLowerCase();
   const hookTitleDuration = hookTitleDurationRaw === 'full' ? 'full' : String([3,5,8].includes(Number(hookTitleDurationRaw)) ? Number(hookTitleDurationRaw) : 5);
+  const hookTitleX = Math.max(.08,Math.min(.92,Number.isFinite(Number(raw.hookTitleX))?Number(raw.hookTitleX):.5));
+  const hookTitleY = Math.max(.08,Math.min(.92,Number.isFinite(Number(raw.hookTitleY))?Number(raw.hookTitleY):.12));
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
@@ -1446,7 +1448,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,hookTitleEnabled,hookTitleText,hookTitleDuration,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,hookTitleEnabled,hookTitleText,hookTitleDuration,hookTitleX,hookTitleY,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -2001,7 +2003,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if(options.captionEffect==='karaoke') st.secondary='&H00FFFFFF';
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const safeMarginX=Math.max(42,Math.round(width*.09));
-  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},${safeMarginX},${safeMarginX},${marginV},1\nStyle: HookTitle,Segoe UI Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,98,100,-0.5,0,3,${Math.max(3,Math.round(width*.0048))},0,8,${safeMarginX},${safeMarginX},${Math.round(height*.075)},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},${safeMarginX},${safeMarginX},${marginV},1\nStyle: HookTitle,Arial Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,-1,0,0,0,96,100,-0.8,0,1,${Math.max(2,Math.round(width*.0028))},0,5,${safeMarginX},${safeMarginX},0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
   const highlight=selectedCaptionColor;
   const effectOverride = () => {
@@ -2076,7 +2078,10 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if(hookTitleActive){
     const clipLength=keepIntervals.reduce((sum,k)=>sum+Math.max(0,Number(k.end||0)-Number(k.start||0)),0);
     const hookEnd=options.hookTitleDuration==='full' ? clipLength : Math.min(clipLength,Number(options.hookTitleDuration||5));
-    if(hookEnd>.05) rows.unshift(`Dialogue: 1,${assTime(0)},${assTime(hookEnd)},HookTitle,,0,0,0,,${assEscape(options.hookTitleText.toUpperCase())}`);
+    if(hookEnd>.05){
+      const hookPos=`{\\an5\\pos(${Math.round(width*options.hookTitleX)},${Math.round(height*options.hookTitleY)})}`;
+      rows.unshift(`Dialogue: 1,${assTime(0)},${assTime(hookEnd)},HookTitle,,0,0,0,,${hookPos}${assEscape(options.hookTitleText.toUpperCase())}`);
+    }
   }
   const body=rows.join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
@@ -2453,7 +2458,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v13-heavy-fonts',
+    captionRendererVersion: 'social-effects-v14-center-dedupe',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
