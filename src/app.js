@@ -488,10 +488,34 @@
   function liveCaptionFontSize(){
     const scale=Math.max(.4,Math.min(2,Number(state.captionScale||1)));
     const size=state.captionSize||'medium';
-    const base=size==='small'?[13,2.7,27]:size==='large'?[20,4.05,42]:[16,3.35,34];
+    const base=size==='small'?[9,1.9,19]:size==='large'?[20,4.05,42]:[16,3.35,34];
     return `clamp(${(base[0]*scale).toFixed(1)}px,${(base[1]*scale).toFixed(2)}vh,${(base[2]*scale).toFixed(1)}px)`;
   }
-  function currentRenderOptions(){const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);const isLong=state.studioMode==='long'&&!isCampaign;return {autoDirector:true,editorContext:isCampaign?'campaign':'general',outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
+  function compactPreviewCaptions(rows=[],maxWords=3,maxChars=24){
+    const out=[];
+    for(const row of rows||[]){
+      const text=String(row?.text||'').trim();if(!text)continue;
+      const words=text.split(/\s+/).filter(Boolean);
+      if(words.length<=maxWords&&text.length<=maxChars){out.push({...row,text});continue}
+      const chunks=[];let current=[];
+      for(const word of words){
+        const next=[...current,word];
+        if(current.length&&(next.length>maxWords||next.join(' ').length>maxChars)){chunks.push(current.join(' '));current=[word]}
+        else current=next;
+      }
+      if(current.length)chunks.push(current.join(' '));
+      const start=Number(row.start||0),end=Math.max(start+.05,Number(row.end||start+.05)),total=Math.max(1,words.length);
+      let cursor=start,used=0;
+      for(let i=0;i<chunks.length;i++){
+        const count=chunks[i].split(/\s+/).filter(Boolean).length;used+=count;
+        const chunkEnd=i===chunks.length-1?end:start+(end-start)*(used/total);
+        out.push({...row,start:cursor,end:Math.max(cursor+.05,chunkEnd),text:chunks[i]});cursor=chunkEnd;
+      }
+    }
+    return out;
+  }
+
+    function currentRenderOptions(){const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);const isLong=state.studioMode==='long'&&!isCampaign;return {autoDirector:true,editorContext:isCampaign?'campaign':'general',outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
   async function uploadWatermark(file){
     if(!file)return;
     try{
@@ -1506,7 +1530,8 @@
     const shortVideo=document.getElementById('shortVideo'),liveCaption=document.getElementById('liveCaption');
     if(shortVideo&&liveCaption){
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
-      const captions=cand?.captions||[];
+      const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);
+      const captions=isCampaign?(cand?.captions||[]):compactPreviewCaptions(cand?.captions||[],3,24);
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
