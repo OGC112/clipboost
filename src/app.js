@@ -314,7 +314,7 @@
     const trackingInfo=c.previewMeta?.tracking||null;
     const trackingWarning=c.previewMeta?.trackingWarning||'';
     const trackingBadge=trackingInfo?`<div class="tracking-badge ${trackingWarning?'warning':''}"><span>◉</span><b>${trackingWarning?'Tracking fallback':`${trackingInfo.faceCountMax||0} face${Number(trackingInfo.faceCountMax||0)===1?'':'s'}`}</b><small>${trackingWarning?'Full source preserved':`${trackingInfo.speakerSwitches||0} switches · ${trackingInfo.reactionPeaks||0} reactions`}</small></div>`:'';
-    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video>${state.watermarkUrl?`<img id="liveWatermark" class="mint-live-watermark-v224" src="${escapeHtml(state.watermarkUrl)}" alt="Watermark" draggable="false" style="left:${Math.round(Number(state.watermarkX||.86)*100)}%;top:${Math.round(Number(state.watermarkY||.12)*100)}%;width:${Math.round(Number(state.watermarkScale||.18)*100)}%;opacity:${Number(state.watermarkOpacity||.9)}">`:''}<div id="liveCaption" class="${liveCaptionClass()}" style="--caption-font-size:${liveCaptionFontSize()};top:${Math.round(currentCaptionY()*100)}%;${state.captionPreference==='off'?'display:none;':''}" role="button" tabindex="0" aria-label="Drag subtitles vertically">${escapeHtml(firstCaption||'Captions')}</div><div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
+    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video>${state.watermarkUrl?`<img id="liveWatermark" class="mint-live-watermark-v224" src="${escapeHtml(state.watermarkUrl)}" alt="Watermark" draggable="false" style="left:${Math.round(Number(state.watermarkX||.86)*100)}%;top:${Math.round(Number(state.watermarkY||.12)*100)}%;width:${Math.round(Number(state.watermarkScale||.18)*100)}%;opacity:${Number(state.watermarkOpacity||.9)}">`:''}<div id="liveCaption" class="${liveCaptionClass()}" style="--caption-font-size:${liveCaptionFontSize(300)};top:${Math.round(currentCaptionY()*100)}%;${state.captionPreference==='off'?'display:none;':''}" role="button" tabindex="0" aria-label="Drag subtitles vertically">${escapeHtml(firstCaption||'Captions')}</div><div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
     const moments=candidates.length?`<div class="moments-head"><strong>${candidates.length} clip${candidates.length===1?'':'s'} generated</strong><span>Click any clip to preview it</span></div>${candidates.slice(0,40).map((m,i)=>`<button class="clip candidate-btn ${i===selected?'candidate-active':''}" data-candidate="${i}"><div class="clip-thumb">${m.thumbnailUrl?`<img src="${m.thumbnailUrl}" alt="clip thumbnail">`:mediaThumb(i)}<div class="score">${Math.round(m.score||0)}</div><span class="clip-tag">#${i+1} · ${m.editPlan?'AI edit plan':m.signals?.semantic?'Local AI':'AI pick'}</span></div><div class="clip-info"><strong>${escapeHtml(m.title||m.reason||'Candidate clip')}</strong><small>${formatTime(m.start||0)} – ${formatTime(m.end||0)} · ${Math.round(m.duration||0)}s</small>${m.quality?`<div class="quality-mini"><span>Hook ${Math.round(m.quality.hook||0)}</span><span>Story ${Math.round(m.quality.story||0)}</span><span>Complete ${Math.round(m.quality.completeness||0)}</span><span>Retention ${Math.round(m.quality.retention||0)}</span><span>View ${Math.round(m.viewPotential||m.quality.retention||0)}</span>${m.campaignFit?`<span class="campaign-fit-mini">Campaign ${Math.round(m.campaignFit.score||0)}</span>`:''}</div>`:''}${m.hook?`<em>${escapeHtml(m.hook)}</em>`:''}<p>${escapeHtml(m.reason||'')}</p></div></button>`).join('')}`:`<div class="studio-empty-moments">${analyzing?'Local AI is still analyzing this video. Only clips that pass the quality bar will appear.':linked?'Upload the linked source file to detect moments.':'Upload a video and ClipBoost will keep only moments that pass the quality bar.'}</div>`;
     const ai=v?.analysis||{};
     const transcriptPreview=(v?.transcript?.captions||[]).slice(0,10).map(x=>`<div class="transcript-line"><span>${formatTime(x.start)}</span><p>${escapeHtml(x.text)}</p></div>`).join('');
@@ -493,11 +493,21 @@
   function liveCaptionClass(){
     return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`,`color-${state.captionColor||'auto'}`].join(' ');
   }
-  function liveCaptionFontSize(){
+  function captionRenderScale(){
+    return state.captionSize==='large'?.086:state.captionSize==='small'?.044:.072;
+  }
+  function liveCaptionFontSize(frameWidth=0){
     const scale=Math.max(.4,Math.min(2,Number(state.captionScale||1)));
-    const size=state.captionSize||'medium';
-    const base=size==='small'?[9,1.9,19]:size==='large'?[20,4.05,42]:[16,3.35,34];
-    return `clamp(${(base[0]*scale).toFixed(1)}px,${(base[1]*scale).toFixed(2)}vh,${(base[2]*scale).toFixed(1)}px)`;
+    const width=Math.max(120,Number(frameWidth)||300);
+    // Match ASS exactly: export/preview font size is outputWidth * sizeScale.
+    // The editor overlay uses the same ratio against the displayed 9:16 frame.
+    return `${Math.max(10,width*captionRenderScale()*scale).toFixed(2)}px`;
+  }
+  function liveCaptionOutlineSize(frameWidth=0){
+    const width=Math.max(120,Number(frameWidth)||300);
+    const style=state.captionStyle||'bold';
+    const ratio=style==='minimal'?.0032:style==='clean'?.0052:style==='neon'?.0060:style==='box'?.0025:style==='impact'?.0074:style==='pop'?.0068:style==='karaoke'?.0064:.0065;
+    return Math.max(1,width*ratio);
   }
   function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
     const phrases=[
@@ -1597,7 +1607,10 @@
       if(!live)return;
       live.className=liveCaptionClass();
       live.style.top=(currentCaptionY()*100)+'%';
-      live.style.setProperty('--caption-font-size',liveCaptionFontSize());
+      const frame=live.closest('.mint-short-video-frame-v222');
+      const frameWidth=Number(frame?.getBoundingClientRect?.().width||frame?.clientWidth||300);
+      live.style.setProperty('--caption-font-size',liveCaptionFontSize(frameWidth));
+      const outlinePx=liveCaptionOutlineSize(frameWidth);
       const previewFont={
         social:'"Segoe UI Black","Arial Black",sans-serif',
         impact:'Impact,"Arial Black",sans-serif',
@@ -1606,7 +1619,9 @@
         trebuchet:'"Trebuchet MS",Arial,sans-serif',
         verdana:'Verdana,Arial,sans-serif'
       }[state.captionFont||'social'];
-      live.style.fontFamily=previewFont||'"Segoe UI Black","Arial Black",sans-serif';
+      live.style.setProperty('font-family',previewFont||'"Segoe UI Black","Arial Black",sans-serif','important');
+      if((state.captionStyle||'bold')==='box') live.style.setProperty('-webkit-text-stroke','0 transparent','important');
+      else live.style.setProperty('-webkit-text-stroke',`${outlinePx.toFixed(2)}px #000`,'important');
       live.style.display=state.captionPreference==='off'?'none':'';
       document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.classList.toggle('active',(btn.dataset.captionColor||'auto')===(state.captionColor||'auto')));
     };
