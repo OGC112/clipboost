@@ -23,7 +23,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analysis.js';
 import { renderDimensions } from './video/format.js';
-import { compactCaptionRows } from './video/captions.js';
+import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
 import { createExternalIngestion } from './integrations/ytdlp.js';
@@ -1918,10 +1918,14 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     ? {...meta,transcript:{...meta.transcript,captions:wordsToCaptions(meta.transcript.rawWords)}}
     : meta;
   const remappedCaptions = remapCaptionsForEditedTimeline(captionMeta, clipStart, keepIntervals).filter(c => c.text);
-  const captions = meta?.campaignId
-    ? remappedCaptions
-    : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2});
   const remappedWords=remapWordsForEditedTimeline(captionMeta,clipStart,keepIntervals);
+  // Speech-only caption windows: prefer exact Whisper word timings so captions
+  // never start before speech and never bridge audible pauses. Fall back to
+  // caption rows only when word timestamps are unavailable.
+  const speechCaptions=compactCaptionWords(remappedWords,{maxWords:4,maxChars:22,minWords:1,maxGap:.14});
+  const captions = speechCaptions.length
+    ? speechCaptions
+    : (meta?.campaignId ? remappedCaptions : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2,maxGap:.14}));
   const hookTitleActive=Boolean(options.hookTitleEnabled&&options.hookTitleText);
   if (!captions.length && !hookTitleActive) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
@@ -2433,7 +2437,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v10-parity',
+    captionRendererVersion: 'social-effects-v11-speech-only',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
