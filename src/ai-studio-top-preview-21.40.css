@@ -594,3 +594,15 @@
   width:100%!important;
   accent-color:#ef4444!important;
 }
+
+
+.mint-center-actions{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:7px!important;
+  margin-top:8px!important;
+}
+.mint-center-actions .btn{
+  flex:1 1 auto!important;
+  min-height:30px!important;
+}
