@@ -123,8 +123,26 @@ export function compactCaptionRows(captions=[], {maxWords=4,maxChars=22,minWords
 }
 
 
+function dedupeAdjacentWords(words=[]){
+  const out=[];
+  for(const token of words){
+    const prev=out[out.length-1];
+    const same=prev&&cleanWord(prev.word)===cleanWord(token.word)&&cleanWord(token.word);
+    const gap=same?Math.max(0,Number(token.start||0)-Number(prev.end||0)):Infinity;
+    // Whisper can emit the same lexical token twice around one acoustic event.
+    // Collapse only tightly-adjacent duplicates; keep intentional repeated words
+    // when there is a perceptible pause between them.
+    if(same&&gap<=.18){
+      prev.end=Math.max(Number(prev.end||0),Number(token.end||0));
+      continue;
+    }
+    out.push({...token});
+  }
+  return out;
+}
+
 export function compactCaptionWords(words=[], {maxWords=4,maxChars=22,minWords=2,maxGap=.14}={}) {
-  const tokens=(words||[])
+  const tokens=dedupeAdjacentWords((words||[])
     .filter(w=>String(w?.word||'').trim()&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
     .map(w=>({
       ...w,
@@ -132,7 +150,7 @@ export function compactCaptionWords(words=[], {maxWords=4,maxChars=22,minWords=2
       start:Number(w.start),
       end:Math.max(Number(w.start)+.02,Number(w.end))
     }))
-    .sort((a,b)=>a.start-b.start);
+    .sort((a,b)=>a.start-b.start));
   if(!tokens.length)return [];
 
   const runs=[];
