@@ -1171,23 +1171,18 @@ ipcMain.handle('desktop:connect-platform', async (_event, provider) => connectPl
 ipcMain.handle('desktop:disconnect-platform', async (_event, provider) => disconnectPlatformOAuth(String(provider||'').toLowerCase()));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
 ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
-function launchDownloadedWindowsInstaller(installerPath) {
+async function launchDownloadedWindowsInstaller(installerPath) {
   if (process.platform !== 'win32') return { ok:false, error:'Direct installer launch is Windows-only.' };
   const target = String(installerPath || '').trim();
   if (!target || !fs.existsSync(target)) return { ok:false, error:'Downloaded installer file was not found.' };
   if (!/\.exe$/i.test(target)) return { ok:false, error:'Downloaded update is not a Windows executable.' };
-  try {
-    const child = spawn(target, ['--updated','--force-run'], {
-      detached:true,
-      stdio:'ignore',
-      windowsHide:false,
-      env:process.env
-    });
-    child.unref();
-    return { ok:true, pid:child.pid || null, path:target };
-  } catch (err) {
-    return { ok:false, error:err?.message || String(err) };
-  }
+
+  // shell.openPath delegates to Windows Explorer/Shell, matching a normal
+  // double-click on the downloaded setup and avoiding child_process spawn
+  // failures such as "spawn UNKNOWN".
+  const openError = await shell.openPath(target);
+  if (openError) return { ok:false, error:openError };
+  return { ok:true, path:target };
 }
 
 ipcMain.handle('desktop:install-update', async () => {
@@ -1204,13 +1199,13 @@ ipcMain.handle('desktop:install-update', async () => {
     writeUpdateInstallMarker(updateState.version);
 
     if (process.platform === 'win32' && downloadedUpdateFile) {
-      const launched = launchDownloadedWindowsInstaller(downloadedUpdateFile);
-      if (!launched.ok) throw new Error(launched.error || 'Could not launch the downloaded installer.');
-      console.log('[ClipBoost Updater] Installer launched directly.', { pid:launched.pid, path:launched.path });
+      const launched = await launchDownloadedWindowsInstaller(downloadedUpdateFile);
+      if (!launched.ok) throw new Error(launched.error || 'Could not open the downloaded installer.');
+      console.log('[ClipBoost Updater] Installer opened through Windows Shell.', { path:launched.path });
       setTimeout(() => {
         try { app.exit(0); } catch {}
-      }, 900);
-      return { ok:true, silent:false, restart:true, method:'direct-windows-installer', pid:launched.pid };
+      }, 1400);
+      return { ok:true, silent:false, restart:false, method:'windows-shell-openpath' };
     }
 
     // Fallback for non-Windows builds or older updater events that do not expose
