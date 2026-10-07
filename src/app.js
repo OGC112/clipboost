@@ -17,7 +17,7 @@
   function persistCampaignSites(){try{localStorage.setItem('clipboost:campaignSites',JSON.stringify(state.campaignSites||[]))}catch{}}
   const state={page:pageFromHash(), video:null, studioMode:editorPrefs.studioMode||'shorts', shortsCount:[5,10,20].includes(Number(editorPrefs.shortsCount))?Number(editorPrefs.shortsCount):10, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, livePlayer:null, libraryLoadMoreBusy:false, libraryRefreshBusy:false, libraryRefreshMessage:'', youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, captionPreference:editorPrefs.captionPreference||'auto', captionColor:editorPrefs.captionColor||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionPosition:editorPrefs.captionPosition||'bottom', captionY:Number.isFinite(Number(editorPrefs.captionY))?Number(editorPrefs.captionY):null, captionSize:editorPrefs.captionSize||'medium', captionColor:editorPrefs.captionColor||'white',
     watermarkUrl:editorPrefs.watermarkUrl||'', watermarkName:editorPrefs.watermarkName||'', watermarkX:Number.isFinite(Number(editorPrefs.watermarkX))?Number(editorPrefs.watermarkX):.86, watermarkY:Number.isFinite(Number(editorPrefs.watermarkY))?Number(editorPrefs.watermarkY):.12, watermarkScale:Number.isFinite(Number(editorPrefs.watermarkScale))?Number(editorPrefs.watermarkScale):.18, watermarkOpacity:Number.isFinite(Number(editorPrefs.watermarkOpacity))?Number(editorPrefs.watermarkOpacity):.9,
-    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},lastExport:null,uiModal:null};
+    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',lastExport:null,uiModal:null};
   const autoIngestAttempted=new Set();
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom',captionY:Number.isFinite(Number(state.captionY))?Number(state.captionY):null,watermarkUrl:state.watermarkUrl||'',watermarkName:state.watermarkName||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9),studioMode:state.studioMode||'shorts'}))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
@@ -372,7 +372,7 @@
                   <span>Clip ${selected+1} / ${candidates.length}</span>
                   <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
                 </div>
-                <button class="btn primary full" type="button" id="previewPublishBtn">Publish</button>
+                <div class="mint-export-choice-v225"><button class="btn secondary" type="button" id="previewDownloadBtn">Download files</button><button class="btn primary" type="button" id="previewPublishBtn">Publish</button></div>
               </div>
             </div>
             <div class="mint-shorts-candidate-rail-v220">${moments}</div>
@@ -396,7 +396,7 @@
               <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
               <span>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</span>
               <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
-              <button class="btn primary" type="button" id="previewPublishBtn">Publish clip</button>
+              <button class="btn secondary" type="button" id="previewDownloadBtn">Download files</button>\n              <button class="btn primary" type="button" id="previewPublishBtn">Publish</button>
             </div>
           </section>`:''}
         </main>
@@ -498,14 +498,57 @@
     }catch(e){showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
   }
     function invalidateRenderedPreviews(){for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;}
-  async function exportCurrent(){
+  async function loadPlatformConnections({quiet=false}={}){
+    if(state.platformConnectionsLoading)return;
+    state.platformConnectionsLoading=true;
+    try{
+      state.platformConnections=await window.clipboostDesktop?.getPlatformConnections?.()||{};
+    }catch(e){
+      if(!quiet)showNotice({kind:'danger',eyebrow:'Platform connections',title:'Could not load connections',message:e.message||'Could not read platform connection status.'});
+    }finally{state.platformConnectionsLoading=false;render()}
+  }
+  async function connectPlatformAccount(provider){
+    if(state.platformConnectBusy)return;
+    const current=state.platformConnections?.[provider];
+    if(current&&!current.configured){
+      return showNotice({kind:'warning',eyebrow:'Platform connections',title:`${current.label||provider} setup required`,message:`Add the OAuth client credentials for ${current.label||provider} in ClipBoost .env, then try Connect again.`,detail:'The OAuth callback URL and exact environment variable names are documented in .env.example.'});
+    }
+    state.platformConnectBusy=provider;render();
+    try{
+      const result=await window.clipboostDesktop?.connectPlatform?.(provider);
+      if(result?.ok===false)throw new Error(result.error||'Connection failed.');
+      state.platformConnections=await window.clipboostDesktop?.getPlatformConnections?.()||state.platformConnections;
+      showNotice({kind:'success',eyebrow:'Platform connections',title:`${state.platformConnections?.[provider]?.label||provider} connected`,message:'The account authorization was completed and stored securely on this computer.'});
+    }catch(e){
+      showNotice({kind:'danger',eyebrow:'Platform connections',title:'Connection failed',message:e.message||'The platform could not be connected.'});
+    }finally{state.platformConnectBusy='';render()}
+  }
+  async function disconnectPlatformAccount(provider){
+    if(state.platformConnectBusy)return;
+    state.platformConnectBusy=provider;render();
+    try{
+      const result=await window.clipboostDesktop?.disconnectPlatform?.(provider);
+      if(result?.ok===false)throw new Error(result.error||'Disconnect failed.');
+      state.platformConnections=await window.clipboostDesktop?.getPlatformConnections?.()||state.platformConnections;
+    }catch(e){showNotice({kind:'danger',eyebrow:'Platform connections',title:'Disconnect failed',message:e.message||'Could not disconnect this account.'})}
+    finally{state.platformConnectBusy='';render()}
+  }
+  async function exportCurrent(mode='publish'){
     const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     state.exportBusy=true;render();
     try{
       if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
-      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};state.publishActivePlatform=state.publishActivePlatform||'tiktok';navigate('publish');}
-    catch(e){showNotice({kind:'danger',title:'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
+      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};
+      if(mode==='download'){
+        if(window.clipboostDesktop?.openExportsFolder)await window.clipboostDesktop.openExportsFolder();
+        else if(data.url){const a=document.createElement('a');a.href=data.url;a.download=data.filename||'clip.mp4';document.body.appendChild(a);a.click();a.remove();}
+        showNotice({kind:'success',eyebrow:'Export',title:'Files ready',message:`${data.filename||'Your clip'} is ready in the ClipBoost exports folder.`});
+      }else{
+        state.publishActivePlatform=state.publishActivePlatform||'tiktok';
+        navigate('publish');
+      }}
+    catch(e){showNotice({kind:'danger',title:mode==='download'?'Download preparation failed':'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
@@ -523,7 +566,16 @@
     const draft=state.publishDrafts[active]||{};
     const selectedCount=platforms.filter(([id])=>state.publishNetworks[id]).length;
     const chips=platforms.map(([id,label,icon])=>`<button type="button" class="mint-pub-chip-v135 ${active===id?'active':''} ${state.publishNetworks[id]?'selected':''}" data-publish-tab="${id}"><span>${icon}</span><b>${label}</b><i>${state.publishNetworks[id]?'✓':'+'}</i></button>`).join('');
-    const destinations=platforms.map(([id,label,icon])=>`<div class="mint-pub-destination-v135 ${state.publishNetworks[id]?'on':''}"><span>${icon}</span><div><b>${label}</b><small>${state.publishNetworks[id]?'Ready to customize':'Not selected'}</small></div><label><input type="checkbox" data-publish-network="${id}" ${state.publishNetworks[id]?'checked':''}></label></div>`).join('');
+    const destinations=platforms.map(([id,label,icon])=>{
+      const conn=state.platformConnections?.[id];
+      const connected=Boolean(conn?.connected);
+      const configured=Boolean(conn?.configured);
+      const status=state.platformConnectionsLoading&&!conn?'Checking…':connected?'Connected':configured?'Not connected':'Setup required';
+      const action=connected
+        ? `<div class="mint-pub-connection-actions-v226"><button class="btn secondary" type="button" data-platform-connect="${id}">Reconnect</button><button class="mint-pub-disconnect-v226" type="button" data-platform-disconnect="${id}">Disconnect</button></div>`
+        : `<button class="btn ${configured?'primary':'secondary'} mint-pub-connect-btn-v226" type="button" data-platform-connect="${id}" ${state.platformConnectBusy===id?'disabled':''}>${state.platformConnectBusy===id?'Connecting…':configured?'Connect':'Setup required'}</button>`;
+      return `<div class="mint-pub-destination-v135 mint-pub-destination-connected-v226 ${state.publishNetworks[id]?'on':''} ${connected?'connected':''}"><span>${icon}</span><div class="mint-pub-destination-copy-v226"><b>${label}</b><small>${status}</small></div><div class="mint-pub-destination-controls-v226">${action}<label><input type="checkbox" data-publish-network="${id}" ${state.publishNetworks[id]?'checked':''}></label></div></div>`;
+    }).join('');
     return `<div class="content mint-publish-page-v135">
       <header class="mint-pub-header-v135"><div><span class="eyebrow">DISTRIBUTION</span><h1>Publish</h1><p>One clip. Every channel. Customize the message for each audience.</p></div><div class="mint-pub-header-actions-v135"><button class="btn secondary" id="savePublishDraftsBtn">Save draft</button><button class="btn primary" id="publishSelectedBtn" ${clip&&selectedCount?'':'disabled'}>Publish to ${selectedCount||0} network${selectedCount===1?'':'s'}</button></div></header>
       <section class="mint-pub-source-v135">
@@ -534,7 +586,7 @@
       <nav class="mint-pub-platforms-v135">${chips}</nav>
       <div class="mint-pub-layout-v135">
         <main class="card mint-pub-composer-v135">
-          <div class="mint-pub-composer-head-v135"><div><span class="mint-pub-platform-icon-v135">${current[2]}</span><div><span class="eyebrow">CUSTOMIZE FOR</span><h2>${current[1]}</h2></div></div><span class="mint-pub-status-v135">${state.publishNetworks[active]?'Selected':'Not selected'}</span></div>
+          <div class="mint-pub-composer-head-v135"><div><span class="mint-pub-platform-icon-v135">${current[2]}</span><div><span class="eyebrow">CUSTOMIZE FOR</span><h2>${current[1]}</h2></div></div><span class="mint-pub-status-v135 ${state.platformConnections?.[active]?.connected?'connected':''}">${state.platformConnections?.[active]?.connected?'Connected':state.publishNetworks[active]?'Selected · account not connected':'Not selected'}</span></div>
           <label class="mint-pub-field-v135"><span>Title <small>${String(draft.title||baseTitle).length}/150</small></span><input data-publish-title="${active}" value="${escapeHtml(draft.title||baseTitle)}" maxlength="150" placeholder="Give this post a strong title"></label>
           <label class="mint-pub-field-v135"><span>Description <small>${String(draft.description||'').length} characters</small></span><textarea data-publish-description="${active}" rows="7" placeholder="Write a caption tailored to ${current[1]}…">${escapeHtml(draft.description||'')}</textarea></label>
           <div class="mint-pub-airow-v135"><button type="button" class="mint-pub-ai-v135" disabled>✦ Generate caption <small>Coming next</small></button><button type="button" class="mint-pub-ai-v135" disabled># Suggest hashtags <small>Coming next</small></button></div>
@@ -545,7 +597,7 @@
           <section class="card mint-pub-preview-v135"><div class="section-head"><div><span class="eyebrow">POST PREVIEW</span><h3>${current[1]}</h3></div></div><div class="mint-pub-phone-v135"><div class="mint-pub-phone-video-v135"><span>9:16</span><b>▶</b></div><div class="mint-pub-phone-copy-v135"><b>${escapeHtml(draft.title||baseTitle)}</b><p>${escapeHtml(draft.description||'Your platform-specific description will appear here.')}</p></div></div></section>
         </aside>
       </div>
-      <footer class="mint-pub-connect-v135"><span>●</span><div><b>Auto Publish is ready for account connections</b><small>Connect OAuth accounts before Mint can send posts automatically.</small></div><button class="btn secondary" data-page="settings">Manage connections</button></footer>
+      <footer class="mint-pub-connect-v135"><span>●</span><div><b>Platform connections</b><small>Connect accounts above. OAuth tokens are stored encrypted on this computer.</small></div><button class="btn secondary" type="button" id="refreshPlatformConnections">Refresh</button></footer>
     </div>`;
   }
 
@@ -1468,13 +1520,14 @@
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
     const previousCandidateBtn=document.getElementById('previousCandidateBtn');if(previousCandidateBtn)previousCandidateBtn.onclick=()=>selectCandidatePreview(Math.max(0,(state.selectedCandidate||0)-1),{autoplay:true});
     const nextCandidateBtn=document.getElementById('nextCandidateBtn');if(nextCandidateBtn)nextCandidateBtn.onclick=()=>selectCandidatePreview(Math.min((state.video?.candidates?.length||1)-1,(state.selectedCandidate||0)+1),{autoplay:true});
-    const previewPublishBtn=document.getElementById('previewPublishBtn');if(previewPublishBtn)previewPublishBtn.onclick=exportCurrent;
+    const previewPublishBtn=document.getElementById('previewPublishBtn');if(previewPublishBtn)previewPublishBtn.onclick=()=>exportCurrent('publish');
+    const previewDownloadBtn=document.getElementById('previewDownloadBtn');if(previewDownloadBtn)previewDownloadBtn.onclick=()=>exportCurrent('download');
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
       if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
     }
-    const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=exportCurrent;
+    const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=()=>exportCurrent('publish');
     const applyLiveCaptionStyle=()=>{
       const live=document.getElementById('liveCaption');
       if(!live)return;
@@ -1522,7 +1575,15 @@
         document.querySelectorAll('[data-publish-network]').forEach(el=>el.onchange=()=>{state.publishNetworks[el.dataset.publishNetwork]=el.checked});
     document.querySelectorAll('[data-publish-tab]').forEach(el=>el.onclick=()=>{state.publishActivePlatform=el.dataset.publishTab;render()});
     const toggleActivePublishNetwork=document.getElementById('toggleActivePublishNetwork');if(toggleActivePublishNetwork)toggleActivePublishNetwork.onclick=()=>{const id=state.publishActivePlatform||'tiktok';state.publishNetworks[id]=!state.publishNetworks[id];render()};
-    const publishSelectedBtn=document.getElementById('publishSelectedBtn');if(publishSelectedBtn)publishSelectedBtn.onclick=()=>showNotice({kind:'warning',eyebrow:'Auto Publish',title:'Connect social accounts first',message:'The publishing workspace is ready. Account authorization is required before Mint can publish automatically.'});
+    document.querySelectorAll('[data-platform-connect]').forEach(el=>el.onclick=()=>connectPlatformAccount(el.dataset.platformConnect));
+    document.querySelectorAll('[data-platform-disconnect]').forEach(el=>el.onclick=()=>disconnectPlatformAccount(el.dataset.platformDisconnect));
+    const refreshPlatformConnections=document.getElementById('refreshPlatformConnections');if(refreshPlatformConnections)refreshPlatformConnections.onclick=()=>loadPlatformConnections();
+    const publishSelectedBtn=document.getElementById('publishSelectedBtn');if(publishSelectedBtn)publishSelectedBtn.onclick=()=>{
+      const selected=Object.entries(state.publishNetworks).filter(([,on])=>on).map(([id])=>id);
+      const missing=selected.filter(id=>!state.platformConnections?.[id]?.connected);
+      if(missing.length)return showNotice({kind:'warning',eyebrow:'Auto Publish',title:'Connect selected platforms first',message:`Connect ${missing.map(id=>state.platformConnections?.[id]?.label||id).join(', ')} before automatic publishing.`});
+      showNotice({kind:'success',eyebrow:'Auto Publish',title:'Accounts connected',message:'All selected destinations are authorized. The account connection layer is ready for the automatic upload/publish API step.'});
+    };
     document.querySelectorAll('[data-publish-title]').forEach(el=>el.oninput=()=>{const id=el.dataset.publishTitle;state.publishDrafts[id]={...(state.publishDrafts[id]||{}),title:el.value}});
     document.querySelectorAll('[data-publish-description]').forEach(el=>el.oninput=()=>{const id=el.dataset.publishDescription;state.publishDrafts[id]={...(state.publishDrafts[id]||{}),description:el.value}});
     const savePublishDraftsBtn=document.getElementById('savePublishDraftsBtn');if(savePublishDraftsBtn)savePublishDraftsBtn.onclick=()=>{try{localStorage.setItem('clipboost:publishDrafts',JSON.stringify({drafts:state.publishDrafts,networks:state.publishNetworks}))}catch{}showNotice({kind:'success',title:'Post drafts saved',message:'Titles, descriptions and selected networks are saved locally.'})};
@@ -1540,7 +1601,8 @@
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.status==='linked'&&!state.video?.sourceUrl&&state.video?.externalSource)maybeAutoIngestCurrentProject();
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
     document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
-    if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
+    if(state.page==='publish'&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
+        if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
     if(state.page==='settings'&&!state.systemHealth&&!state.systemHealthLoading)setTimeout(loadSystemHealth,120);
     if(state.page==='settings'){
       const save=document.getElementById('saveSettingsBtn');if(save)save.onclick=saveSettings;
