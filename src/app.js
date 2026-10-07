@@ -485,7 +485,7 @@
   function liveCaptionClass(){
     return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`,`color-${state.captionColor||'auto'}`].join(' ');
   }
-  function currentRenderOptions(){const isLong=state.studioMode==='long'&&!state.video?.campaign?.id;return {autoDirector:true,outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
+  function currentRenderOptions(){const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);const isLong=state.studioMode==='long'&&!isCampaign;return {autoDirector:true,editorContext:isCampaign?'campaign':'general',outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
   async function uploadWatermark(file){
     if(!file)return;
     try{

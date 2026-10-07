@@ -23,6 +23,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes } from './video/analysis.js';
 import { renderDimensions } from './video/format.js';
+import { compactCaptionRows } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
 import { createExternalIngestion } from './integrations/ytdlp.js';
@@ -1285,13 +1286,14 @@ function normalizeRenderOptions(raw = {}) {
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
   const outputFormat = String(raw.outputFormat||'shorts-9x16').toLowerCase()==='source' ? 'source' : 'shorts-9x16';
+  const editorContext = String(raw.editorContext||'general').toLowerCase()==='campaign' ? 'campaign' : 'general';
   const watermarkUrl = /^\/media\/watermarks\/[a-zA-Z0-9._-]+$/.test(String(raw.watermarkUrl||'')) ? String(raw.watermarkUrl) : '';
   const watermarkX = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkX))?Number(raw.watermarkX):.86));
   const watermarkY = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkY))?Number(raw.watermarkY):.12));
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,
+    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1357,10 +1359,15 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
   if (contentType === 'podcast' || sceneRate >= 16) intensity = 'low';
   else if (contentType === 'gaming' && sceneRate < 10) intensity = 'high';
 
+  // General AI Studio should feel calmer than Campaign Studio.
+  // Campaign Studio keeps its existing adaptive profile.
+  if (base.editorContext === 'general') intensity = 'low';
+
   // Avoid mechanical zooms on footage that is already visually active.
   let zoomStyle = 'natural';
   if (preset === 'podcast' || preset === 'clean' || sceneRate >= 10) zoomStyle = 'minimal';
   else if (contentType === 'gaming' && sceneRate < 5 && reactionHint) zoomStyle = 'energetic';
+  if (base.editorContext === 'general') zoomStyle = 'minimal';
 
   const autoReframe = !sourceIsVertical;
   const cameraMovement = sourceIsVertical || contentType === 'podcast' || sceneRate >= 15 ? 'low' : 'balanced';
@@ -1389,7 +1396,9 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
   const sceneAwareCuts = scenes.length > 0;
   const silenceRemoval = silenceSeconds >= .55 && silenceRatio >= .018;
   const reactionDetection = autoReframe && ['gaming','reaction','dynamic'].includes(contentType);
-  const dynamicZoom = zoomStyle !== 'minimal' && sceneRate < 10 && hasSpeech;
+  const dynamicZoom = base.editorContext === 'general'
+    ? false
+    : (zoomStyle !== 'minimal' && sceneRate < 10 && hasSpeech);
 
   const options = {
     ...base,
@@ -1692,7 +1701,10 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const captionMeta = options.cleanupMode==='off' && meta?.transcript?.rawWords?.length
     ? {...meta,transcript:{...meta.transcript,captions:wordsToCaptions(meta.transcript.rawWords)}}
     : meta;
-  const captions = remapCaptionsForEditedTimeline(captionMeta, clipStart, keepIntervals).filter(c => c.text);
+  const remappedCaptions = remapCaptionsForEditedTimeline(captionMeta, clipStart, keepIntervals).filter(c => c.text);
+  const captions = meta?.campaignId
+    ? remappedCaptions
+    : compactCaptionRows(remappedCaptions,{maxWords:5,maxChars:34});
   if (!captions.length) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
   const sizeScale = options.captionSize === 'large' ? 0.082 : options.captionSize === 'small' ? 0.054 : 0.068;
@@ -1998,7 +2010,8 @@ async function analyzeProject(projectId, options = {}) {
     for (let i=0; i<candidates.length; i++) {
       candidates[i].thumbnailUrl = await makeThumbnail(input, meta.id, candidates[i], i).catch(() => null);
       if (transcript) {
-        candidates[i].captions = captionsForRange(transcript, candidates[i].start, candidates[i].end);
+        const rows=captionsForRange(transcript, candidates[i].start, candidates[i].end);
+        candidates[i].captions = meta.campaignId ? rows : compactCaptionRows(rows,{maxWords:5,maxChars:34});
       }
       candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced', 'dynamic', 'natural');
     }
