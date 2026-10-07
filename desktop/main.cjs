@@ -20,6 +20,7 @@ let updateState = { status: 'idle', version: null, percent: 0 };
 let manualUpdateCheck = false;
 let lastReadyEventVersion = null;
 let installUpdateInProgress = false;
+let downloadedUpdateFile = null;
 let updateCheckInFlight = null;
 let lastProgressEventPercent = -1;
 let lastRendererActivity = Date.now();
@@ -210,6 +211,7 @@ function setupUpdater(owner, repo) {
   updater.on('update-available', info => {
     lastProgressEventPercent = -1;
     lastReadyEventVersion = null;
+    downloadedUpdateFile = null;
     updateState = { status:'downloading', version:info.version, percent:0 };
     if (manualUpdateCheck) emitUpdateEvent({ status:'available', version:info.version, downloading:Boolean(updater.autoDownload), updateState, manual:true });
     if (!updater.autoDownload) manualUpdateCheck = false;
@@ -224,11 +226,13 @@ function setupUpdater(owner, repo) {
     }
   });
   updater.on('update-not-available', info => {
+    downloadedUpdateFile = null;
     updateState = { status:'current', version:info.version || app.getVersion(), percent:100 };
     if (manualUpdateCheck) emitUpdateEvent({ status:'current', version:app.getVersion(), updateState });
     manualUpdateCheck = false;
   });
   updater.on('error', err => {
+    downloadedUpdateFile = null;
     updateState = { status:'error', version:null, percent:0 };
     console.error('[ClipBoost Updater]', err);
     const duringInstall = installUpdateInProgress;
@@ -245,6 +249,9 @@ function setupUpdater(owner, repo) {
   updater.on('update-downloaded', info => {
     const version = String(info?.version || updateState.version || '').trim();
     const wasManual = manualUpdateCheck;
+    const candidateFile = String(info?.downloadedFile || '').trim();
+    downloadedUpdateFile = candidateFile && fs.existsSync(candidateFile) ? candidateFile : null;
+    console.log('[ClipBoost Updater] Update downloaded.', { version, downloadedFile: downloadedUpdateFile });
     updateState = { status:'ready', version, percent:100 };
     if (version && lastReadyEventVersion !== version) {
       lastReadyEventVersion = version;
@@ -1008,6 +1015,25 @@ ipcMain.handle('desktop:clear-campaign-import-session', async () => { await sess
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
 ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
+function launchDownloadedWindowsInstaller(installerPath) {
+  if (process.platform !== 'win32') return { ok:false, error:'Direct installer launch is Windows-only.' };
+  const target = String(installerPath || '').trim();
+  if (!target || !fs.existsSync(target)) return { ok:false, error:'Downloaded installer file was not found.' };
+  if (!/\.exe$/i.test(target)) return { ok:false, error:'Downloaded update is not a Windows executable.' };
+  try {
+    const child = spawn(target, ['--updated','--force-run'], {
+      detached:true,
+      stdio:'ignore',
+      windowsHide:false,
+      env:process.env
+    });
+    child.unref();
+    return { ok:true, pid:child.pid || null, path:target };
+  } catch (err) {
+    return { ok:false, error:err?.message || String(err) };
+  }
+}
+
 ipcMain.handle('desktop:install-update', async () => {
   if (!updater || updateState.status !== 'ready') return { ok:false, error:'No downloaded update is ready.' };
   if (installUpdateInProgress) return { ok:true, alreadyStarting:true, silent:true };
@@ -1020,16 +1046,26 @@ ipcMain.handle('desktop:install-update', async () => {
     await shutdownBackendGracefully();
     allowImmediateQuit = true;
     writeUpdateInstallMarker(updateState.version);
-    // Keep the NSIS installer visible on Windows. Silent installs made the app
-    // disappear with no user feedback and could leave the relaunch unnoticed.
-    // isForceRunAfter=true asks NSIS to reopen ClipBoost after installation.
+
+    if (process.platform === 'win32' && downloadedUpdateFile) {
+      const launched = launchDownloadedWindowsInstaller(downloadedUpdateFile);
+      if (!launched.ok) throw new Error(launched.error || 'Could not launch the downloaded installer.');
+      console.log('[ClipBoost Updater] Installer launched directly.', { pid:launched.pid, path:launched.path });
+      setTimeout(() => {
+        try { app.exit(0); } catch {}
+      }, 900);
+      return { ok:true, silent:false, restart:true, method:'direct-windows-installer', pid:launched.pid };
+    }
+
+    // Fallback for non-Windows builds or older updater events that do not expose
+    // the downloaded installer path.
     updater.quitAndInstall(false, true);
-    return { ok:true, silent:false, restart:true, method:'electron-updater-visible' };
+    return { ok:true, silent:false, restart:true, method:'electron-updater-fallback' };
   } catch (err) {
     installUpdateInProgress = false;
     isQuitting = false;
     lastReadyEventVersion = null;
-    console.error('[ClipBoost Updater] Silent install failed:', err);
+    console.error('[ClipBoost Updater] Install launch failed:', err);
     emitUpdateEvent({ status:'error', message:err?.message || String(err), updateState });
     return { ok:false, error:err?.message || String(err) };
   }
