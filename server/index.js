@@ -1288,13 +1288,15 @@ function normalizeRenderOptions(raw = {}) {
   const cameraMovement = ['low','balanced','high'].includes(String(raw.cameraMovement || '').toLowerCase()) ? String(raw.cameraMovement).toLowerCase() : 'balanced';
   const outputFormat = String(raw.outputFormat||'shorts-9x16').toLowerCase()==='source' ? 'source' : 'shorts-9x16';
   const editorContext = String(raw.editorContext||'general').toLowerCase()==='campaign' ? 'campaign' : 'general';
+  const sourceSubtitleMode = ['keep','crop','hide'].includes(String(raw.sourceSubtitleMode||'keep').toLowerCase()) ? String(raw.sourceSubtitleMode||'keep').toLowerCase() : 'keep';
+  const sourceSubtitleBottom = Math.max(.06,Math.min(.28,Number.isFinite(Number(raw.sourceSubtitleBottom))?Number(raw.sourceSubtitleBottom):.15));
   const watermarkUrl = /^\/media\/watermarks\/[a-zA-Z0-9._-]+$/.test(String(raw.watermarkUrl||'')) ? String(raw.watermarkUrl) : '';
   const watermarkX = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkX))?Number(raw.watermarkX):.86));
   const watermarkY = Math.max(0,Math.min(1,Number.isFinite(Number(raw.watermarkY))?Number(raw.watermarkY):.12));
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,
+    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1857,6 +1859,10 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   const height = Number(render.height || (preview ? 960 : 1920));
   const srcW=Math.max(2,Number(meta.details?.width||width));
   const srcH=Math.max(2,Number(meta.details?.height||height));
+  const cropSourceSubtitles = options.editorContext==='general' && options.sourceSubtitleMode==='crop';
+  const hideSourceSubtitles = options.editorContext==='general' && options.sourceSubtitleMode==='hide';
+  const sourceSubtitleBottomPx = cropSourceSubtitles ? Math.max(2,Math.round(srcH*options.sourceSubtitleBottom/2)*2) : 0;
+  const effectiveSrcH = Math.max(2,srcH-sourceSubtitleBottomPx);
   const filter = [];
   const hasAudio = Boolean(meta.details?.audioCodec);
   for (let i=0; i<timeline.pieces.length; i++) {
@@ -1867,24 +1873,24 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     if(options.autoReframe && part.frameMode==='full'){
       // Safety / speaker-switch view: preserve the COMPLETE original frame. The foreground is never cropped.
       // A blurred copy fills the vertical canvas, while the original source is scaled down to fit inside it.
-      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[fbg${i}][ffg${i}]`);
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},split=2[fbg${i}][ffg${i}]`);
       filter.push(`[fbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
       filter.push(`[ffg${i}]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg${i}]`);
       filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
     }else if(options.autoReframe && part.frameMode==='wide'){
       // Wider source-space bridge retained for compatibility; safety fallbacks now use the full source above.
-      const wide=sourceCropForWide(srcW,srcH,width,height,part);
-      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,split=2[wbg${i}][wfg${i}]`);
+      const wide=sourceCropForWide(srcW,effectiveSrcH,width,height,part);
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},split=2[wbg${i}][wfg${i}]`);
       filter.push(`[wbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
       filter.push(`[wfg${i}]crop=${wide.cropW}:${wide.cropH}:${wide.x}:${wide.y},scale=${width}:-2:force_original_aspect_ratio=decrease[fg${i}]`);
       filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
     }else if(options.autoReframe){
       // Speaker crop is calculated in source pixels, then scaled once to 9:16.
       // This means panning/reframing is never constrained by a previously resized social frame.
-      const crop=sourceCropForSpeaker(srcW,srcH,width,height,part,editZoom);
-      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,crop=${crop.cropW}:${crop.cropH}:${crop.x}:${crop.y},scale=${width}:${height}:flags=lanczos,setsar=1[v${i}]`);
+      const crop=sourceCropForSpeaker(srcW,effectiveSrcH,width,height,part,editZoom);
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},crop=${crop.cropW}:${crop.cropH}:${crop.x}:${crop.y},scale=${width}:${height}:flags=lanczos,setsar=1[v${i}]`);
     }else{
-      let vf=`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+      let vf=`${cropSourceSubtitles?`crop=${srcW}:${effectiveSrcH}:0:0,`:''}scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
       if(editZoom>1.001){const zw=Math.max(width,Math.round(width*editZoom)),zh=Math.max(height,Math.round(height*editZoom));vf+=`,scale=${zw}:${zh},crop=${width}:${height}`;}
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf},setsar=1[v${i}]`);
     }
@@ -1902,7 +1908,13 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     else filter.push(`${timeline.pieces.map((_,i)=>`[v${i}]`).join('')}concat=n=${timeline.pieces.length}:v=1:a=0[${videoLabel}]`);
   }
 
-  let watermarkPath = null;
+  if (hideSourceSubtitles) {
+    const bandH = Math.max(20, Math.round(height * options.sourceSubtitleBottom));
+    filter.push(`[${videoLabel}]drawbox=x=0:y=ih-${bandH}:w=iw:h=${bandH}:color=black@0.72:t=fill[sourcecaptionhide]`);
+    videoLabel = 'sourcecaptionhide';
+  }
+
+    let watermarkPath = null;
   if (options.watermarkUrl) {
     const filename = path.basename(options.watermarkUrl);
     const candidatePath = path.join(watermarksDir, filename);
@@ -1968,6 +1980,8 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       captionSize: options.captionSize,
       captionScale: options.captionScale,
       captionColor: options.captionColor,
+      sourceSubtitleMode: options.sourceSubtitleMode,
+      sourceSubtitleBottom: options.sourceSubtitleBottom,
       watermark: watermarkPath ? {
         url: options.watermarkUrl,
         x: options.watermarkX,
