@@ -1415,10 +1415,10 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     captionColor,
     cleanupMode,
     zoomStyle,
-    trackingMode:generalStudio?'center':trackingMode,
+    trackingMode:generalStudio?'speaker':trackingMode,
     cameraMovement:generalStudio?'low':cameraMovement,
     autoReframe,
-    speakerTracking:generalStudio?false:autoReframe,
+    speakerTracking:autoReframe,
     reactionDetection:generalStudio?false:reactionDetection,
     sceneAwareCuts,
     silenceRemoval,
@@ -1474,7 +1474,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v6`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v7`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -1547,26 +1547,6 @@ function nearestTrackingFrame(tracking, time) {
 function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
   const generalStudio=options.editorContext==='general';
-  if(generalStudio){
-    const pieces=(timeline?.pieces||[]).map(part=>({
-      ...part,
-      focusX:.5,
-      focusY:.46,
-      trackingConfidence:0,
-      speakerConfidence:0,
-      activeFaceId:null,
-      faceCount:0,
-      faceWidth:0,
-      faceHeight:0,
-      spreadX:0,
-      safeFrame:false,
-      trackingFallback:false,
-      frameMode:'speaker',
-      speakerZoom:1,
-      switchBridge:false
-    }));
-    return {...timeline,pieces};
-  }
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
   const frames=tracking?.keyframes||[];
   const switchTimes=(tracking?.summary?.speakerSwitchTimes||[]).map(Number).filter(Number.isFinite);
@@ -1579,9 +1559,11 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
     for(const f of frames){
       const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null, safe=Boolean(f.safeFrame);
       const moved=Math.hypot(x-lastX,y-lastY)>moveThreshold;
-      const speakerChanged=id&&lastId&&id!==lastId;
-      const safeChanged=lastSafe!==null&&safe!==lastSafe;
-      if(t-lastTime>=maxGap || moved || speakerChanged || safeChanged){
+      const speakerConfidence=Number(f.speakerConfidence||f.confidence||0);
+      const speakerChanged=Boolean(id&&lastId&&id!==lastId&&(speakerConfidence>=.18||!generalStudio));
+      const safeChanged=!generalStudio&&lastSafe!==null&&safe!==lastSafe;
+      const timedRefresh=generalStudio ? (t-lastTime>=3.2 && moved) : (t-lastTime>=maxGap);
+      if(timedRefresh || moved || speakerChanged || safeChanged){
         boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;
       }
     }
@@ -1601,16 +1583,16 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
     const safeFrame=Boolean(trackingUnavailable || noFace || frame?.safeFrame || (frame && faceCount>1 && speakerConfidence<.24));
     const nearSwitch=!generalStudio&&switchTimes.some(t=>Math.abs(mid-t)<=.24);
     const mode=String(frame?.mode||'');
-    const fullSource=safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1;
+    const fullSource=generalStudio ? false : (safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1);
     const faceHeight=Math.max(0,Number(frame?.faceHeight||0));
-    // General AI Studio uses a constant crop scale. Only the X/Y focus follows the subject.
-    // This removes the repeated zoom effect caused by face-size fluctuations.
+    // General AI Studio keeps a constant crop scale. Only X/Y moves to keep the active
+    // speaker inside the 9:16 safe area, so tracking cannot create zoom pumping.
     const speakerZoom=generalStudio
       ? 1
       : (faceHeight>0 ? Math.max(1,Math.min(1.18,1.13-(faceHeight-.10)*.55)) : 1.04);
     return {...part,
-      focusX:frame?Number(frame.x||.5):.5,
-      focusY:frame?Number(frame.y||.44):.44,
+      focusX:frame&&Number.isFinite(Number(frame.x))?Number(frame.x):.5,
+      focusY:frame&&Number.isFinite(Number(frame.y))?Number(frame.y):.46,
       trackingConfidence:frame?Number(frame.confidence||0):0,
       speakerConfidence,
       activeFaceId:frame?.activeFaceId??null,
