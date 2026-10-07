@@ -121,3 +121,49 @@ export function compactCaptionRows(captions=[], {maxWords=4,maxChars=22,minWords
   }
   return out;
 }
+
+
+export function compactCaptionWords(words=[], {maxWords=4,maxChars=22,minWords=2,maxGap=.14}={}) {
+  const tokens=(words||[])
+    .filter(w=>String(w?.word||'').trim()&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
+    .map(w=>({
+      ...w,
+      word:String(w.word).trim(),
+      start:Number(w.start),
+      end:Math.max(Number(w.start)+.02,Number(w.end))
+    }))
+    .sort((a,b)=>a.start-b.start);
+  if(!tokens.length)return [];
+
+  const runs=[];
+  let current=[];
+  for(const token of tokens){
+    const prev=current[current.length-1];
+    const gap=prev?Math.max(0,token.start-prev.end):0;
+    if(current.length&&(gap>maxGap||TERMINAL.test(prev.word))){
+      runs.push(current);
+      current=[];
+    }
+    current.push(token);
+  }
+  if(current.length)runs.push(current);
+
+  const out=[];
+  for(const run of runs){
+    for(const chunk of segmentTokenRun(run,{maxWords,maxChars,minWords})){
+      const text=chunk.map(t=>t.word).join(' ').trim();
+      if(!text)continue;
+      out.push({
+        start:Number(chunk[0].start.toFixed(3)),
+        end:Number(Math.max(chunk[0].start+.02,chunk.at(-1).end).toFixed(3)),
+        text,
+        words:chunk.map(w=>({
+          word:w.word,
+          start:Number(w.start.toFixed(3)),
+          end:Number(w.end.toFixed(3))
+        }))
+      });
+    }
+  }
+  return out;
+}
