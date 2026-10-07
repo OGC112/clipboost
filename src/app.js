@@ -372,7 +372,7 @@
                   <span>Clip ${selected+1} / ${candidates.length}</span>
                   <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
                 </div>
-                <button class="btn primary full" type="button" id="previewPublishBtn">Publish</button>
+                <div class="mint-export-choice-v225"><button class="btn secondary" type="button" id="previewDownloadBtn">Download files</button><button class="btn primary" type="button" id="previewPublishBtn">Publish</button></div>
               </div>
             </div>
             <div class="mint-shorts-candidate-rail-v220">${moments}</div>
@@ -396,7 +396,8 @@
               <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
               <span>${formatTime(c.start||0)} – ${formatTime(c.end||0)} · ${Math.round(c.duration||clipDuration)}s</span>
               <button class="btn secondary" type="button" id="nextCandidateBtn" ${selected>=candidates.length-1?'disabled':''}>Next →</button>
-              <button class="btn primary" type="button" id="previewPublishBtn">Publish clip</button>
+              <button class="btn secondary" type="button" id="previewDownloadBtn">Download files</button>
+              <button class="btn primary" type="button" id="previewPublishBtn">Publish</button>
             </div>
           </section>`:''}
         </main>
@@ -498,14 +499,21 @@
     }catch(e){showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
   }
     function invalidateRenderedPreviews(){for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;}
-  async function exportCurrent(){
+  async function exportCurrent(mode='publish'){
     const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     state.exportBusy=true;render();
     try{
       if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
-      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};state.publishActivePlatform=state.publishActivePlatform||'tiktok';navigate('publish');}
-    catch(e){showNotice({kind:'danger',title:'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
+      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};
+      if(mode==='download'){
+        if(window.clipboostDesktop?.openExportsFolder) await window.clipboostDesktop.openExportsFolder();
+        else if(data.url){const a=document.createElement('a');a.href=data.url;a.download=data.filename||'clip.mp4';document.body.appendChild(a);a.click();a.remove();}
+        showNotice({kind:'success',eyebrow:'Export',title:'Files ready',message:`${data.filename||'Your clip'} is ready in the ClipBoost exports folder.`});
+      }else{
+        state.publishActivePlatform=state.publishActivePlatform||'tiktok';navigate('publish');
+      }}
+    catch(e){showNotice({kind:'danger',title:mode==='download'?'Download preparation failed':'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
@@ -1468,7 +1476,8 @@
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
     const previousCandidateBtn=document.getElementById('previousCandidateBtn');if(previousCandidateBtn)previousCandidateBtn.onclick=()=>selectCandidatePreview(Math.max(0,(state.selectedCandidate||0)-1),{autoplay:true});
     const nextCandidateBtn=document.getElementById('nextCandidateBtn');if(nextCandidateBtn)nextCandidateBtn.onclick=()=>selectCandidatePreview(Math.min((state.video?.candidates?.length||1)-1,(state.selectedCandidate||0)+1),{autoplay:true});
-    const previewPublishBtn=document.getElementById('previewPublishBtn');if(previewPublishBtn)previewPublishBtn.onclick=exportCurrent;
+    const previewPublishBtn=document.getElementById('previewPublishBtn');if(previewPublishBtn)previewPublishBtn.onclick=()=>exportCurrent('publish');
+    const previewDownloadBtn=document.getElementById('previewDownloadBtn');if(previewDownloadBtn)previewDownloadBtn.onclick=()=>exportCurrent('download');
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
