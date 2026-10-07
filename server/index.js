@@ -1086,10 +1086,6 @@ async function semanticClipCandidatesLocal(meta, transcript, fallbackCandidates 
   const blocks = transcriptBlocks(transcript.words || []);
   const duration = Number(meta.details?.duration || 0);
   const target = resolveClipTarget(duration, preference);
-  if(duration>0&&duration<=30&&blocks.length){
-    const full=finalizeCandidate(meta,transcript,{id:crypto.randomUUID(),start:0,end:duration,score:82,title:'Full short asset',hook:String(blocks[0]?.text||'').slice(0,160),reason:'Short Asset Mode: preserve the complete creative and optimize hook, captions and edit.',signals:{local:true,shortAsset:true,qualityEngineV2:true}});
-    return qualityRerankCandidates(meta,transcript,[full]);
-  }
   if (!blocks.length) return selectDiverseCandidates(fallbackCandidates.map(c=>finalizeCandidate(meta,transcript,c)), target, duration, preference);
 
   const sectionCount = duration > 20*60 ? Math.min(7, Math.max(2, Math.ceil(target/4))) : 1;
@@ -1158,21 +1154,10 @@ ${inputText}`;
   ollamaDiagnostics.semanticSelected=semanticSelected;
   ollamaDiagnostics.reviewRemovedSemantic=Math.max(0,semanticBeforeReview-semanticAfterReview);
 
-  // Never leave an analyzed source with no selectable result. For short assets
-  // the source itself is already the creative; for longer videos expose the
-  // best deterministic/semantic moments as fallback choices so the user, not
-  // the quality threshold, gets the final say.
+  // Never leave an analyzed source with no selectable result. Expose the best
+  // deterministic/semantic moments as fallback choices, but always keep the
+  // same boundary-aware selection rules regardless of source duration.
   if(!selected.length){
-    if(duration>0&&duration<=30){
-      const full=finalizeCandidate(meta,transcript,{
-        id:crypto.randomUUID(),start:0,end:duration,score:70,
-        title:'Full short asset',hook:String(blocks[0]?.text||'').slice(0,160),
-        reason:'Short Asset Mode: keep the complete source and optimize its edit.',
-        signals:{local:true,qualityFallback:true,shortAsset:true}
-      });
-      ollamaDiagnostics.fallbackSelected=1;
-      return [full];
-    }
     const fallbackPool=[...clips,...heuristic,...fallback]
       .filter(c=>Number(c?.end||0)>Number(c?.start||0))
       .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
