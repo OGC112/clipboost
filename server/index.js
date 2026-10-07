@@ -1276,6 +1276,7 @@ function normalizeRenderOptions(raw = {}) {
   const intensity = ['low','balanced','high'].includes(String(raw.intensity || '').toLowerCase()) ? String(raw.intensity).toLowerCase() : 'balanced';
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
+  const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
   const captionPosition = ['top','center','bottom','custom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
@@ -1296,7 +1297,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1772,19 +1773,33 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const alignment = customCaptionY!==null ? 5 : options.captionPosition === 'top' ? 8 : options.captionPosition === 'center' ? 5 : 2;
   const marginV = customCaptionY!==null ? 0 : options.captionPosition === 'top' ? Math.round(height*.12) : options.captionPosition === 'center' ? 0 : Math.round(height*.16);
   const captionOverride = customCaptionY!==null ? `{\\an5\\pos(${Math.round(width/2)},${Math.round(height*customCaptionY)})}` : '';
+  const fontMap = {
+    // "Social" is intentionally based on Segoe UI Black on Windows: its
+    // rounded, dense letterforms are closer to modern TikTok/Reels captions
+    // than classic Arial Black while remaining available without bundling a
+    // third-party font file.
+    social:'Segoe UI Black',
+    impact:'Impact',
+    'arial-black':'Arial Black',
+    'segoe-black':'Segoe UI Black',
+    trebuchet:'Trebuchet MS',
+    verdana:'Verdana'
+  };
+  const selectedFont=fontMap[options.captionFont]||fontMap.social;
+
   const styleMap = {
     // Arial Black gives the default preset the dense, high-contrast weight
     // used by native short-form/social editors without introducing a bundled
     // third-party font dependency. Slight horizontal compression keeps short
     // bursts punchy while preserving generous vertical stroke weight.
-    bold: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    clean: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
-    neon: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    minimal: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
-    impact: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:2, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
-    pop: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    box: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00000000', back:'&HCC111111', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:3 },
-    karaoke: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
+    bold: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    clean: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
+    neon: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    minimal: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
+    impact: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:2, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
+    pop: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    box: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00000000', back:'&HCC111111', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:3 },
+    karaoke: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
   };
   const colorMap={
     white:'&H00FFFFFF',
@@ -1801,7 +1816,12 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     black:'&H00000000'
   };
   const base=styleMap[options.captionStyle]||styleMap.bold;
-  const st={...base,primary:colorMap[options.captionColor]||base.primary};
+  const fontTuning = options.captionFont==='impact'
+    ? { scaleX:90, spacing:-1.8 }
+    : options.captionFont==='social'
+      ? { scaleX:98, spacing:-.6 }
+      : {};
+  const st={...base,...fontTuning,primary:colorMap[options.captionColor]||base.primary};
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
@@ -2032,6 +2052,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       trackingMode: options.trackingMode,
       cameraMovement: options.cameraMovement,
       captionStyle: options.captionStyle,
+      captionFont: options.captionFont,
       captionSize: options.captionSize,
       captionScale: options.captionScale,
       captionColor: options.captionColor,
@@ -2201,7 +2222,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v3',
+    captionRendererVersion: 'social-fonts-v4',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
