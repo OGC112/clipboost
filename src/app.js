@@ -1581,6 +1581,11 @@
         const hasSpeechCaption=Boolean(line?.text&&String(line.text).trim());
         liveCaption.textContent=hasSpeechCaption?String(line.text):'';
         liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
+        const hookTitle=document.getElementById('liveHookTitle');
+        if(hookTitle){
+          const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
+          hookTitle.style.visibility=state.hookTitleEnabled&&state.hookTitleText&&rel<=hookEnd?'visible':'hidden';
+        }
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
       const tickCaptionClock=()=>{
