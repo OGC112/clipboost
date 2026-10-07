@@ -1962,14 +1962,17 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     // used by native short-form/social editors without introducing a bundled
     // third-party font dependency. Slight horizontal compression keeps short
     // bursts punchy while preserving generous vertical stroke weight.
-    bold: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    clean: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
-    neon: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    minimal: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
-    impact: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:2, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
-    pop: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    // Only the Box preset is allowed to draw a filled background. For every
+    // other social preset BackColour is fully transparent and Shadow=0 so ASS
+    // matches the transparent HTML preview.
+    bold: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&HFF000000', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    clean: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&HFF000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
+    neon: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&HFF000000', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    minimal: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&HFF000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
+    impact: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&HFF000000', shadow:0, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
+    pop: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&HFF000000', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
     box: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00000000', back:'&HCC111111', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:3 },
-    karaoke: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
+    karaoke: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&HFF000000', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
   };
   const colorMap={
     white:'&H00FFFFFF',
@@ -2024,21 +2027,33 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     const span=Math.max(.08,Number(cap.end||0)-Number(cap.start||0));
     return text.map((word,i)=>({word,start:Number(cap.start||0)+span*i/text.length,end:Number(cap.start||0)+span*(i+1)/text.length}));
   };
+  const timedCaptions=captions
+    .map(c=>({...c,start:Number(c.start||0),end:Number(c.end||0)}))
+    .sort((a,b)=>a.start-b.start)
+    .map((cap,i,all)=>{
+      const next=all[i+1];
+      const hardEnd=next ? Math.min(cap.end,Math.max(cap.start+.02,next.start-.006)) : cap.end;
+      return {...cap,end:Number(Math.max(cap.start+.02,hardEnd).toFixed(3))};
+    })
+    .filter(c=>c.end>c.start+.015);
   const rows=[];
-  for(const cap of captions){
+  for(const cap of timedCaptions){
     const words=wordsForCaption(cap);
     const baseOverride=`${captionOverride}${effectOverride()}`;
     if(options.captionEffect==='word-pop'){
-      for(const w of words){
-        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}{\\fscx116\\fscy116\\t(0,90,\\fscx100\\fscy100)}${styleWord(w.word)}`);
+      for(let wi=0;wi<words.length;wi++){
+        const w=words[wi],next=words[wi+1];
+        const wordEnd=next?Math.min(Number(w.end||0),Math.max(Number(w.start||0)+.02,Number(next.start||0)-.006)):Number(w.end||0);
+        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(wordEnd)},Default,,0,0,0,,${baseOverride}{\\fscx116\\fscy116\\t(0,90,\\fscx100\\fscy100)}${styleWord(w.word)}`);
       }
       continue;
     }
     if(options.captionEffect==='active-word'){
       for(let i=0;i<words.length;i++){
-        const w=words[i];
+        const w=words[i],next=words[i+1];
+        const wordEnd=next?Math.min(Number(w.end||0),Math.max(Number(w.start||0)+.02,Number(next.start||0)-.006)):Number(w.end||0);
         const text=words.map((x,j)=>styleWord(x.word,j===i,false)).join(' ');
-        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}${text}`);
+        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(wordEnd)},Default,,0,0,0,,${baseOverride}${text}`);
       }
       continue;
     }
@@ -2437,7 +2452,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v11-speech-only',
+    captionRendererVersion: 'social-effects-v12-no-overlap',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });

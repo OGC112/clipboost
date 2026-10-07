@@ -408,12 +408,12 @@
 .mint-social-caption-v223:focus-visible{
   outline:none!important;
   border-color:rgba(255,255,255,.5)!important;
-  background:rgba(0,0,0,.18)!important;
+  background:transparent!important;
 }
 .mint-social-caption-v223.dragging{
   cursor:grabbing!important;
   border-color:rgba(239,68,68,.9)!important;
-  background:rgba(15,15,18,.3)!important;
+  background:transparent!important;
   transform:translate(-50%,-50%) scale(1.02)!important;
 }
 .mint-social-caption-v223.size-small{font-size:var(--caption-font-size,clamp(9px,1.9vh,19px))!important}
@@ -441,7 +441,10 @@
   font-weight:500!important;
   text-transform:none!important;
   text-shadow:0 2px 4px rgba(0,0,0,.88)!important;
-  background:rgba(0,0,0,.16)!important;
+  background:transparent!important;
+}
+.mint-social-caption-v223.style-box{
+  background:rgba(17,17,17,.80)!important;
 }
 
 .mint-social-caption-v223.color-auto,
