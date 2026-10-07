@@ -524,3 +524,19 @@
 }
 .mint-watermark-sliders-v224 input[type="range"]{width:100%!important;accent-color:#ef4444!important}
 .mint-watermark-upload-v224{justify-content:center!important;cursor:pointer!important}
+
+
+/* AI Studio 21.45 — explicit publish/download choice */
+.mint-export-choice-v225{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+  margin-top:2px!important;
+}
+.mint-export-choice-v225 .btn{
+  width:100%!important;
+  justify-content:center!important;
+}
+@media(max-width:720px){
+  .mint-export-choice-v225{grid-template-columns:1fr!important}
+}
