@@ -1177,12 +1177,54 @@ async function launchDownloadedWindowsInstaller(installerPath) {
   if (!target || !fs.existsSync(target)) return { ok:false, error:'Downloaded installer file was not found.' };
   if (!/\.exe$/i.test(target)) return { ok:false, error:'Downloaded update is not a Windows executable.' };
 
-  // shell.openPath delegates to Windows Explorer/Shell, matching a normal
-  // double-click on the downloaded setup and avoiding child_process spawn
-  // failures such as "spawn UNKNOWN".
-  const openError = await shell.openPath(target);
-  if (openError) return { ok:false, error:openError };
-  return { ok:true, path:target };
+  // electron-builder NSIS updates require --updated so the installer waits for
+  // the running app and treats this as an in-place update. --force-run mirrors
+  // electron-updater's normal non-silent restart behavior.
+  const args = ['--updated','--force-run'];
+
+  const waitForSpawn = child => new Promise((resolve,reject) => {
+    let settled=false;
+    const done = fn => value => { if(settled)return; settled=true; fn(value); };
+    child.once('spawn',done(resolve));
+    child.once('error',done(reject));
+  });
+
+  // First try a normal CreateProcess launch. Per-user NSIS installs should not
+  // need elevation and this avoids an unnecessary UAC prompt.
+  try {
+    const child=spawn(target,args,{detached:true,stdio:'ignore',windowsHide:true});
+    await waitForSpawn(child);
+    child.unref();
+    console.log('[ClipBoost Updater] NSIS installer started directly.', { target, args });
+    return { ok:true, path:target, method:'direct-nsis' };
+  } catch (err) {
+    const code=String(err?.code||'');
+    console.warn('[ClipBoost Updater] Direct NSIS launch failed; trying Windows elevation.', { code, message:err?.message||String(err) });
+    if (!['EACCES','EPERM','UNKNOWN'].includes(code) && !/elevation|required|access/i.test(String(err?.message||''))) {
+      return { ok:false, error:err?.message || String(err) };
+    }
+  }
+
+  // If Windows requires elevation, launch the exact same cached installer with
+  // the updater arguments through PowerShell's RunAs verb. Passing the path via
+  // an environment variable avoids quoting bugs with spaces in AppData paths.
+  try {
+    const psScript = [
+      "$p=$env:CLIPBOOST_UPDATE_INSTALLER",
+      "$a=@('--updated','--force-run')",
+      "Start-Process -FilePath $p -ArgumentList $a -Verb RunAs"
+    ].join(';');
+    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',psScript],{
+      detached:true,stdio:'ignore',windowsHide:true,
+      env:{...process.env,CLIPBOOST_UPDATE_INSTALLER:target}
+    });
+    await waitForSpawn(child);
+    child.unref();
+    console.log('[ClipBoost Updater] NSIS installer handed to Windows elevation.', { target, args });
+    return { ok:true, path:target, method:'powershell-runas' };
+  } catch (err) {
+    return { ok:false, error:err?.message || String(err) };
+  }
 }
 
 ipcMain.handle('desktop:install-update', async () => {
@@ -1198,10 +1240,15 @@ ipcMain.handle('desktop:install-update', async () => {
     allowImmediateQuit = true;
     writeUpdateInstallMarker(updateState.version);
 
-    // Always let electron-updater perform the NSIS install. It knows the
-    // downloaded package metadata and passes the updater-specific installer
-    // arguments expected by electron-builder. Opening the cached .exe directly
-    // can leave the installed app on the old version and cause an update loop.
+    if (process.platform === 'win32' && downloadedUpdateFile) {
+      const launched = await launchDownloadedWindowsInstaller(downloadedUpdateFile);
+      if (!launched.ok) throw new Error(launched.error || 'Windows installer could not be started.');
+      // Give Windows enough time to accept the process/elevation handoff before
+      // terminating ClipBoost. The NSIS --updated flag will wait for the app.
+      setTimeout(() => app.exit(0), 900);
+      return { ok:true, silent:false, restart:true, method:launched.method };
+    }
+
     updater.quitAndInstall(false, true);
     return { ok:true, silent:false, restart:true, method:'electron-updater' };
   } catch (err) {
