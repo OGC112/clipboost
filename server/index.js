@@ -776,13 +776,61 @@ function snapCandidateToSpeech(transcript,start,end,duration,coreStart=start,cor
   return {start:Number(a.toFixed(2)),end:Number(b.toFixed(2)),contextScore:contextual.contextScore,payoffScore:contextual.payoffScore,expanded:contextual.expanded};
 }
 
+function repairCandidateOpening(transcript,start,end,duration,maxLookback=12){
+  const words=(transcript?.rawWords||transcript?.words||[])
+    .filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
+    .map(w=>({...w,start:Number(w.start),end:Number(w.end)}))
+    .sort((a,b)=>a.start-b.start);
+  if(!words.length)return {start,end,repaired:false,reason:'no-words'};
+
+  let firstIndex=words.findIndex(w=>w.end>=start-.06&&w.start<=end+.06);
+  if(firstIndex<0)return {start,end,repaired:false,reason:'no-overlap'};
+
+  const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
+  const gapBefore=i=>i<=0?99:Math.max(0,words[i].start-words[i-1].end);
+  const starterUnsafe=i=>{
+    if(i<=0)return false;
+    const prev=words[i-1];
+    const cur=words[i];
+    if(cur.start<start-.08)return true;
+    if(terminalWord(prev))return false;
+    return gapBefore(i)<.50;
+  };
+
+  if(!starterUnsafe(firstIndex))return {start,end,repaired:false,reason:'already-safe'};
+
+  const originalStart=start;
+  let bestIndex=firstIndex;
+  for(let i=firstIndex;i>=0;i--){
+    const candidateStart=words[i].start;
+    if(originalStart-candidateStart>maxLookback)break;
+    if(end-candidateStart>60)continue;
+    const safeBoundary=i===0||terminalWord(words[i-1])||gapBefore(i)>=.50;
+    if(safeBoundary){bestIndex=i;break;}
+    bestIndex=i;
+  }
+
+  const repairedStart=Math.max(0,words[bestIndex].start);
+  if(repairedStart>=originalStart-.08)return {start,end,repaired:false,reason:'no-earlier-boundary'};
+  return {
+    start:Number(repairedStart.toFixed(2)),
+    end,
+    repaired:true,
+    reason:'continued-sentence',
+    lookback:Number((originalStart-repairedStart).toFixed(2))
+  };
+}
+
 function finalizeCandidate(meta,transcript,candidate={}){
   const duration=Number(meta?.details?.duration||candidate.end||0);
   const coreStart=Number(candidate.momentStart??candidate.coreStart??candidate.start??0);
   const coreEnd=Number(candidate.momentEnd??candidate.coreEnd??candidate.end??(coreStart+4));
   const snapped=snapCandidateToSpeech(transcript,Number(candidate.start||coreStart),Number(candidate.end||coreEnd),duration,coreStart,coreEnd);
-  const quality=candidateQuality(meta,transcript,snapped.start,snapped.end,candidate.score||70);
-  const caps=clipCaptionsAbsolute(transcript,snapped.start,snapped.end);
+  const repairedOpening=repairCandidateOpening(transcript,snapped.start,snapped.end,duration);
+  const finalStart=Number(repairedOpening.start);
+  const finalEnd=Number(repairedOpening.end);
+  const quality=candidateQuality(meta,transcript,finalStart,finalEnd,candidate.score||70);
+  const caps=clipCaptionsAbsolute(transcript,finalStart,finalEnd);
   const actualOpening=caps.slice(0,2).map(x=>x.text).join(' ').trim();
   const hook=actualOpening||String(candidate.hook||'').trim();
   const hookWindows=[];
@@ -794,8 +842,8 @@ function finalizeCandidate(meta,transcript,candidate={}){
   }
   hookWindows.sort((a,b)=>b.score-a.score);
   const hookOptions=hookWindows.filter((x,i,a)=>a.findIndex(y=>textSimilarity(y.text,x.text)>.82)===i).slice(0,3);
-  const selectionText=clipTextAbsolute(transcript,snapped.start,snapped.end).slice(0,1800);
-  const draft={...candidate,start:snapped.start,end:snapped.end,duration:Number((snapped.end-snapped.start).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
+  const selectionText=clipTextAbsolute(transcript,finalStart,finalEnd).slice(0,1800);
+  const draft={...candidate,start:finalStart,end:finalEnd,duration:Number((finalEnd-finalStart).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
   const campaignFit=campaignFitForCandidate(meta,draft,quality);
   const viewPotential=clampScore(Math.round(quality.hook*.24+quality.retention*.26+quality.emotion*.10+quality.completeness*.20+quality.payoff*.12+quality.cleanSpeech*.08));
   const combinedScore=campaignFit?clampScore(Math.round(quality.overall*.72+campaignFit.score*.28)):quality.overall;
@@ -806,7 +854,7 @@ function finalizeCandidate(meta,transcript,candidate={}){
     viewPotential,
     campaignFit,
     quality,
-    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded)},
+    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded||repairedOpening.repaired),openingRepair:repairedOpening},
     qualityEngine:campaignFit?'v4-quality-campaign':'v4-quality'
   };
 }
@@ -1301,6 +1349,7 @@ function normalizeRenderOptions(raw = {}) {
   const intensity = ['low','balanced','high'].includes(String(raw.intensity || '').toLowerCase()) ? String(raw.intensity).toLowerCase() : 'balanced';
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
+  const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
   const captionPosition = ['top','center','bottom','custom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
@@ -1321,7 +1370,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1797,19 +1846,29 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const alignment = customCaptionY!==null ? 5 : options.captionPosition === 'top' ? 8 : options.captionPosition === 'center' ? 5 : 2;
   const marginV = customCaptionY!==null ? 0 : options.captionPosition === 'top' ? Math.round(height*.12) : options.captionPosition === 'center' ? 0 : Math.round(height*.16);
   const captionOverride = customCaptionY!==null ? `{\\an5\\pos(${Math.round(width/2)},${Math.round(height*customCaptionY)})}` : '';
+  const fontMap = {
+    social:'Segoe UI Black',
+    impact:'Impact',
+    'arial-black':'Arial Black',
+    'segoe-black':'Segoe UI Black',
+    trebuchet:'Trebuchet MS',
+    verdana:'Verdana'
+  };
+  const selectedFont=fontMap[options.captionFont]||fontMap.social;
+
   const styleMap = {
     // Arial Black gives the default preset the dense, high-contrast weight
     // used by native short-form/social editors without introducing a bundled
     // third-party font dependency. Slight horizontal compression keeps short
     // bursts punchy while preserving generous vertical stroke weight.
-    bold: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    clean: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
-    neon: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    minimal: { font:'Arial', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
-    impact: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:2, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
-    pop: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
-    box: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00000000', back:'&HCC111111', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:3 },
-    karaoke: { font:'Arial Black', primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
+    bold: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H70000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    clean: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00151515', back:'&H50000000', shadow:0, spacing:0, bold:-1, scaleX:100, borderStyle:1 },
+    neon: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00A84BFF', back:'&H60000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    minimal: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H80000000', back:'&H00000000', shadow:0, spacing:0, bold:0, scaleX:100, borderStyle:1 },
+    impact: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:2, spacing:-1.5, bold:-1, scaleX:93, borderStyle:1 },
+    pop: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H0000FFFF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 },
+    box: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H00FFFFFF', outline:'&H00000000', back:'&HCC111111', shadow:0, spacing:-1, bold:-1, scaleX:96, borderStyle:3 },
+    karaoke: { font:selectedFont, primary:'&H00FFFFFF', secondary:'&H004AD5FF', outline:'&H00000000', back:'&H65000000', shadow:1, spacing:-1, bold:-1, scaleX:96, borderStyle:1 }
   };
   const colorMap={
     white:'&H00FFFFFF',
@@ -1826,7 +1885,12 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     black:'&H00000000'
   };
   const base=styleMap[options.captionStyle]||styleMap.bold;
-  const st={...base,primary:colorMap[options.captionColor]||base.primary};
+  const fontTuning = options.captionFont==='impact'
+    ? { scaleX:90, spacing:-1.8 }
+    : options.captionFont==='social'
+      ? { scaleX:98, spacing:-.6 }
+      : {};
+  const st={...base,...fontTuning,primary:colorMap[options.captionColor]||base.primary};
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
@@ -2057,6 +2121,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       trackingMode: options.trackingMode,
       cameraMovement: options.cameraMovement,
       captionStyle: options.captionStyle,
+      captionFont: options.captionFont,
       captionSize: options.captionSize,
       captionScale: options.captionScale,
       captionColor: options.captionColor,
@@ -2226,7 +2291,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v3',
+    captionRendererVersion: 'social-fonts-v4',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
