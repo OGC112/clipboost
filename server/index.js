@@ -788,19 +788,48 @@ function repairCandidateOpening(transcript,start,end,duration){
   if(firstIndex<0)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-overlap'};
 
   const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
-  const gapBefore=i=>i<=0?99:Math.max(0,words[i].start-words[i-1].end);
-  const safeBoundary=i=>i===0||terminalWord(words[i-1])||gapBefore(i)>=.62;
+  const gapBefore=i=>i<=0?Math.max(0,words[0].start):Math.max(0,words[i].start-words[i-1].end);
+  const safeBoundary=i=>i>0&&(terminalWord(words[i-1])||gapBefore(i)>=.62);
   const startsInsideWord=words[firstIndex].start<start-.08;
+  const firstLex=wordLexeme(words[firstIndex]?.word||'');
+  const suspiciousSourceOpening=firstIndex===0 && words[0].start<.62 &&
+    (WEAK_CLIP_STARTERS.has(firstLex)||REFERENTIAL_CLIP_STARTERS.has(firstLex));
 
-  if(!startsInsideWord&&safeBoundary(firstIndex)){
+  if(!startsInsideWord&&!suspiciousSourceOpening&&(firstIndex===0||safeBoundary(firstIndex))){
     return {start,end,repaired:false,openingSafe:true,verified:true,reason:'already-safe',gapBefore:Number(gapBefore(firstIndex).toFixed(3))};
   }
 
+  // If the source itself begins with a continuation ("et", "mais", pronoun,
+  // etc.), there is nothing earlier to recover. Cut forward to the first real
+  // pause/terminal boundary instead of accepting time 0 as automatically safe.
+  if(suspiciousSourceOpening){
+    let forwardIndex=-1;
+    for(let i=1;i<words.length;i++){
+      if(!safeBoundary(i))continue;
+      const candidateStart=Math.max(0,words[i].start);
+      if(candidateStart>=end-2.5)break;
+      forwardIndex=i;
+      break;
+    }
+    if(forwardIndex>=0){
+      return {
+        start:Number(words[forwardIndex].start.toFixed(2)),
+        end,
+        repaired:true,
+        openingSafe:true,
+        verified:true,
+        reason:'trimmed-incomplete-source-opening',
+        lookahead:Number((words[forwardIndex].start-start).toFixed(2)),
+        firstWord:String(words[firstIndex]?.word||'')
+      };
+    }
+    return {start,end,repaired:false,openingSafe:false,verified:true,reason:'source-starts-mid-sentence-no-next-boundary',firstWord:String(words[firstIndex]?.word||'')};
+  }
+
   // Hard rule: walk back to an actual sentence/pause boundary. If no such
-  // boundary can fit inside the 60s limit, reject the candidate instead of
-  // inventing a "good enough" start in the middle of a sentence.
+  // boundary can fit inside the 60s limit, reject the candidate.
   let safeIndex=-1;
-  for(let i=firstIndex;i>=0;i--){
+  for(let i=firstIndex;i>=1;i--){
     if(!safeBoundary(i))continue;
     const candidateStart=Math.max(0,words[i].start);
     if(end-candidateStart>60)break;
@@ -1344,7 +1373,10 @@ function normalizeRenderOptions(raw = {}) {
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
   const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
-  const captionEffect = ['static','word-by-word','active-word','keyword-color','punch-words','karaoke'].includes(String(raw.captionEffect || '').toLowerCase()) ? String(raw.captionEffect).toLowerCase() : 'active-word';
+  const rawCaptionEffect=String(raw.captionEffect||'active-word').toLowerCase();
+  const captionEffectAliases={'word-by-word':'word-pop','punch-words':'keyword-color','static':'clean-bold'};
+  const normalizedCaptionEffect=captionEffectAliases[rawCaptionEffect]||rawCaptionEffect;
+  const captionEffect = ['active-word','word-pop','karaoke','keyword-color','clean-bold'].includes(normalizedCaptionEffect) ? normalizedCaptionEffect : 'active-word';
   const captionPosition = ['top','center','bottom','custom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
@@ -1938,7 +1970,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   for(const cap of captions){
     const words=wordsForCaption(cap);
     const baseOverride=`${captionOverride}${effectOverride()}`;
-    if(options.captionEffect==='word-by-word'){
+    if(options.captionEffect==='word-pop'){
       for(const w of words){
         rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}{\\fscx116\\fscy116\\t(0,90,\\fscx100\\fscy100)}${styleWord(w.word)}`);
       }
@@ -1952,13 +1984,12 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
       }
       continue;
     }
-    if(options.captionEffect==='keyword-color'||options.captionEffect==='punch-words'){
-      const punch=options.captionEffect==='punch-words';
-      const text=words.map(x=>styleWord(x.word,importantWord(x.word),punch&&importantWord(x.word))).join(' ');
+    if(options.captionEffect==='keyword-color'){
+      const text=words.map(x=>styleWord(x.word,importantWord(x.word),importantWord(x.word))).join(' ');
       rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${text}`);
       continue;
     }
-    if(options.captionEffect==='karaoke'||options.captionStyle==='karaoke'){
+    if(options.captionEffect==='karaoke'){
       const text=words.map(w=>{
         const cs=Math.max(1,Math.round(Math.max(.03,Number(w.end||0)-Number(w.start||0))*100));
         return `{\\kf${cs}}${styleWord(w.word)}`;
@@ -2343,7 +2374,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v5',
+    captionRendererVersion: 'social-effects-v7-live-preview',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
