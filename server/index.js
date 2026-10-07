@@ -776,13 +776,67 @@ function snapCandidateToSpeech(transcript,start,end,duration,coreStart=start,cor
   return {start:Number(a.toFixed(2)),end:Number(b.toFixed(2)),contextScore:contextual.contextScore,payoffScore:contextual.payoffScore,expanded:contextual.expanded};
 }
 
+function repairCandidateOpening(transcript,start,end,duration,maxLookback=12){
+  const words=(transcript?.rawWords||transcript?.words||[])
+    .filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
+    .map(w=>({...w,start:Number(w.start),end:Number(w.end)}))
+    .sort((a,b)=>a.start-b.start);
+  if(!words.length)return {start,end,repaired:false,reason:'no-words'};
+
+  let firstIndex=words.findIndex(w=>w.end>=start-.06&&w.start<=end+.06);
+  if(firstIndex<0)return {start,end,repaired:false,reason:'no-overlap'};
+
+  const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
+  const gapBefore=i=>i<=0?99:Math.max(0,words[i].start-words[i-1].end);
+  const starterUnsafe=i=>{
+    if(i<=0)return false;
+    const prev=words[i-1];
+    const cur=words[i];
+    if(cur.start<start-.08)return true;
+    if(terminalWord(prev))return false;
+    const gap=gapBefore(i);
+    return gap<.50;
+  };
+
+  if(!starterUnsafe(firstIndex))return {start,end,repaired:false,reason:'already-safe'};
+
+  const originalStart=start;
+  let bestIndex=firstIndex;
+  for(let i=firstIndex;i>=0;i--){
+    const candidateStart=words[i].start;
+    if(originalStart-candidateStart>maxLookback)break;
+    if(end-candidateStart>60)continue;
+
+    const safeBoundary=i===0||terminalWord(words[i-1])||gapBefore(i)>=.50;
+    if(safeBoundary){
+      bestIndex=i;
+      break;
+    }
+    bestIndex=i;
+  }
+
+  const repairedStart=Math.max(0,words[bestIndex].start);
+  if(repairedStart>=originalStart-.08)return {start,end,repaired:false,reason:'no-earlier-boundary'};
+
+  return {
+    start:Number(repairedStart.toFixed(2)),
+    end,
+    repaired:true,
+    reason:'continued-sentence',
+    lookback:Number((originalStart-repairedStart).toFixed(2))
+  };
+}
+
 function finalizeCandidate(meta,transcript,candidate={}){
   const duration=Number(meta?.details?.duration||candidate.end||0);
   const coreStart=Number(candidate.momentStart??candidate.coreStart??candidate.start??0);
   const coreEnd=Number(candidate.momentEnd??candidate.coreEnd??candidate.end??(coreStart+4));
   const snapped=snapCandidateToSpeech(transcript,Number(candidate.start||coreStart),Number(candidate.end||coreEnd),duration,coreStart,coreEnd);
-  const quality=candidateQuality(meta,transcript,snapped.start,snapped.end,candidate.score||70);
-  const caps=clipCaptionsAbsolute(transcript,snapped.start,snapped.end);
+  const repairedOpening=repairCandidateOpening(transcript,snapped.start,snapped.end,duration);
+  const finalStart=Number(repairedOpening.start);
+  const finalEnd=Number(repairedOpening.end);
+  const quality=candidateQuality(meta,transcript,finalStart,finalEnd,candidate.score||70);
+  const caps=clipCaptionsAbsolute(transcript,finalStart,finalEnd);
   const actualOpening=caps.slice(0,2).map(x=>x.text).join(' ').trim();
   const hook=actualOpening||String(candidate.hook||'').trim();
   const hookWindows=[];
@@ -794,8 +848,8 @@ function finalizeCandidate(meta,transcript,candidate={}){
   }
   hookWindows.sort((a,b)=>b.score-a.score);
   const hookOptions=hookWindows.filter((x,i,a)=>a.findIndex(y=>textSimilarity(y.text,x.text)>.82)===i).slice(0,3);
-  const selectionText=clipTextAbsolute(transcript,snapped.start,snapped.end).slice(0,1800);
-  const draft={...candidate,start:snapped.start,end:snapped.end,duration:Number((snapped.end-snapped.start).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
+  const selectionText=clipTextAbsolute(transcript,finalStart,finalEnd).slice(0,1800);
+  const draft={...candidate,start:finalStart,end:finalEnd,duration:Number((finalEnd-finalStart).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
   const campaignFit=campaignFitForCandidate(meta,draft,quality);
   const viewPotential=clampScore(Math.round(quality.hook*.24+quality.retention*.26+quality.emotion*.10+quality.completeness*.20+quality.payoff*.12+quality.cleanSpeech*.08));
   const combinedScore=campaignFit?clampScore(Math.round(quality.overall*.72+campaignFit.score*.28)):quality.overall;
@@ -806,7 +860,7 @@ function finalizeCandidate(meta,transcript,candidate={}){
     viewPotential,
     campaignFit,
     quality,
-    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded)},
+    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded||repairedOpening.repaired),openingRepair:repairedOpening},
     qualityEngine:campaignFit?'v4-quality-campaign':'v4-quality'
   };
 }
