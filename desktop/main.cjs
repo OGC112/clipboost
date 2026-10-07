@@ -1,8 +1,10 @@
-const { app, BrowserWindow, shell, dialog, Menu, Tray, nativeImage, ipcMain, session } = require('electron');
+const { app, BrowserWindow, shell, dialog, Menu, Tray, nativeImage, ipcMain, session, safeStorage } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
+const http = require('http');
+const crypto = require('crypto');
 const dotenv = require('dotenv');
 
 // Stabilize Chromium rendering for Mint's frameless window on Windows.
@@ -67,6 +69,157 @@ function readUpdateInstallMarker() {
 }
 function clearUpdateInstallMarker() {
   try { fs.unlinkSync(updateInstallMarkerPath()); } catch {}
+}
+
+function platformTokensPath() { return path.join(userRoot(), 'platform-oauth.json'); }
+function readPlatformTokens() {
+  try {
+    const parsed=JSON.parse(fs.readFileSync(platformTokensPath(),'utf8'));
+    const out={};
+    for(const [provider,encoded] of Object.entries(parsed||{})){
+      try {
+        const encrypted=Buffer.from(String(encoded||''),'base64');
+        if(!safeStorage.isEncryptionAvailable()) continue;
+        out[provider]=JSON.parse(safeStorage.decryptString(encrypted));
+      } catch {}
+    }
+    return out;
+  } catch { return {}; }
+}
+function writePlatformTokens(tokens={}) {
+  if(!safeStorage.isEncryptionAvailable()) throw new Error('Secure credential storage is unavailable on this Windows session.');
+  const encoded={};
+  for(const [provider,value] of Object.entries(tokens||{})){
+    if(!value) continue;
+    encoded[provider]=safeStorage.encryptString(JSON.stringify(value)).toString('base64');
+  }
+  fs.writeFileSync(platformTokensPath(),JSON.stringify(encoded,null,2),'utf8');
+}
+function base64Url(buffer) {
+  return Buffer.from(buffer).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+}
+function oauthProviderConfig(provider) {
+  const env=readDesktopEnv();
+  const id=String(provider||'').toLowerCase();
+  const upper=id.toUpperCase();
+  const defaults={
+    tiktok:{label:'TikTok',authUrl:'https://www.tiktok.com/v2/auth/authorize/',tokenUrl:'https://open.tiktokapis.com/v2/oauth/token/',clientParam:'client_key',scope:'user.info.basic,video.publish',scopeSeparator:',',pkce:true},
+    instagram:{label:'Instagram',authUrl:'https://www.facebook.com/v23.0/dialog/oauth',tokenUrl:'https://graph.facebook.com/v23.0/oauth/access_token',clientParam:'client_id',scope:'instagram_basic,instagram_content_publish,pages_show_list',scopeSeparator:',',pkce:false},
+    youtube:{label:'YouTube',authUrl:'https://accounts.google.com/o/oauth2/v2/auth',tokenUrl:'https://oauth2.googleapis.com/token',clientParam:'client_id',scope:'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',scopeSeparator:' ',pkce:true,authExtra:{access_type:'offline',prompt:'consent'}},
+    facebook:{label:'Facebook',authUrl:'https://www.facebook.com/v23.0/dialog/oauth',tokenUrl:'https://graph.facebook.com/v23.0/oauth/access_token',clientParam:'client_id',scope:'pages_show_list,pages_read_engagement,pages_manage_posts',scopeSeparator:',',pkce:false},
+    x:{label:'X',authUrl:'https://twitter.com/i/oauth2/authorize',tokenUrl:'https://api.x.com/2/oauth2/token',clientParam:'client_id',scope:'tweet.read tweet.write users.read offline.access',scopeSeparator:' ',pkce:true}
+  };
+  const base=defaults[id]; if(!base)return null;
+  const redirectPort=Math.max(1024,Math.min(65535,Number(env[`${upper}_OAUTH_REDIRECT_PORT`]||53682)));
+  return {
+    ...base,
+    clientId:String(env[`${upper}_OAUTH_CLIENT_ID`]||'').trim(),
+    clientSecret:String(env[`${upper}_OAUTH_CLIENT_SECRET`]||'').trim(),
+    authUrl:String(env[`${upper}_OAUTH_AUTH_URL`]||base.authUrl).trim(),
+    tokenUrl:String(env[`${upper}_OAUTH_TOKEN_URL`]||base.tokenUrl).trim(),
+    scope:String(env[`${upper}_OAUTH_SCOPES`]||base.scope).trim(),
+    redirectPort,
+    redirectUri:`http://127.0.0.1:${redirectPort}/oauth/callback/${id}`,
+    tokenAuth:String(env[`${upper}_OAUTH_TOKEN_AUTH`]||'body').trim().toLowerCase()
+  };
+}
+function platformConnectionSnapshot() {
+  const tokens=readPlatformTokens();
+  const providers=['tiktok','instagram','youtube','facebook','x'];
+  return Object.fromEntries(providers.map(id=>{
+    const cfg=oauthProviderConfig(id);
+    const token=tokens[id];
+    return [id,{
+      provider:id,
+      label:cfg?.label||id,
+      configured:Boolean(cfg?.clientId&&cfg?.authUrl&&cfg?.tokenUrl),
+      connected:Boolean(token?.access_token),
+      connectedAt:token?.connectedAt||null,
+      expiresAt:token?.expiresAt||null
+    }];
+  }));
+}
+async function connectPlatformOAuth(provider) {
+  const cfg=oauthProviderConfig(provider);
+  if(!cfg) throw new Error('Unsupported platform.');
+  if(!cfg.clientId) throw new Error(`${cfg.label} OAuth is not configured. Add ${String(provider).toUpperCase()}_OAUTH_CLIENT_ID in ClipBoost .env.`);
+  if(!safeStorage.isEncryptionAvailable()) throw new Error('Secure Windows credential storage is unavailable.');
+
+  const state=base64Url(crypto.randomBytes(24));
+  const verifier=base64Url(crypto.randomBytes(48)).slice(0,96);
+  const challenge=base64Url(crypto.createHash('sha256').update(verifier).digest());
+  const callbackPath=`/oauth/callback/${provider}`;
+  let callbackResolve,callbackReject;
+  const callbackPromise=new Promise((resolve,reject)=>{callbackResolve=resolve;callbackReject=reject});
+  const server=http.createServer((req,res)=>{
+    try{
+      const url=new URL(req.url,`http://127.0.0.1:${cfg.redirectPort}`);
+      if(url.pathname!==callbackPath){res.writeHead(404,{'Content-Type':'text/plain'});res.end('Not found');return}
+      const returnedState=url.searchParams.get('state')||'';
+      const error=url.searchParams.get('error')||'';
+      const errorDescription=url.searchParams.get('error_description')||error;
+      const code=url.searchParams.get('code')||'';
+      if(returnedState!==state) throw new Error('OAuth state validation failed.');
+      if(error) throw new Error(errorDescription||'Authorization was denied.');
+      if(!code) throw new Error('Authorization code was not returned.');
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});
+      res.end('<!doctype html><html><body style="font-family:system-ui;background:#0b0d12;color:#fff;padding:40px"><h2>Connected to ClipBoost</h2><p>You can close this window and return to ClipBoost.</p></body></html>');
+      callbackResolve(code);
+    }catch(err){
+      res.writeHead(400,{'Content-Type':'text/plain; charset=utf-8'});res.end('ClipBoost authorization failed. You can close this window.');
+      callbackReject(err);
+    }
+  });
+  await new Promise((resolve,reject)=>{
+    server.once('error',reject);
+    server.listen(cfg.redirectPort,'127.0.0.1',resolve);
+  });
+
+  const auth=new URL(cfg.authUrl);
+  auth.searchParams.set(cfg.clientParam,cfg.clientId);
+  auth.searchParams.set('response_type','code');
+  auth.searchParams.set('redirect_uri',cfg.redirectUri);
+  auth.searchParams.set('state',state);
+  auth.searchParams.set('scope',cfg.scope);
+  if(cfg.pkce){auth.searchParams.set('code_challenge',challenge);auth.searchParams.set('code_challenge_method','S256')}
+  for(const [k,v] of Object.entries(cfg.authExtra||{}))auth.searchParams.set(k,v);
+
+  try{
+    await shell.openExternal(auth.toString());
+    const code=await Promise.race([
+      callbackPromise,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Authorization timed out.')),180000))
+    ]);
+    const body=new URLSearchParams();
+    body.set('grant_type','authorization_code');
+    body.set('code',code);
+    body.set('redirect_uri',cfg.redirectUri);
+    body.set(cfg.clientParam,cfg.clientId);
+    if(cfg.pkce)body.set('code_verifier',verifier);
+    if(cfg.clientSecret && cfg.tokenAuth!=='basic')body.set('client_secret',cfg.clientSecret);
+    const headers={'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'};
+    if(cfg.clientSecret && cfg.tokenAuth==='basic'){
+      headers.Authorization='Basic '+Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64');
+    }
+    const tokenRes=await fetch(cfg.tokenUrl,{method:'POST',headers,body});
+    const raw=await tokenRes.text();
+    let token;try{token=JSON.parse(raw)}catch{throw new Error(`${cfg.label} returned an invalid token response.`)}
+    if(!tokenRes.ok||!token?.access_token)throw new Error(token?.error_description||token?.message||token?.error||`${cfg.label} token exchange failed.`);
+    const expiresIn=Number(token.expires_in||0);
+    const stored={...token,connectedAt:new Date().toISOString(),expiresAt:expiresIn?new Date(Date.now()+expiresIn*1000).toISOString():null};
+    const tokens=readPlatformTokens();tokens[provider]=stored;writePlatformTokens(tokens);
+    if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('desktop:platform-auth-event',{provider,status:'connected'});
+    return {ok:true,connection:platformConnectionSnapshot()[provider]};
+  }finally{
+    try{server.close()}catch{}
+  }
+}
+function disconnectPlatformOAuth(provider) {
+  const tokens=readPlatformTokens();
+  delete tokens[provider];
+  writePlatformTokens(tokens);
+  if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('desktop:platform-auth-event',{provider,status:'disconnected'});
+  return {ok:true,connection:platformConnectionSnapshot()[provider]};
 }
 function readDesktopSettings() {
   const defaults = { startWithWindows:false, closeToTray:true, ecoMode:true, idleTimeoutMinutes:5, checkUpdatesOnStartup:true, autoDownloadUpdates:true };
@@ -1013,6 +1166,9 @@ ipcMain.handle('desktop:inspect-campaign-asset-pack', async (_event, url) => { t
 ipcMain.handle('desktop:import-campaign-asset', async (_event, payload={}) => { try { return await importCampaignAssetToProject(payload.projectId,payload.mediaUrl,payload.pageUrl,payload.label); } catch (err) { return {ok:false,error:err?.message||'Could not import campaign asset.'}; } });
 ipcMain.handle('desktop:clear-campaign-import-session', async () => { await session.fromPartition(CAMPAIGN_IMPORT_PARTITION).clearStorageData(); return { ok:true }; });
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
+ipcMain.handle('desktop:get-platform-connections', () => platformConnectionSnapshot());
+ipcMain.handle('desktop:connect-platform', async (_event, provider) => connectPlatformOAuth(String(provider||'').toLowerCase()));
+ipcMain.handle('desktop:disconnect-platform', async (_event, provider) => disconnectPlatformOAuth(String(provider||'').toLowerCase()));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });
 ipcMain.handle('desktop:check-updates', async () => checkForUpdates(true));
 function launchDownloadedWindowsInstaller(installerPath) {
