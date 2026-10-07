@@ -416,7 +416,7 @@
   background:rgba(15,15,18,.3)!important;
   transform:translate(-50%,-50%) scale(1.02)!important;
 }
-.mint-social-caption-v223.size-small{font-size:var(--caption-font-size,clamp(13px,2.7vh,27px))!important}
+.mint-social-caption-v223.size-small{font-size:var(--caption-font-size,clamp(9px,1.9vh,19px))!important}
 .mint-social-caption-v223.size-medium{font-size:var(--caption-font-size,clamp(16px,3.35vh,34px))!important}
 .mint-social-caption-v223.size-large{font-size:var(--caption-font-size,clamp(20px,4.05vh,42px))!important}
 
