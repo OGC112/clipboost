@@ -1198,20 +1198,12 @@ ipcMain.handle('desktop:install-update', async () => {
     allowImmediateQuit = true;
     writeUpdateInstallMarker(updateState.version);
 
-    if (process.platform === 'win32' && downloadedUpdateFile) {
-      const launched = await launchDownloadedWindowsInstaller(downloadedUpdateFile);
-      if (!launched.ok) throw new Error(launched.error || 'Could not open the downloaded installer.');
-      console.log('[ClipBoost Updater] Installer opened through Windows Shell.', { path:launched.path });
-      setTimeout(() => {
-        try { app.exit(0); } catch {}
-      }, 1400);
-      return { ok:true, silent:false, restart:false, method:'windows-shell-openpath' };
-    }
-
-    // Fallback for non-Windows builds or older updater events that do not expose
-    // the downloaded installer path.
+    // Always let electron-updater perform the NSIS install. It knows the
+    // downloaded package metadata and passes the updater-specific installer
+    // arguments expected by electron-builder. Opening the cached .exe directly
+    // can leave the installed app on the old version and cause an update loop.
     updater.quitAndInstall(false, true);
-    return { ok:true, silent:false, restart:true, method:'electron-updater-fallback' };
+    return { ok:true, silent:false, restart:true, method:'electron-updater' };
   } catch (err) {
     installUpdateInProgress = false;
     isQuitting = false;
