@@ -1581,7 +1581,7 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
       for(const t of switchTimes){ boundaries.push(Math.max(0,t-.22),t,Math.min(Number(timeline?.pieces?.at(-1)?.end||t+.22),t+.24)); }
     }
   }
-  const pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
+  let pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
     const mid=(Number(part.start)+Number(part.end))/2;
     const frame=nearestTrackingFrame(tracking,mid);
     const speakerConfidence=frame?Number(frame.speakerConfidence||frame.confidence||0):0;
@@ -1615,6 +1615,30 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
       switchBridge:nearSwitch
     };
   });
+
+  if(generalStudio && pieces.length){
+    // Never switch visual composition abruptly inside a General Studio clip.
+    // If any meaningful segment cannot be cropped safely around the speaker,
+    // keep the whole clip in the stable full-source-on-vertical-canvas layout.
+    const totalDuration=pieces.reduce((sum,p)=>sum+Math.max(0,Number(p.end||0)-Number(p.start||0)),0);
+    const unsafeDuration=pieces
+      .filter(p=>p.frameMode==='full')
+      .reduce((sum,p)=>sum+Math.max(0,Number(p.end||0)-Number(p.start||0)),0);
+    const unsafeRatio=totalDuration>0?unsafeDuration/totalDuration:1;
+    const hasMeaningfulUnsafe=pieces.some(p=>p.frameMode==='full' && Number(p.end||0)-Number(p.start||0)>=.20);
+    const lockFullSource=tracking?.ok===false || !frames.length || hasMeaningfulUnsafe || unsafeRatio>=.08;
+    if(lockFullSource){
+      pieces=pieces.map(p=>({
+        ...p,
+        frameMode:'full',
+        speakerZoom:1,
+        switchBridge:false,
+        layoutLocked:true
+      }));
+    }else{
+      pieces=pieces.map(p=>({...p,frameMode:'speaker',speakerZoom:1,switchBridge:false,layoutLocked:true}));
+    }
+  }
   return {...timeline,pieces};
 }
 
@@ -2144,7 +2168,7 @@ function previewCacheKey(meta, start, end, options = {}) {
   const variant = JSON.stringify({
     ...normalizeRenderOptions(options),
     autoDirector: options?.autoDirector !== false,
-    autoDirectorVersion: 'v3',
+    autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
     captionRendererVersion: 'social-native-v2',
