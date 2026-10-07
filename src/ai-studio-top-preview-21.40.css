@@ -524,3 +524,32 @@
 }
 .mint-watermark-sliders-v224 input[type="range"]{width:100%!important;accent-color:#ef4444!important}
 .mint-watermark-upload-v224{justify-content:center!important;cursor:pointer!important}
+
+
+/* AI Studio 21.47 — precise caption size */
+.mint-caption-size-slider-v227{
+  display:grid!important;
+  gap:7px!important;
+  margin-top:10px!important;
+  padding-top:10px!important;
+  border-top:1px solid rgba(255,255,255,.06)!important;
+}
+.mint-caption-size-slider-v227>div{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+}
+.mint-caption-size-slider-v227 span{
+  color:#9da2ad!important;
+  font-size:8px!important;
+}
+.mint-caption-size-slider-v227 b{
+  color:#f4f4f5!important;
+  font-size:8px!important;
+  font-variant-numeric:tabular-nums!important;
+}
+.mint-caption-size-slider-v227 input[type="range"]{
+  width:100%!important;
+  accent-color:#ef4444!important;
+}
