@@ -1470,7 +1470,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v5`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v6`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -1542,23 +1542,30 @@ function nearestTrackingFrame(tracking, time) {
 
 function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
+  const generalStudio=options.editorContext==='general';
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
   const frames=tracking?.keyframes||[];
   const switchTimes=(tracking?.summary?.speakerSwitchTimes||[]).map(Number).filter(Number.isFinite);
   if(frames.length){
-    // Reframe from the original source often enough to visibly follow the active speaker.
-    // Camera movement now controls smoothing, not whether we sample the speaker often enough.
-    const maxGap=options.cameraMovement==='high'?.34:options.cameraMovement==='low'?.54:.42;
+    // General AI Studio should feel stable, like a social editor, not like a camera
+    // continuously breathing in and out. Campaign Studio keeps the more reactive tracking.
+    const maxGap=generalStudio ? 2.4 : (options.cameraMovement==='high'?.34:options.cameraMovement==='low'?.54:.42);
+    const moveThreshold=generalStudio ? .075 : .018;
     let lastTime=-99,lastX=.5,lastY=.45,lastId=null,lastSafe=null;
     for(const f of frames){
       const t=Number(f.time||0), x=Number(f.x||.5), y=Number(f.y||.45), id=f.activeFaceId??null, safe=Boolean(f.safeFrame);
-      const moved=Math.hypot(x-lastX,y-lastY)>0.018;
+      const moved=Math.hypot(x-lastX,y-lastY)>moveThreshold;
       const speakerChanged=id&&lastId&&id!==lastId;
       const safeChanged=lastSafe!==null&&safe!==lastSafe;
-      if(t-lastTime>=maxGap || moved || speakerChanged || safeChanged){boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;}
+      if(t-lastTime>=maxGap || moved || speakerChanged || safeChanged){
+        boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;
+      }
     }
-    // Create a short zoom-out bridge around real speaker changes so the frame never has to teleport.
-    for(const t of switchTimes){ boundaries.push(Math.max(0,t-.22),t,Math.min(Number(timeline?.pieces?.at(-1)?.end||t+.22),t+.24)); }
+    // Campaign Studio keeps its short transition bridge. In general AI Studio,
+    // speaker switches only move the crop; they never trigger a full-frame zoom-out.
+    if(!generalStudio){
+      for(const t of switchTimes){ boundaries.push(Math.max(0,t-.22),t,Math.min(Number(timeline?.pieces?.at(-1)?.end||t+.22),t+.24)); }
+    }
   }
   const pieces=splitPiecesAtBoundaries(timeline.pieces,boundaries).map(part=>{
     const mid=(Number(part.start)+Number(part.end))/2;
@@ -1568,13 +1575,15 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
     const trackingUnavailable=tracking?.ok===false || !frames.length || !frame;
     const noFace=faceCount<=0;
     const safeFrame=Boolean(trackingUnavailable || noFace || frame?.safeFrame || (frame && faceCount>1 && speakerConfidence<.24));
-    const nearSwitch=switchTimes.some(t=>Math.abs(mid-t)<=.24);
+    const nearSwitch=!generalStudio&&switchTimes.some(t=>Math.abs(mid-t)<=.24);
     const mode=String(frame?.mode||'');
     const fullSource=safeFrame || nearSwitch || mode==='group' || frame?.activeFaceId===-1;
     const faceHeight=Math.max(0,Number(frame?.faceHeight||0));
-    // A confident speaker uses a source-space 9:16 crop. Any ambiguity, tracking failure or
-    // speaker transition returns to the COMPLETE source frame instead of a center crop.
-    const speakerZoom=faceHeight>0 ? Math.max(1,Math.min(1.18,1.13-(faceHeight-.10)*.55)) : 1.04;
+    // General AI Studio uses a constant crop scale. Only the X/Y focus follows the subject.
+    // This removes the repeated zoom effect caused by face-size fluctuations.
+    const speakerZoom=generalStudio
+      ? 1
+      : (faceHeight>0 ? Math.max(1,Math.min(1.18,1.13-(faceHeight-.10)*.55)) : 1.04);
     return {...part,
       focusX:frame?Number(frame.x||.5):.5,
       focusY:frame?Number(frame.y||.44):.44,
