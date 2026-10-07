@@ -1414,7 +1414,10 @@ function normalizeRenderOptions(raw = {}) {
   const intensity = ['low','balanced','high'].includes(String(raw.intensity || '').toLowerCase()) ? String(raw.intensity).toLowerCase() : 'balanced';
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
-  const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
+  const rawCaptionFont=String(raw.captionFont||'social').toLowerCase();
+  const captionFontAliases={trebuchet:'social',verdana:'social'};
+  const normalizedCaptionFont=captionFontAliases[rawCaptionFont]||rawCaptionFont;
+  const captionFont = ['social','impact','arial-black','segoe-black'].includes(normalizedCaptionFont) ? normalizedCaptionFont : 'social';
   const rawCaptionEffect=String(raw.captionEffect||'active-word').toLowerCase();
   const captionEffectAliases={'word-by-word':'word-pop','punch-words':'keyword-color','static':'clean-bold'};
   const normalizedCaptionEffect=captionEffectAliases[rawCaptionEffect]||rawCaptionEffect;
@@ -1948,12 +1951,10 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const marginV = customCaptionY!==null ? 0 : options.captionPosition === 'top' ? Math.round(height*.12) : options.captionPosition === 'center' ? 0 : Math.round(height*.16);
   const captionOverride = customCaptionY!==null ? `{\\an5\\pos(${Math.round(width/2)},${Math.round(height*customCaptionY)})\\q0}` : `{\\q0}`;
   const fontMap = {
-    social:'Segoe UI Black',
+    social:'Arial Black',
     impact:'Impact',
     'arial-black':'Arial Black',
-    'segoe-black':'Segoe UI Black',
-    trebuchet:'Trebuchet MS',
-    verdana:'Verdana'
+    'segoe-black':'Segoe UI Black'
   };
   const selectedFont=fontMap[options.captionFont]||fontMap.social;
 
@@ -1990,10 +1991,10 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   };
   const base=styleMap[options.captionStyle]||styleMap.bold;
   const fontTuning = options.captionFont==='impact'
-    ? { scaleX:90, spacing:-1.8 }
-    : options.captionFont==='social'
-      ? { scaleX:98, spacing:-.6 }
-      : {};
+    ? { scaleX:88, spacing:-1.6, bold:-1 }
+    : options.captionFont==='segoe-black'
+      ? { scaleX:96, spacing:-.8, bold:-1 }
+      : { scaleX:94, spacing:-1.0, bold:-1 };
   const selectedCaptionColor=colorMap[options.captionColor]||'&H00FFFFFF';
   const accentOnly=['active-word','karaoke','keyword-color'].includes(options.captionEffect);
   const st={...base,...fontTuning,primary:accentOnly?'&H00FFFFFF':selectedCaptionColor};
@@ -2452,7 +2453,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v12-no-overlap',
+    captionRendererVersion: 'social-effects-v13-heavy-fonts',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
