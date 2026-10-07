@@ -1425,6 +1425,10 @@ function normalizeRenderOptions(raw = {}) {
   const captionSize = ['small','medium','large'].includes(String(raw.captionSize || '').toLowerCase()) ? String(raw.captionSize).toLowerCase() : 'medium';
   const captionScale = Math.max(.4,Math.min(2,Number.isFinite(Number(raw.captionScale))?Number(raw.captionScale):1));
   const captionColor = ['white','yellow','lime','cyan','pink','red','green','blue','purple','orange','black'].includes(String(raw.captionColor || '').toLowerCase()) ? String(raw.captionColor).toLowerCase() : 'white';
+  const hookTitleEnabled = raw.hookTitleEnabled === true;
+  const hookTitleText = String(raw.hookTitleText || '').replace(/\s+/g,' ').trim().slice(0,120);
+  const hookTitleDurationRaw = String(raw.hookTitleDuration || '5').toLowerCase();
+  const hookTitleDuration = hookTitleDurationRaw === 'full' ? 'full' : String([3,5,8].includes(Number(hookTitleDurationRaw)) ? Number(hookTitleDurationRaw) : 5);
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
@@ -1439,7 +1443,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,hookTitleEnabled,hookTitleText,hookTitleDuration,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1918,7 +1922,8 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
     ? remappedCaptions
     : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2});
   const remappedWords=remapWordsForEditedTimeline(captionMeta,clipStart,keepIntervals);
-  if (!captions.length) return null;
+  const hookTitleActive=Boolean(options.hookTitleEnabled&&options.hookTitleText);
+  if (!captions.length && !hookTitleActive) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
   // Social-native captions need heavier glyphs and a stronger outline than
   // traditional subtitle styling. Keep every measurement tied to the final
@@ -1984,7 +1989,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
       : {};
   const st={...base,...fontTuning,primary:colorMap[options.captionColor]||base.primary};
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
-  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\nStyle: HookTitle,Segoe UI Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,98,100,-0.5,0,3,${Math.max(3,Math.round(width*.0048))},0,8,70,70,${Math.round(height*.075)},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
   const highlight='&H004AD5FF';
   const effectOverride = () => {
@@ -2043,6 +2048,11 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
       continue;
     }
     rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${assEscape(transform(stripCaptionPunctuation(cap.text)))}`);
+  }
+  if(hookTitleActive){
+    const clipLength=keepIntervals.reduce((sum,k)=>sum+Math.max(0,Number(k.end||0)-Number(k.start||0)),0);
+    const hookEnd=options.hookTitleDuration==='full' ? clipLength : Math.min(clipLength,Number(options.hookTitleDuration||5));
+    if(hookEnd>.05) rows.unshift(`Dialogue: 1,${assTime(0)},${assTime(hookEnd)},HookTitle,,0,0,0,,${assEscape(options.hookTitleText.toUpperCase())}`);
   }
   const body=rows.join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
@@ -2419,7 +2429,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v7-live-preview',
+    captionRendererVersion: 'social-effects-v8-hook-title',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
