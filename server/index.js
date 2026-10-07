@@ -776,51 +776,59 @@ function snapCandidateToSpeech(transcript,start,end,duration,coreStart=start,cor
   return {start:Number(a.toFixed(2)),end:Number(b.toFixed(2)),contextScore:contextual.contextScore,payoffScore:contextual.payoffScore,expanded:contextual.expanded};
 }
 
-function repairCandidateOpening(transcript,start,end,duration,maxLookback=12){
+function repairCandidateOpening(transcript,start,end,duration){
   const words=(transcript?.rawWords||transcript?.words||[])
     .filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
     .map(w=>({...w,start:Number(w.start),end:Number(w.end)}))
     .sort((a,b)=>a.start-b.start);
-  if(!words.length)return {start,end,repaired:false,reason:'no-words'};
 
-  let firstIndex=words.findIndex(w=>w.end>=start-.06&&w.start<=end+.06);
-  if(firstIndex<0)return {start,end,repaired:false,reason:'no-overlap'};
+  if(!words.length)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-words'};
+
+  const firstIndex=words.findIndex(w=>w.end>start+.02&&w.start<end-.01);
+  if(firstIndex<0)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-overlap'};
 
   const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
   const gapBefore=i=>i<=0?99:Math.max(0,words[i].start-words[i-1].end);
-  const starterUnsafe=i=>{
-    if(i<=0)return false;
-    const prev=words[i-1];
-    const cur=words[i];
-    if(cur.start<start-.08)return true;
-    if(terminalWord(prev))return false;
-    return gapBefore(i)<.50;
-  };
+  const safeBoundary=i=>i===0||terminalWord(words[i-1])||gapBefore(i)>=.62;
+  const startsInsideWord=words[firstIndex].start<start-.08;
 
-  if(!starterUnsafe(firstIndex))return {start,end,repaired:false,reason:'already-safe'};
-
-  const originalStart=start;
-  let bestIndex=firstIndex;
-  for(let i=firstIndex;i>=0;i--){
-    const candidateStart=words[i].start;
-    if(originalStart-candidateStart>maxLookback)break;
-    if(end-candidateStart>60)continue;
-    const safeBoundary=i===0||terminalWord(words[i-1])||gapBefore(i)>=.50;
-    if(safeBoundary){bestIndex=i;break;}
-    bestIndex=i;
+  if(!startsInsideWord&&safeBoundary(firstIndex)){
+    return {start,end,repaired:false,openingSafe:true,verified:true,reason:'already-safe',gapBefore:Number(gapBefore(firstIndex).toFixed(3))};
   }
 
-  const repairedStart=Math.max(0,words[bestIndex].start);
-  if(repairedStart>=originalStart-.08)return {start,end,repaired:false,reason:'no-earlier-boundary'};
+  // Hard rule: walk back to an actual sentence/pause boundary. If no such
+  // boundary can fit inside the 60s limit, reject the candidate instead of
+  // inventing a "good enough" start in the middle of a sentence.
+  let safeIndex=-1;
+  for(let i=firstIndex;i>=0;i--){
+    if(!safeBoundary(i))continue;
+    const candidateStart=Math.max(0,words[i].start);
+    if(end-candidateStart>60)break;
+    safeIndex=i;
+    break;
+  }
+
+  if(safeIndex<0){
+    return {
+      start,end,repaired:false,openingSafe:false,verified:true,
+      reason:'no-safe-boundary-within-60s',
+      firstWord:String(words[firstIndex]?.word||''),
+      gapBefore:Number(gapBefore(firstIndex).toFixed(3))
+    };
+  }
+
+  const repairedStart=Math.max(0,words[safeIndex].start);
   return {
     start:Number(repairedStart.toFixed(2)),
     end,
-    repaired:true,
+    repaired:repairedStart<start-.08,
+    openingSafe:true,
+    verified:true,
     reason:'continued-sentence',
-    lookback:Number((originalStart-repairedStart).toFixed(2))
+    lookback:Number(Math.max(0,start-repairedStart).toFixed(2)),
+    gapBefore:Number(gapBefore(safeIndex).toFixed(3))
   };
 }
-
 function finalizeCandidate(meta,transcript,candidate={}){
   const duration=Number(meta?.details?.duration||candidate.end||0);
   const coreStart=Number(candidate.momentStart??candidate.coreStart??candidate.start??0);
@@ -843,7 +851,7 @@ function finalizeCandidate(meta,transcript,candidate={}){
   hookWindows.sort((a,b)=>b.score-a.score);
   const hookOptions=hookWindows.filter((x,i,a)=>a.findIndex(y=>textSimilarity(y.text,x.text)>.82)===i).slice(0,3);
   const selectionText=clipTextAbsolute(transcript,finalStart,finalEnd).slice(0,1800);
-  const draft={...candidate,start:finalStart,end:finalEnd,duration:Number((finalEnd-finalStart).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions};
+  const draft={...candidate,start:finalStart,end:finalEnd,duration:Number((finalEnd-finalStart).toFixed(2)),selectionText,hook:hook.slice(0,180),hookOptions,openingSafe:repairedOpening.openingSafe!==false};
   const campaignFit=campaignFitForCandidate(meta,draft,quality);
   const viewPotential=clampScore(Math.round(quality.hook*.24+quality.retention*.26+quality.emotion*.10+quality.completeness*.20+quality.payoff*.12+quality.cleanSpeech*.08));
   const combinedScore=campaignFit?clampScore(Math.round(quality.overall*.72+campaignFit.score*.28)):quality.overall;
@@ -854,7 +862,7 @@ function finalizeCandidate(meta,transcript,candidate={}){
     viewPotential,
     campaignFit,
     quality,
-    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded||repairedOpening.repaired),openingRepair:repairedOpening},
+    narrative:{coreStart,coreEnd,contextScore:Number(snapped.contextScore||0),payoffScore:Number(snapped.payoffScore||0),expanded:Boolean(snapped.expanded||repairedOpening.repaired),openingSafe:repairedOpening.openingSafe!==false,openingRepair:repairedOpening},
     qualityEngine:campaignFit?'v4-quality-campaign':'v4-quality'
   };
 }
@@ -873,6 +881,7 @@ function isStrongClipCandidate(c, floor=74){
   const q=c?.quality||{};
   const boundary=q.boundary||{};
   const score=Number(c?.score||0);
+  if(c?.openingSafe===false || c?.narrative?.openingSafe===false || c?.narrative?.openingRepair?.openingSafe===false) return false;
   if(score<floor) return false;
   // Visual/signal fallback when speech transcription is unavailable: require an unusually high score.
   if(!c?.quality) return score>=Math.max(82,floor);
@@ -886,7 +895,7 @@ function isStrongClipCandidate(c, floor=74){
 }
 
 function selectDiverseCandidates(input=[], target=8, duration=0, preference='auto') {
-  const cleaned=[...input].filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start+2)
+  const cleaned=[...input].filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start+2&&c?.openingSafe!==false&&c?.narrative?.openingSafe!==false&&c?.narrative?.openingRepair?.openingSafe!==false)
     .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
   const unique=[];
   for(const c of cleaned){
@@ -1350,6 +1359,7 @@ function normalizeRenderOptions(raw = {}) {
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
   const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
+  const captionEffect = ['static','word-by-word','active-word','keyword-color','punch-words','karaoke'].includes(String(raw.captionEffect || '').toLowerCase()) ? String(raw.captionEffect).toLowerCase() : 'active-word';
   const captionPosition = ['top','center','bottom','custom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
@@ -1370,7 +1380,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionFont,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1817,6 +1827,25 @@ function remapCaptionsForEditedTimeline(meta, clipStart, keepIntervals = []) {
   return out;
 }
 
+function remapWordsForEditedTimeline(meta, clipStart, keepIntervals = []) {
+  const sourceWords=(meta?.transcript?.words||[]).filter(w=>w?.word);
+  const out=[];
+  let offset=0;
+  for(const k of keepIntervals){
+    const absStart=clipStart+k.start, absEnd=clipStart+k.end;
+    for(const w of sourceWords){
+      const ws=Number(w.start||0), we=Number(w.end||ws);
+      if(we<=absStart||ws>=absEnd)continue;
+      const start=offset+Math.max(0,ws-absStart);
+      const end=offset+Math.min(k.end-k.start,we-absStart);
+      if(end<=start+.02)continue;
+      out.push({...w,start:Number(start.toFixed(3)),end:Number(end.toFixed(3))});
+    }
+    offset+=k.end-k.start;
+  }
+  return out.sort((a,b)=>a.start-b.start);
+}
+
 async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height=1920, rawOptions={}) {
   const options = normalizeRenderOptions(rawOptions);
   const captionMeta = options.cleanupMode==='off' && meta?.transcript?.rawWords?.length
@@ -1826,6 +1855,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const captions = meta?.campaignId
     ? remappedCaptions
     : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2});
+  const remappedWords=remapWordsForEditedTimeline(captionMeta,clipStart,keepIntervals);
   if (!captions.length) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
   // Social-native captions need heavier glyphs and a stronger outline than
@@ -1894,29 +1924,66 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
-  const karaokeText = (text,duration) => {
-    const words=transform(stripCaptionPunctuation(text)).split(/\s+/).filter(Boolean);
-    if(!words.length)return '';
-    const totalCs=Math.max(words.length,Math.round(Math.max(.12,Number(duration||0))*100));
-    const each=Math.max(1,Math.floor(totalCs/words.length));
-    let used=0;
-    return words.map((word,i)=>{
-      const cs=i===words.length-1?Math.max(1,totalCs-used):each;
-      used+=cs;
-      return `{\\kf${cs}}${assEscape(word)}`;
-    }).join(' ');
-  };
-  const effectOverride = (c) => {
+  const highlight='&H004AD5FF';
+  const effectOverride = () => {
     if(options.captionStyle==='pop') return `{\\fscx118\\fscy118\\t(0,120,\\fscx100\\fscy100)}`;
     if(options.captionStyle==='impact') return `{\\bord${Math.max(outline+1,Math.round(width*.0078))}\\shad2}`;
     return '';
   };
-  const body = captions.map(c => {
-    const text=options.captionStyle==='karaoke'
-      ? karaokeText(c.text,Number(c.end||0)-Number(c.start||0))
-      : assEscape(transform(stripCaptionPunctuation(c.text)));
-    return `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${captionOverride}${effectOverride(c)}${text}`;
-  }).join('\n');
+  const importantWord = word => {
+    const raw=String(word||'').trim();
+    const lex=wordLexeme(raw);
+    return /\d/.test(raw) || raw.length>=8 || /\b(secret|erreur|problème|vérité|jamais|toujours|résultat|argent|million|mille|pourcent|important|incroyable|impossible|meilleur|pire|mistake|problem|truth|never|always|result|money|percent|crazy|best|worst)\b/i.test(lex);
+  };
+  const styleWord=(word,active=false,punch=false)=>{
+    const clean=assEscape(transform(stripCaptionPunctuation(word)));
+    if(!clean)return '';
+    if(punch)return `{\\c${highlight}&\\fscx116\\fscy116}${clean}{\\rDefault}`;
+    if(active)return `{\\c${highlight}&}${clean}{\\rDefault}`;
+    return clean;
+  };
+  const wordsForCaption = cap => {
+    const inside=remappedWords.filter(w=>Number(w.end||0)>Number(cap.start||0)+.01&&Number(w.start||0)<Number(cap.end||0)-.01);
+    if(inside.length)return inside;
+    const text=String(cap.text||'').trim().split(/\s+/).filter(Boolean);
+    const span=Math.max(.08,Number(cap.end||0)-Number(cap.start||0));
+    return text.map((word,i)=>({word,start:Number(cap.start||0)+span*i/text.length,end:Number(cap.start||0)+span*(i+1)/text.length}));
+  };
+  const rows=[];
+  for(const cap of captions){
+    const words=wordsForCaption(cap);
+    const baseOverride=`${captionOverride}${effectOverride()}`;
+    if(options.captionEffect==='word-by-word'){
+      for(const w of words){
+        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}{\\fscx116\\fscy116\\t(0,90,\\fscx100\\fscy100)}${styleWord(w.word)}`);
+      }
+      continue;
+    }
+    if(options.captionEffect==='active-word'){
+      for(let i=0;i<words.length;i++){
+        const w=words[i];
+        const text=words.map((x,j)=>styleWord(x.word,j===i,false)).join(' ');
+        rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}${text}`);
+      }
+      continue;
+    }
+    if(options.captionEffect==='keyword-color'||options.captionEffect==='punch-words'){
+      const punch=options.captionEffect==='punch-words';
+      const text=words.map(x=>styleWord(x.word,importantWord(x.word),punch&&importantWord(x.word))).join(' ');
+      rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${text}`);
+      continue;
+    }
+    if(options.captionEffect==='karaoke'||options.captionStyle==='karaoke'){
+      const text=words.map(w=>{
+        const cs=Math.max(1,Math.round(Math.max(.03,Number(w.end||0)-Number(w.start||0))*100));
+        return `{\\kf${cs}}${styleWord(w.word)}`;
+      }).join(' ');
+      rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${text}`);
+      continue;
+    }
+    rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${assEscape(transform(stripCaptionPunctuation(cap.text)))}`);
+  }
+  const body=rows.join('\n');
   await fs.writeFile(file, header + body + '\n', 'utf8');
   return file;
 }
@@ -2291,7 +2358,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-fonts-v4',
+    captionRendererVersion: 'social-effects-v5',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
