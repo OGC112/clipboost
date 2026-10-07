@@ -1598,6 +1598,15 @@
       live.className=liveCaptionClass();
       live.style.top=(currentCaptionY()*100)+'%';
       live.style.setProperty('--caption-font-size',liveCaptionFontSize());
+      const previewFont={
+        social:'"Segoe UI Black","Arial Black",sans-serif',
+        impact:'Impact,"Arial Black",sans-serif',
+        'arial-black':'"Arial Black",Arial,sans-serif',
+        'segoe-black':'"Segoe UI Black","Arial Black",sans-serif',
+        trebuchet:'"Trebuchet MS",Arial,sans-serif',
+        verdana:'Verdana,Arial,sans-serif'
+      }[state.captionFont||'social'];
+      live.style.fontFamily=previewFont||'"Segoe UI Black","Arial Black",sans-serif';
       live.style.display=state.captionPreference==='off'?'none':'';
       document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.classList.toggle('active',(btn.dataset.captionColor||'auto')===(state.captionColor||'auto')));
     };
