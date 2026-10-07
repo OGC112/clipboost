@@ -21,7 +21,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 
 
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
-import { parseSilences, parseScenes } from './video/analysis.js';
+import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analysis.js';
 import { renderDimensions } from './video/format.js';
 import { compactCaptionRows } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
@@ -1164,11 +1164,36 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
 
   events.push({ type: 'reframe', start: 0, end: clipDuration, mode: style === 'podcast' ? 'speaker-safe' : 'center-subject', confidence: 0.76 });
 
+  const acousticSilences = [];
   for (const s of silences) {
     const overlapStart = Math.max(start, Number(s.start || 0));
     const overlapEnd = Math.min(end, Number(s.end || 0));
     const dur = overlapEnd - overlapStart;
-    if (dur >= silenceThreshold) events.push({ type: 'remove-silence', start: Number((overlapStart-start).toFixed(2)), end: Number((overlapEnd-start).toFixed(2)), duration: Number(dur.toFixed(2)) });
+    if (dur >= silenceThreshold) {
+      acousticSilences.push({ start:overlapStart, end:overlapEnd });
+      events.push({ type:'remove-silence', start:Number((overlapStart-start).toFixed(2)), end:Number((overlapEnd-start).toFixed(2)), duration:Number(dur.toFixed(2)), source:'ffmpeg' });
+    }
+  }
+
+  // FFmpeg's silencedetect can miss conversational pauses when music, room tone
+  // or background noise keeps the waveform above the acoustic threshold. Use
+  // Whisper word timestamps as a second signal so real speech gaps still become
+  // clean jump cuts. Keep this conservative to avoid chopping normal cadence.
+  const transcriptGapThreshold = style === 'gaming' ? .40 : style === 'clean' ? .72 : style === 'podcast' ? .68 : .48;
+  const transcriptPauses = transcriptPauseRanges(transcript, start, end, transcriptGapThreshold, 3.5);
+  for (const p of transcriptPauses) {
+    const overlapsAcoustic = acousticSilences.some(s => Math.max(s.start,p.start) < Math.min(s.end,p.end));
+    if (overlapsAcoustic) continue;
+    const relStart = Math.max(0, p.start-start);
+    const relEnd = Math.min(clipDuration, p.end-start);
+    if (relEnd-relStart < transcriptGapThreshold) continue;
+    events.push({
+      type:'remove-silence',
+      start:Number(relStart.toFixed(3)),
+      end:Number(relEnd.toFixed(3)),
+      duration:Number((relEnd-relStart).toFixed(3)),
+      source:'transcript-gap'
+    });
   }
 
   // Transcript cleanup is always planned, but only applied to audio when
