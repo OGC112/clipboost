@@ -304,7 +304,8 @@
     const embed=linked?externalEmbed(v.externalSource):'';
     const sourcePlaybackUrl=hasLocal?`${v.sourceUrl}${String(v.sourceUrl).includes('?')?'&':'?'}v=${encodeURIComponent(v.updatedAt||v.id||Date.now())}`:'';
     const realVideo=hasLocal?`<video id="sourceVideo" class="real-video" controls playsinline preload="metadata" src="${sourcePlaybackUrl}"></video>`:linked&&embed?`<iframe class="studio-source-embed" src="${embed}" title="${escapeHtml(v.originalName||'Linked source')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>`:`${mediaThumb(0,true)}<div class="caption">UPLOAD A <b>VIDEO</b></div><div class="play">▶</div>`;
-    const firstCaption=(c.captions||[])[0]?.text||c.hook||'';
+    const previewCaptionRows=previewCaptionRowsForCandidate(c);
+    const firstCaption=previewCaptionRows[0]?.text||c.hook||'';
     const clipStartValue=Number(c.start||0),clipEndValue=Math.max(clipStartValue+.25,Number(c.end||clipStartValue+30)),clipDuration=Math.max(.25,clipEndValue-clipStartValue);
     const clipPreviewLoading=state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
     const previewError=state.candidatePreviewError&&state.candidatePreviewLoadingIndex===selected?state.candidatePreviewError:'';
@@ -491,28 +492,54 @@
     const base=size==='small'?[9,1.9,19]:size==='large'?[20,4.05,42]:[16,3.35,34];
     return `clamp(${(base[0]*scale).toFixed(1)}px,${(base[1]*scale).toFixed(2)}vh,${(base[2]*scale).toFixed(1)}px)`;
   }
-  function compactPreviewCaptions(rows=[],maxWords=3,maxChars=24){
-    const out=[];
+  function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
+    const phrases=[
+      ['thank','you'],['thanks','so','much'],['so','much'],['do','you'],['did','you'],['are','you'],['can','you'],['could','you'],['would','you'],
+      ['you','want','to'],['want','to'],['going','to'],['have','to'],['need','to'],['got','to'],['let','me'],['i','want'],['i','need'],['i','think'],['i','know'],
+      ['what','do','you'],['how','do','you'],['why','do','you'],['merci','beaucoup'],['est-ce','que'],['tu','veux'],['vous','voulez'],['je','veux'],['je','pense'],
+      ['je','sais'],['on','va'],['il','faut'],['parce','que'],['pour','que']
+    ];
+    const clean=w=>String(w||'').toLowerCase().replace(/^[("'‘’“”\[]+|[)"'‘’“”\],.!?…:;]+$/g,'').replace(/[’]/g,"'");
+    const phraseLen=(tokens,index)=>{
+      const rem=tokens.slice(index,index+maxWords).map(t=>clean(t.word));
+      for(const p of phrases)if(p.length<=maxWords&&p.length<=rem.length&&p.every((w,i)=>rem[i]===w))return p.length;
+      return 0;
+    };
+    const timed=[];
     for(const row of rows||[]){
-      const text=String(row?.text||'').trim();if(!text)continue;
-      const words=text.split(/\s+/).filter(Boolean);
-      if(words.length<=maxWords&&text.length<=maxChars){out.push({...row,text});continue}
-      const chunks=[];let current=[];
-      for(const word of words){
-        const next=[...current,word];
-        if(current.length&&(next.length>maxWords||next.join(' ').length>maxChars)){chunks.push(current.join(' '));current=[word]}
-        else current=next;
+      const words=String(row?.text||'').trim().split(/\s+/).filter(Boolean);if(!words.length)continue;
+      const start=Number(row.start||0),end=Math.max(start+.05,Number(row.end||start+.05)),span=end-start;
+      words.forEach((word,i)=>timed.push({word,start:start+span*(i/words.length),end:start+span*((i+1)/words.length)}));
+    }
+    const out=[];let i=0;
+    while(i<timed.length){
+      let take=phraseLen(timed,i);
+      if(!take){
+        take=1;
+        for(let n=2;n<=maxWords&&i+n<=timed.length;n++){
+          const text=timed.slice(i,i+n).map(t=>t.word).join(' ');
+          if(text.length>maxChars)break;
+          take=n;
+          if(phraseLen(timed,i+n)&&n>=2)break;
+          if(/[.!?…]$/.test(timed[i+n-1].word))break;
+        }
       }
-      if(current.length)chunks.push(current.join(' '));
-      const start=Number(row.start||0),end=Math.max(start+.05,Number(row.end||start+.05)),total=Math.max(1,words.length);
-      let cursor=start,used=0;
-      for(let i=0;i<chunks.length;i++){
-        const count=chunks[i].split(/\s+/).filter(Boolean).length;used+=count;
-        const chunkEnd=i===chunks.length-1?end:start+(end-start)*(used/total);
-        out.push({...row,start:cursor,end:Math.max(cursor+.05,chunkEnd),text:chunks[i]});cursor=chunkEnd;
-      }
+      const chunk=timed.slice(i,i+take);
+      out.push({start:Number(chunk[0].start.toFixed(3)),end:Number(Math.max(chunk[0].start+.05,chunk.at(-1).end).toFixed(3)),text:chunk.map(t=>t.word).join(' ')});
+      i+=take;
     }
     return out;
+  }
+  function previewCaptionRowsForCandidate(cand){
+    if(!cand)return[];
+    const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);
+    if(isCampaign)return cand.captions||[];
+    const absolute=(state.video?.transcript?.captions||[]).filter(row=>Number(row.end||0)>=Number(cand.start||0)&&Number(row.start||0)<=Number(cand.end||0)).map(row=>({
+      ...row,
+      start:Math.max(0,Number(row.start||0)-Number(cand.start||0)),
+      end:Math.max(.05,Math.min(Number(cand.end||0),Number(row.end||0))-Number(cand.start||0))
+    }));
+    return compactPreviewCaptions(absolute.length?absolute:(cand.captions||[]),4,22);
   }
 
     function currentRenderOptions(){const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);const isLong=state.studioMode==='long'&&!isCampaign;return {autoDirector:true,editorContext:isCampaign?'campaign':'general',outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
@@ -1530,8 +1557,7 @@
     const shortVideo=document.getElementById('shortVideo'),liveCaption=document.getElementById('liveCaption');
     if(shortVideo&&liveCaption){
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
-      const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);
-      const captions=isCampaign?(cand?.captions||[]):compactPreviewCaptions(cand?.captions||[],3,24);
+      const captions=previewCaptionRowsForCandidate(cand);
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
