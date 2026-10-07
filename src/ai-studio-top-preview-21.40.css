@@ -553,3 +553,41 @@
   width:100%!important;
   accent-color:#ef4444!important;
 }
+
+
+/* AI Studio 21.48 — baked-in source subtitle removal */
+.mint-source-subtitles-v228{
+  display:grid!important;
+  gap:10px!important;
+  padding:12px!important;
+  border:1px solid rgba(255,255,255,.055)!important;
+  border-radius:12px!important;
+  background:rgba(255,255,255,.012)!important;
+}
+.mint-source-subtitles-row-v228{
+  margin:0!important;
+}
+.mint-source-subtitles-range-v228{
+  display:grid!important;
+  gap:7px!important;
+}
+.mint-source-subtitles-range-v228>div{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+}
+.mint-source-subtitles-range-v228 span,
+.mint-source-subtitles-range-v228 small{
+  color:#8f95a1!important;
+  font-size:7px!important;
+}
+.mint-source-subtitles-range-v228 b{
+  color:#f4f4f5!important;
+  font-size:8px!important;
+  font-variant-numeric:tabular-nums!important;
+}
+.mint-source-subtitles-range-v228 input[type="range"]{
+  width:100%!important;
+  accent-color:#ef4444!important;
+}
