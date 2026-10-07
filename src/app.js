@@ -1600,28 +1600,31 @@
       const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
-        const line=captions.find(x=>rel>=Number(x.start||0)&&rel<=Number(x.end||0));
-        const hasSpeechCaption=Boolean(line?.text&&String(line.text).trim());
+        const hookTitle=document.getElementById('liveHookTitle');
+        if(hookTitle){
+          const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
+          hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
+        }
+
+        const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
+        const line=activeSpeechWord
+          ? captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02)
+          : null;
+        const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
         liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
         if(!hasSpeechCaption){
           liveCaption.innerHTML='';
-          const hookTitle=document.getElementById('liveHookTitle');
-          if(hookTitle){
-            const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
-            hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
-          }
           return;
         }
+
         const lineWords=captionWords.filter(w=>Number(w.end||0)>Number(line.start||0)+.005&&Number(w.start||0)<Number(line.end||0)-.005);
-        const words=lineWords.length?lineWords:String(line.text||'').split(/\s+/).filter(Boolean).map((word,i,arr)=>({
-          word,start:Number(line.start||0)+(Number(line.end||0)-Number(line.start||0))*i/arr.length,
-          end:Number(line.start||0)+(Number(line.end||0)-Number(line.start||0))*(i+1)/arr.length
-        }));
-        const active=Math.max(0,words.findIndex(w=>rel>=Number(w.start||0)&&rel<=Number(w.end||0)+.03));
+        const words=lineWords.length?lineWords:[activeSpeechWord];
+        const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
         const effect=state.captionEffect||'active-word';
         const accent=accentMap[state.captionColor||'auto']||accentMap.auto;
         if(effect==='word-pop'){
-          const w=words[active]||words[0];
+          const w=words[active]||activeSpeechWord;
           liveCaption.innerHTML=`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`;
           return;
         }
@@ -1637,12 +1640,7 @@
           liveCaption.innerHTML=words.map(w=>`<span style="color:${captionWordImportant(w.word)?accent:'#fff'};display:inline-block;${captionWordImportant(w.word)?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' ');
           return;
         }
-        liveCaption.innerHTML=`<span style="color:${accent}">${esc(String(line.text||''))}</span>`;
-        const hookTitle=document.getElementById('liveHookTitle');
-        if(hookTitle){
-          const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
-          hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
-        }
+        liveCaption.innerHTML=`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`;
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
       const tickCaptionClock=()=>{
