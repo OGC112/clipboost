@@ -1576,15 +1576,27 @@
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
+      let captionRaf=0;
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const line=captions.find(x=>rel>=Number(x.start||0)&&rel<=Number(x.end||0));
-        liveCaption.textContent=(line?.text||cand?.hook||'');
+        const hasSpeechCaption=Boolean(line?.text&&String(line.text).trim());
+        liveCaption.textContent=hasSpeechCaption?String(line.text):'';
+        liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
       };
+      const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
+      const tickCaptionClock=()=>{
+        syncCaption();
+        if(!shortVideo.paused&&!shortVideo.ended)captionRaf=requestAnimationFrame(tickCaptionClock);
+        else captionRaf=0;
+      };
+      const startCaptionClock=()=>{stopCaptionClock();tickCaptionClock()};
+      shortVideo.addEventListener('play',startCaptionClock);
+      shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()});
       shortVideo.addEventListener('timeupdate',syncCaption);
       shortVideo.addEventListener('seeked',syncCaption);
       shortVideo.addEventListener('loadedmetadata',syncCaption,{once:true});
-      shortVideo.addEventListener('ended',()=>{shortVideo.currentTime=0;syncCaption()});
+      shortVideo.addEventListener('ended',()=>{stopCaptionClock();shortVideo.currentTime=0;syncCaption()});
       if(state.candidatePreviewAutoplay){
         const autoplay=()=>{state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
         if(shortVideo.readyState>=2)setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true});
