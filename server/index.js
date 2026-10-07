@@ -1942,7 +1942,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const customCaptionY=Number.isFinite(Number(options.captionY))?Math.max(.12,Math.min(.88,Number(options.captionY))):null;
   const alignment = customCaptionY!==null ? 5 : options.captionPosition === 'top' ? 8 : options.captionPosition === 'center' ? 5 : 2;
   const marginV = customCaptionY!==null ? 0 : options.captionPosition === 'top' ? Math.round(height*.12) : options.captionPosition === 'center' ? 0 : Math.round(height*.16);
-  const captionOverride = customCaptionY!==null ? `{\\an5\\pos(${Math.round(width/2)},${Math.round(height*customCaptionY)})}` : '';
+  const captionOverride = customCaptionY!==null ? `{\\an5\\pos(${Math.round(width/2)},${Math.round(height*customCaptionY)})\\q0}` : `{\\q0}`;
   const fontMap = {
     social:'Segoe UI Black',
     impact:'Impact',
@@ -1989,7 +1989,8 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
       : {};
   const st={...base,...fontTuning,primary:colorMap[options.captionColor]||base.primary};
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
-  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},55,55,${marginV},1\nStyle: HookTitle,Segoe UI Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,98,100,-0.5,0,3,${Math.max(3,Math.round(width*.0048))},0,8,70,70,${Math.round(height*.075)},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const safeMarginX=Math.max(42,Math.round(width*.09));
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},${safeMarginX},${safeMarginX},${marginV},1\nStyle: HookTitle,Segoe UI Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,98,100,-0.5,0,3,${Math.max(3,Math.round(width*.0048))},0,8,${safeMarginX},${safeMarginX},${Math.round(height*.075)},1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
   const highlight='&H004AD5FF';
   const effectOverride = () => {
@@ -2429,7 +2430,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v8-hook-title',
+    captionRendererVersion: 'social-effects-v9-safe-area',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
