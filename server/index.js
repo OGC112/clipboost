@@ -1218,6 +1218,39 @@ function captionEnergyScore(text='') {
   return score;
 }
 
+function openingFragmentTrimForRender(transcript,start,end){
+  const words=(transcript?.rawWords||transcript?.words||[])
+    .filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
+    .map(w=>({...w,start:Number(w.start),end:Number(w.end)}))
+    .sort((a,b)=>a.start-b.start);
+  if(!words.length)return null;
+  const firstIndex=words.findIndex(w=>w.end>start+.02&&w.start<end-.01);
+  if(firstIndex<0)return null;
+  const terminal=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
+  const gapBefore=i=>i<=0?Math.max(0,words[0].start):Math.max(0,words[i].start-words[i-1].end);
+  const naturalBoundary=i=>i>0&&(terminal(words[i-1])||gapBefore(i)>=.62);
+  const firstLex=wordLexeme(words[firstIndex]?.word||'');
+  const sourceContinuation=firstIndex===0&&words[0].start<.62&&(WEAK_CLIP_STARTERS.has(firstLex)||REFERENTIAL_CLIP_STARTERS.has(firstLex));
+  const startsInsideWord=words[firstIndex].start<start-.08;
+  const startsInsideSentence=firstIndex>0&&!naturalBoundary(firstIndex);
+  if(!startsInsideWord&&!startsInsideSentence&&!sourceContinuation)return null;
+
+  for(let i=Math.max(1,firstIndex+1);i<words.length;i++){
+    if(!naturalBoundary(i))continue;
+    const abs=Number(words[i].start);
+    if(abs<=start+.10)continue;
+    if(abs>=end-2.5)break;
+    return {
+      start:0,
+      end:Number((abs-start).toFixed(3)),
+      absoluteStart:Number(start.toFixed(3)),
+      absoluteEnd:Number(abs.toFixed(3)),
+      reason:sourceContinuation?'incomplete-source-opening':'candidate-starts-mid-sentence'
+    };
+  }
+  return null;
+}
+
 function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanced', preset = 'dynamic', zoomStyle = 'natural') {
   const start = Number(candidate.start || 0);
   const end = Number(candidate.end || start + 30);
@@ -1234,6 +1267,14 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
   const maxZoom = Math.max(1.025,Math.min(1.13,zoomBase+styleBoost+modeBoost));
 
   events.push({ type: 'reframe', start: 0, end: clipDuration, mode: style === 'podcast' ? 'speaker-safe' : 'center-subject', confidence: 0.76 });
+
+  // Enforce sentence-safe playback even for candidates saved before the latest
+  // analysis engine. If the selected range starts inside a spoken sentence,
+  // remove the leading fragment up to the next natural boundary.
+  const openingTrim=openingFragmentTrimForRender(transcript,start,end);
+  if(openingTrim&&openingTrim.end>=.12&&openingTrim.end<clipDuration-2.5){
+    events.push({type:'remove-opening-fragment',...openingTrim});
+  }
 
   const acousticSilences = [];
   for (const s of silences) {
@@ -1335,7 +1376,8 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
     autoReframe: true, captions: true, silenceRemoval: true,
     events: events.sort((a,b)=>a.start-b.start),
     summary: {
-      cuts: events.filter(e=>e.type==='remove-silence').length,
+      cuts: events.filter(e=>e.type==='remove-silence'||e.type==='remove-opening-fragment').length,
+      openingCuts: events.filter(e=>e.type==='remove-opening-fragment').length,
       disfluencies: events.filter(e=>e.type==='remove-disfluency').length,
       zooms: events.filter(e=>/zoom|punch/.test(e.type)).length,
       reframes: events.filter(e=>e.type==='reframe').length
@@ -1781,6 +1823,9 @@ function zoomAtTime(event,t){
 function buildEditedTimeline(plan, clipDuration, options) {
   const planned=plan?.events||[];
   const removalEvents=[];
+  for(const e of planned.filter(e=>e.type==='remove-opening-fragment')){
+    removalEvents.push({start:Math.max(0,Number(e.start||0)),end:Math.min(clipDuration,Number(e.end||0))});
+  }
   if(options.silenceRemoval){
     for(const e of planned.filter(e=>e.type==='remove-silence')){
       const a=Number(e.start||0),b=Number(e.end||0);
