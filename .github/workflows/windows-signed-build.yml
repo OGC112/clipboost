@@ -1,0 +1,68 @@
+name: Windows Signed Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate signing secrets
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
+            throw "Missing GitHub secret WINDOWS_CSC_LINK."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
+            throw "Missing GitHub secret WINDOWS_CSC_KEY_PASSWORD."
+          }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Windows installer
+        run: npm run desktop:build
+
+      - name: Verify Authenticode signature
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path release -Filter "ClipBoost-Setup-*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            throw "ClipBoost installer was not produced."
+          }
+          $sig = Get-AuthenticodeSignature $installer.FullName
+          Write-Host "Installer: $($installer.Name)"
+          Write-Host "Signature status: $($sig.Status)"
+          Write-Host "Signer: $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne "Valid") {
+            throw "Installer signature is not valid: $($sig.Status)"
+          }
+
+      - name: Upload signed installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipboost-windows-signed
+          path: |
+            release/ClipBoost-Setup-*.exe
+            release/latest.yml
+            release/*.blockmap
+          if-no-files-found: error
