@@ -788,19 +788,48 @@ function repairCandidateOpening(transcript,start,end,duration){
   if(firstIndex<0)return {start,end,repaired:false,openingSafe:true,verified:false,reason:'no-overlap'};
 
   const terminalWord=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
-  const gapBefore=i=>i<=0?99:Math.max(0,words[i].start-words[i-1].end);
-  const safeBoundary=i=>i===0||terminalWord(words[i-1])||gapBefore(i)>=.62;
+  const gapBefore=i=>i<=0?Math.max(0,words[0].start):Math.max(0,words[i].start-words[i-1].end);
+  const safeBoundary=i=>i>0&&(terminalWord(words[i-1])||gapBefore(i)>=.62);
   const startsInsideWord=words[firstIndex].start<start-.08;
+  const firstLex=wordLexeme(words[firstIndex]?.word||'');
+  const suspiciousSourceOpening=firstIndex===0 && words[0].start<.62 &&
+    (WEAK_CLIP_STARTERS.has(firstLex)||REFERENTIAL_CLIP_STARTERS.has(firstLex));
 
-  if(!startsInsideWord&&safeBoundary(firstIndex)){
+  if(!startsInsideWord&&!suspiciousSourceOpening&&(firstIndex===0||safeBoundary(firstIndex))){
     return {start,end,repaired:false,openingSafe:true,verified:true,reason:'already-safe',gapBefore:Number(gapBefore(firstIndex).toFixed(3))};
   }
 
+  // If the source itself begins with a continuation ("et", "mais", pronoun,
+  // etc.), there is nothing earlier to recover. Cut forward to the first real
+  // pause/terminal boundary instead of accepting time 0 as automatically safe.
+  if(suspiciousSourceOpening){
+    let forwardIndex=-1;
+    for(let i=1;i<words.length;i++){
+      if(!safeBoundary(i))continue;
+      const candidateStart=Math.max(0,words[i].start);
+      if(candidateStart>=end-2.5)break;
+      forwardIndex=i;
+      break;
+    }
+    if(forwardIndex>=0){
+      return {
+        start:Number(words[forwardIndex].start.toFixed(2)),
+        end,
+        repaired:true,
+        openingSafe:true,
+        verified:true,
+        reason:'trimmed-incomplete-source-opening',
+        lookahead:Number((words[forwardIndex].start-start).toFixed(2)),
+        firstWord:String(words[firstIndex]?.word||'')
+      };
+    }
+    return {start,end,repaired:false,openingSafe:false,verified:true,reason:'source-starts-mid-sentence-no-next-boundary',firstWord:String(words[firstIndex]?.word||'')};
+  }
+
   // Hard rule: walk back to an actual sentence/pause boundary. If no such
-  // boundary can fit inside the 60s limit, reject the candidate instead of
-  // inventing a "good enough" start in the middle of a sentence.
+  // boundary can fit inside the 60s limit, reject the candidate.
   let safeIndex=-1;
-  for(let i=firstIndex;i>=0;i--){
+  for(let i=firstIndex;i>=1;i--){
     if(!safeBoundary(i))continue;
     const candidateStart=Math.max(0,words[i].start);
     if(end-candidateStart>60)break;
@@ -1189,6 +1218,39 @@ function captionEnergyScore(text='') {
   return score;
 }
 
+function openingFragmentTrimForRender(transcript,start,end){
+  const words=(transcript?.rawWords||transcript?.words||[])
+    .filter(w=>w?.word&&Number.isFinite(Number(w.start))&&Number.isFinite(Number(w.end)))
+    .map(w=>({...w,start:Number(w.start),end:Number(w.end)}))
+    .sort((a,b)=>a.start-b.start);
+  if(!words.length)return null;
+  const firstIndex=words.findIndex(w=>w.end>start+.02&&w.start<end-.01);
+  if(firstIndex<0)return null;
+  const terminal=w=>/[.!?…][\"'’)]?$/.test(String(w?.word||'').trim());
+  const gapBefore=i=>i<=0?Math.max(0,words[0].start):Math.max(0,words[i].start-words[i-1].end);
+  const naturalBoundary=i=>i>0&&(terminal(words[i-1])||gapBefore(i)>=.62);
+  const firstLex=wordLexeme(words[firstIndex]?.word||'');
+  const sourceContinuation=firstIndex===0&&words[0].start<.62&&(WEAK_CLIP_STARTERS.has(firstLex)||REFERENTIAL_CLIP_STARTERS.has(firstLex));
+  const startsInsideWord=words[firstIndex].start<start-.08;
+  const startsInsideSentence=firstIndex>0&&!naturalBoundary(firstIndex);
+  if(!startsInsideWord&&!startsInsideSentence&&!sourceContinuation)return null;
+
+  for(let i=Math.max(1,firstIndex+1);i<words.length;i++){
+    if(!naturalBoundary(i))continue;
+    const abs=Number(words[i].start);
+    if(abs<=start+.10)continue;
+    if(abs>=end-2.5)break;
+    return {
+      start:0,
+      end:Number((abs-start).toFixed(3)),
+      absoluteStart:Number(start.toFixed(3)),
+      absoluteEnd:Number(abs.toFixed(3)),
+      reason:sourceContinuation?'incomplete-source-opening':'candidate-starts-mid-sentence'
+    };
+  }
+  return null;
+}
+
 function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanced', preset = 'dynamic', zoomStyle = 'natural') {
   const start = Number(candidate.start || 0);
   const end = Number(candidate.end || start + 30);
@@ -1205,6 +1267,14 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
   const maxZoom = Math.max(1.025,Math.min(1.13,zoomBase+styleBoost+modeBoost));
 
   events.push({ type: 'reframe', start: 0, end: clipDuration, mode: style === 'podcast' ? 'speaker-safe' : 'center-subject', confidence: 0.76 });
+
+  // Enforce sentence-safe playback even for candidates saved before the latest
+  // analysis engine. If the selected range starts inside a spoken sentence,
+  // remove the leading fragment up to the next natural boundary.
+  const openingTrim=openingFragmentTrimForRender(transcript,start,end);
+  if(openingTrim&&openingTrim.end>=.12&&openingTrim.end<clipDuration-2.5){
+    events.push({type:'remove-opening-fragment',...openingTrim});
+  }
 
   const acousticSilences = [];
   for (const s of silences) {
@@ -1306,7 +1376,8 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
     autoReframe: true, captions: true, silenceRemoval: true,
     events: events.sort((a,b)=>a.start-b.start),
     summary: {
-      cuts: events.filter(e=>e.type==='remove-silence').length,
+      cuts: events.filter(e=>e.type==='remove-silence'||e.type==='remove-opening-fragment').length,
+      openingCuts: events.filter(e=>e.type==='remove-opening-fragment').length,
       disfluencies: events.filter(e=>e.type==='remove-disfluency').length,
       zooms: events.filter(e=>/zoom|punch/.test(e.type)).length,
       reframes: events.filter(e=>e.type==='reframe').length
@@ -1344,7 +1415,10 @@ function normalizeRenderOptions(raw = {}) {
   const preset = ['dynamic','clean','gaming','podcast'].includes(String(raw.preset || '').toLowerCase()) ? String(raw.preset).toLowerCase() : 'dynamic';
   const captionStyle = ['bold','clean','neon','minimal','impact','pop','box','karaoke'].includes(String(raw.captionStyle || '').toLowerCase()) ? String(raw.captionStyle).toLowerCase() : 'bold';
   const captionFont = ['social','impact','arial-black','segoe-black','trebuchet','verdana'].includes(String(raw.captionFont || '').toLowerCase()) ? String(raw.captionFont).toLowerCase() : 'social';
-  const captionEffect = ['static','word-by-word','active-word','keyword-color','punch-words','karaoke'].includes(String(raw.captionEffect || '').toLowerCase()) ? String(raw.captionEffect).toLowerCase() : 'active-word';
+  const rawCaptionEffect=String(raw.captionEffect||'active-word').toLowerCase();
+  const captionEffectAliases={'word-by-word':'word-pop','punch-words':'keyword-color','static':'clean-bold'};
+  const normalizedCaptionEffect=captionEffectAliases[rawCaptionEffect]||rawCaptionEffect;
+  const captionEffect = ['active-word','word-pop','karaoke','keyword-color','clean-bold'].includes(normalizedCaptionEffect) ? normalizedCaptionEffect : 'active-word';
   const captionPosition = ['top','center','bottom','custom'].includes(String(raw.captionPosition || '').toLowerCase()) ? String(raw.captionPosition).toLowerCase() : 'bottom';
   const rawCaptionY=Number(raw.captionY);
   const captionY=Number.isFinite(rawCaptionY)?Math.max(.12,Math.min(.88,rawCaptionY)):null;
@@ -1749,6 +1823,9 @@ function zoomAtTime(event,t){
 function buildEditedTimeline(plan, clipDuration, options) {
   const planned=plan?.events||[];
   const removalEvents=[];
+  for(const e of planned.filter(e=>e.type==='remove-opening-fragment')){
+    removalEvents.push({start:Math.max(0,Number(e.start||0)),end:Math.min(clipDuration,Number(e.end||0))});
+  }
   if(options.silenceRemoval){
     for(const e of planned.filter(e=>e.type==='remove-silence')){
       const a=Number(e.start||0),b=Number(e.end||0);
@@ -1938,7 +2015,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   for(const cap of captions){
     const words=wordsForCaption(cap);
     const baseOverride=`${captionOverride}${effectOverride()}`;
-    if(options.captionEffect==='word-by-word'){
+    if(options.captionEffect==='word-pop'){
       for(const w of words){
         rows.push(`Dialogue: 0,${assTime(w.start)},${assTime(w.end)},Default,,0,0,0,,${baseOverride}{\\fscx116\\fscy116\\t(0,90,\\fscx100\\fscy100)}${styleWord(w.word)}`);
       }
@@ -1952,13 +2029,12 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
       }
       continue;
     }
-    if(options.captionEffect==='keyword-color'||options.captionEffect==='punch-words'){
-      const punch=options.captionEffect==='punch-words';
-      const text=words.map(x=>styleWord(x.word,importantWord(x.word),punch&&importantWord(x.word))).join(' ');
+    if(options.captionEffect==='keyword-color'){
+      const text=words.map(x=>styleWord(x.word,importantWord(x.word),importantWord(x.word))).join(' ');
       rows.push(`Dialogue: 0,${assTime(cap.start)},${assTime(cap.end)},Default,,0,0,0,,${baseOverride}${text}`);
       continue;
     }
-    if(options.captionEffect==='karaoke'||options.captionStyle==='karaoke'){
+    if(options.captionEffect==='karaoke'){
       const text=words.map(w=>{
         const cs=Math.max(1,Math.round(Math.max(.03,Number(w.end||0)-Number(w.start||0))*100));
         return `{\\kf${cs}}${styleWord(w.word)}`;
@@ -2343,7 +2419,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v5',
+    captionRendererVersion: 'social-effects-v7-live-preview',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
