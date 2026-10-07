@@ -1415,10 +1415,13 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
     captionColor,
     cleanupMode,
     zoomStyle,
-    trackingMode:generalStudio?'center':trackingMode,
+    trackingMode:generalStudio?'speaker':trackingMode,
     cameraMovement:generalStudio?'low':cameraMovement,
     autoReframe,
-    speakerTracking:generalStudio?false:autoReframe,
+    // General AI Studio still tracks the active speaker so a 9:16 crop does
+    // not strand the person talking outside the frame. Movement stays low and
+    // zoom/reaction effects remain disabled below.
+    speakerTracking:autoReframe,
     reactionDetection:generalStudio?false:reactionDetection,
     sceneAwareCuts,
     silenceRemoval,
@@ -1474,7 +1477,7 @@ function autoDirectorRenderOptions(meta, start, end, raw = {}) {
 
 function trackingCacheKey(meta, start, end, options) {
   const sourceStamp = (() => { try { const st=fsSync.statSync(meta.sourcePath); return `${st.size}:${Math.round(st.mtimeMs)}`; } catch { return 'source'; } })();
-  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v6`).digest('hex').slice(0,24);
+  return crypto.createHash('sha1').update(`${meta.id}:${sourceStamp}:${Number(start).toFixed(3)}:${Number(end).toFixed(3)}:${options.trackingMode}:${options.cameraMovement}:speaker-reframe-v7`).digest('hex').slice(0,24);
 }
 
 async function ensureFaceTracking(meta, start, end, options) {
@@ -1547,26 +1550,9 @@ function nearestTrackingFrame(tracking, time) {
 function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
   let boundaries=[];
   const generalStudio=options.editorContext==='general';
-  if(generalStudio){
-    const pieces=(timeline?.pieces||[]).map(part=>({
-      ...part,
-      focusX:.5,
-      focusY:.46,
-      trackingConfidence:0,
-      speakerConfidence:0,
-      activeFaceId:null,
-      faceCount:0,
-      faceWidth:0,
-      faceHeight:0,
-      spreadX:0,
-      safeFrame:false,
-      trackingFallback:false,
-      frameMode:'speaker',
-      speakerZoom:1,
-      switchBridge:false
-    }));
-    return {...timeline,pieces};
-  }
+  // General AI Studio uses the same speaker coordinates as Campaign Studio,
+  // but with much calmer thresholds and a constant zoom. This keeps the active
+  // speaker inside the vertical crop without the "camera breathing" effect.
   if(options.sceneAwareCuts) boundaries.push(...sceneTimes);
   const frames=tracking?.keyframes||[];
   const switchTimes=(tracking?.summary?.speakerSwitchTimes||[]).map(Number).filter(Number.isFinite);
@@ -1582,7 +1568,11 @@ function applySmartFraming(timeline, tracking, sceneTimes = [], options = {}) {
       const speakerChanged=id&&lastId&&id!==lastId;
       const safeChanged=lastSafe!==null&&safe!==lastSafe;
       if(t-lastTime>=maxGap || moved || speakerChanged || safeChanged){
-        boundaries.push(t);lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;
+        boundaries.push(t);
+        // Speaker changes should retarget immediately, while normal motion still
+        // follows the calmer General Studio cadence.
+        if(generalStudio && speakerChanged) boundaries.push(Math.max(0,t-.08));
+        lastTime=t;lastX=x;lastY=y;lastId=id||lastId;lastSafe=safe;
       }
     }
     // Campaign Studio keeps its short transition bridge. In general AI Studio,
