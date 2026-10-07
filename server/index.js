@@ -1735,10 +1735,10 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const remappedCaptions = remapCaptionsForEditedTimeline(captionMeta, clipStart, keepIntervals).filter(c => c.text);
   const captions = meta?.campaignId
     ? remappedCaptions
-    : compactCaptionRows(remappedCaptions,{maxWords:5,maxChars:34});
+    : compactCaptionRows(remappedCaptions,{maxWords:3,maxChars:24});
   if (!captions.length) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
-  const sizeScale = options.captionSize === 'large' ? 0.082 : options.captionSize === 'small' ? 0.054 : 0.068;
+  const sizeScale = options.captionSize === 'large' ? 0.082 : options.captionSize === 'small' ? 0.040 : 0.068;
   const fontSize = Math.max(26, Math.round(width * sizeScale * options.captionScale));
   const outline = options.captionStyle === 'minimal' ? Math.max(2, Math.round(width*.0028)) : Math.max(3, Math.round(width * .0046));
   const customCaptionY=Number.isFinite(Number(options.captionY))?Math.max(.12,Math.min(.88,Number(options.captionY))):null;
@@ -2044,7 +2044,7 @@ async function analyzeProject(projectId, options = {}) {
       candidates[i].thumbnailUrl = await makeThumbnail(input, meta.id, candidates[i], i).catch(() => null);
       if (transcript) {
         const rows=captionsForRange(transcript, candidates[i].start, candidates[i].end);
-        candidates[i].captions = meta.campaignId ? rows : compactCaptionRows(rows,{maxWords:5,maxChars:34});
+        candidates[i].captions = meta.campaignId ? rows : compactCaptionRows(rows,{maxWords:3,maxChars:24});
       }
       candidates[i].editPlan = buildEditPlan(candidates[i], transcript, silences, 'balanced', 'dynamic', 'natural');
     }
