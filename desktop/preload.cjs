@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('clipboostDesktop', {
   checkForUpdates: () => ipcRenderer.invoke('desktop:check-updates'),
   installUpdate: () => ipcRenderer.invoke('desktop:install-update'),
   getPlatformConnections: () => ipcRenderer.invoke('desktop:get-platform-connections'),
+  getYouTubeAnalytics: (options={}) => ipcRenderer.invoke('desktop:get-youtube-analytics', options),
   connectPlatform: (provider) => ipcRenderer.invoke('desktop:connect-platform', provider),
   disconnectPlatform: (provider) => ipcRenderer.invoke('desktop:disconnect-platform', provider),
   onPlatformAuthEvent: (callback) => { const listener = (_event, payload) => callback(payload); ipcRenderer.on('desktop:platform-auth-event', listener); return () => ipcRenderer.removeListener('desktop:platform-auth-event', listener); },
