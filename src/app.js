@@ -19,7 +19,7 @@
     sourceSubtitleMode:['keep','crop','hide'].includes(editorPrefs.sourceSubtitleMode)?editorPrefs.sourceSubtitleMode:'keep',
     sourceSubtitleBottom:Number.isFinite(Number(editorPrefs.sourceSubtitleBottom))?Math.max(.06,Math.min(.28,Number(editorPrefs.sourceSubtitleBottom))):.15,
     watermarkUrl:editorPrefs.watermarkUrl||'', watermarkName:editorPrefs.watermarkName||'', watermarkX:Number.isFinite(Number(editorPrefs.watermarkX))?Number(editorPrefs.watermarkX):.86, watermarkY:Number.isFinite(Number(editorPrefs.watermarkY))?Number(editorPrefs.watermarkY):.12, watermarkScale:Number.isFinite(Number(editorPrefs.watermarkScale))?Number(editorPrefs.watermarkScale):.18, watermarkOpacity:Number.isFinite(Number(editorPrefs.watermarkOpacity))?Number(editorPrefs.watermarkOpacity):.9,
-    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',lastExport:null,uiModal:null};
+    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsSearch:'',lastExport:null,uiModal:null};
   const autoIngestAttempted=new Set();
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionFont:state.captionFont||'social',captionEffect:state.captionEffect||'active-word',hookTitleEnabled:Boolean(state.hookTitleEnabled),hookTitleText:String(state.hookTitleText||''),hookTitleDuration:String(state.hookTitleDuration||'5'),hookTitleX:Number(state.hookTitleX||.5),hookTitleY:Number(state.hookTitleY||.12),captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:Number.isFinite(Number(state.captionY))?Number(state.captionY):null,sourceSubtitleMode:state.sourceSubtitleMode||'keep',sourceSubtitleBottom:Number(state.sourceSubtitleBottom||.15),watermarkUrl:state.watermarkUrl||'',watermarkName:state.watermarkName||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9),studioMode:state.studioMode||'shorts'}))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
@@ -82,6 +82,7 @@
     render();
     window.scrollTo(0,0);
     if(page==='studio'&&!state.video) setTimeout(restoreLastStudioProject,0);
+    if(page==='analytics'&&!state.campaigns&&!state.campaignsLoading) setTimeout(loadCampaigns,0);
   }
   const nav=[['home','⌂','Home'],['studio','✦','AI Studio'],['campaigns','◎','Campaign Studio'],['library','▣','Library'],['projects','▤','Projects']];
   const vods=[
@@ -705,10 +706,148 @@
 
   function analytics(){
     const campaignsList=state.campaigns?.campaigns||[];
-    const totals=campaignsList.reduce((a,c)=>{const t=c.totals||{};a.views+=Number(t.totalViews||0);a.estimated+=Number(t.estimatedRevenue||0);a.confirmed+=Number(t.confirmedRevenue||c.confirmedPayout||0);a.posts+=Number(t.postCount||c.posts?.length||0);return a;},{views:0,estimated:0,confirmed:0,posts:0});
-    const currency=campaignsList[0]?.currency||'USD';
-    const rows=campaignsList.length?campaignsList.map(c=>{const t=c.totals||{};const q=Number(campaignQualification(c)||0);const views=Number(t.totalViews||0);const progress=q?Math.min(100,Math.round((views/q)*100)):null;return `<button class="mint-results-row-v1418" data-home-campaign="${escapeHtml(c.id)}" type="button"><div><strong>${escapeHtml(c.name||'Campaign')}</strong><small>${escapeHtml(c.provider||'Campaign')}</small></div><div><b>${formatCount(views)}</b><small>views</small></div><div><b>${Number(t.postCount||c.posts?.length||0)}</b><small>published</small></div><div><b>${formatMoney(Number(t.estimatedRevenue||0),c.currency||currency)}</b><small>estimated</small></div><div><b>${formatMoney(Number(t.confirmedRevenue||c.confirmedPayout||0),c.currency||currency)}</b><small>confirmed</small></div><div><b>${progress===null?'—':progress+'%'}</b><small>target</small></div><span>→</span></button>`;}).join(''):`<div class="mint-results-empty-v1418">No tracked campaigns yet.</div>`;
-    return `<div class="content mint-results-nb-v1418"><section class="mint-page-heading-v1418"><div><div class="eyebrow">REAL PERFORMANCE</div><h1>Results</h1><p>Verified campaign tracking only. Metrics stay empty when Mint does not have the data.</p></div></section><section class="mint-results-summary-v1418"><div><b>${formatCount(totals.views)}</b><small>Tracked views</small></div><div><b>${formatMoney(totals.estimated,currency)}</b><small>Estimated payout</small></div><div><b>${formatMoney(totals.confirmed,currency)}</b><small>Confirmed payout</small></div><div><b>${totals.posts}</b><small>Published clips</small></div></section><section class="mint-results-list-v1418"><header><b>Campaign performance</b><small>${campaignsList.length} campaign${campaignsList.length===1?'':'s'}</small></header>${rows}</section></div>`;
+    const platformMeta={
+      tiktok:{label:'TikTok',icon:'♪'},
+      youtube:{label:'YouTube',icon:'▶'},
+      instagram:{label:'Instagram',icon:'◎'},
+      twitch:{label:'Twitch',icon:'▣'},
+      x:{label:'X',icon:'𝕏'},
+      facebook:{label:'Facebook',icon:'f'},
+      unknown:{label:'Other',icon:'•'}
+    };
+    const campaignPosts=campaignsList.flatMap(c=>{
+      const totals=c.totals||{};
+      return (Array.isArray(c.posts)?c.posts:[]).map((p,i)=>({
+        ...p,
+        _id:String(p.id||p.postId||p.url||`${c.id}-${i}`),
+        _kind:'campaign',
+        _campaignId:c.id,
+        _campaignName:c.name||'Campaign',
+        _currency:c.currency||'USD',
+        _platform:String(p.platform||'unknown').toLowerCase(),
+        _title:String(p.title||p.caption||p.description||p.url||`Campaign post ${i+1}`),
+        _date:p.publishedAt||p.submittedAt||p.createdAt||c.updatedAt||c.createdAt||null,
+        _views:Math.max(0,Number(p.views||0)),
+        _likes:Math.max(0,Number(p.likes||p.likeCount||0)),
+        _comments:Math.max(0,Number(p.comments||p.commentCount||0)),
+        _shares:Math.max(0,Number(p.shares||p.shareCount||0)),
+        _revenue:Math.max(0,Number(p.payoutConfirmed||p.revenue||0)),
+        _thumb:p.thumbnail||p.thumbnailUrl||p.previewUrl||''
+      }));
+    });
+    // Organic tracking store is intentionally separate from AI Studio projects.
+    // Until platform publishing stores post IDs/metrics, the organic tab stays truthful
+    // instead of treating source videos or drafts as published posts.
+    const organicPosts=Array.isArray(state.analyticsOrganicPosts)?state.analyticsOrganicPosts:[];
+    const allPosts=[...campaignPosts,...organicPosts];
+
+    const scope=state.analyticsScope||'all';
+    const platform=state.analyticsPlatform||'all';
+    const query=String(state.analyticsSearch||'').trim().toLowerCase();
+    const periodDays=Math.max(1,Number(state.analyticsPeriod||30));
+    const cutoff=Date.now()-periodDays*86400000;
+    const inPeriod=p=>!p._date||new Date(p._date).getTime()>=cutoff;
+    const filtered=allPosts.filter(p=>
+      (scope==='all'||p._kind===scope)&&
+      (platform==='all'||p._platform===platform)&&
+      inPeriod(p)&&
+      (!query||[`${p._title}`,`${p._campaignName||""}`,`${p._platform}`].join(' ').toLowerCase().includes(query))
+    );
+
+    const totals=filtered.reduce((a,p)=>{a.views+=p._views;a.likes+=p._likes;a.comments+=p._comments;a.shares+=p._shares;a.revenue+=p._revenue;a.posts++;return a;},{views:0,likes:0,comments:0,shares:0,revenue:0,posts:0});
+    const campaignSummary=campaignsList.reduce((a,c)=>{const t=c.totals||{};a.estimated+=Number(t.estimatedRevenue||0);a.confirmed+=Number(t.confirmedRevenue||c.confirmedPayout||0);return a;},{estimated:0,confirmed:0});
+    const engagement=totals.views?((totals.likes+totals.comments+totals.shares)/totals.views*100):0;
+    const avgViews=totals.posts?Math.round(totals.views/totals.posts):0;
+
+    const platformTotals=new Map();
+    for(const p of filtered){
+      const key=p._platform||'unknown';
+      const cur=platformTotals.get(key)||{views:0,posts:0};
+      cur.views+=p._views;cur.posts++;platformTotals.set(key,cur);
+    }
+    const platformRows=[...platformTotals.entries()].sort((a,b)=>b[1].views-a[1].views);
+    const bestPlatform=platformRows[0]||null;
+    const bestPost=[...filtered].sort((a,b)=>b._views-a._views)[0]||null;
+    const bestCampaign=campaignsList.map(c=>({c,views:Number(c.totals?.totalViews||0),revenue:Number(c.totals?.estimatedRevenue||0)})).sort((a,b)=>b.views-a.views)[0]||null;
+    const bestOrganic=[...organicPosts].sort((a,b)=>Number(b._views||0)-Number(a._views||0))[0]||null;
+
+    const metricCard=(icon,label,value,accent='red',sub='Tracked data')=>`<div class="mint-stat-card"><div class="mint-stat-label"><span class="mint-stat-icon ${accent}">${icon}</span><small>${label}</small></div><strong>${value}</strong><span class="mint-stat-sub">${sub}</span><i class="mint-stat-spark ${accent}"></i></div>`;
+    const scopeTab=(id,label,count='')=>`<button type="button" data-analytics-scope="${id}" class="${scope===id?'active':''}">${label}${count!==''?` <em>(${count})</em>`:''}</button>`;
+    const platformBtn=(id,label,icon)=>`<button type="button" data-analytics-platform="${id}" class="${platform===id?'active':''}"><span>${icon}</span>${label}</button>`;
+
+    const totalPlatformViews=Math.max(1,platformRows.reduce((s,[,v])=>s+v.views,0));
+    const donutStops=[];let cursor=0;
+    const donutColors=['#ff263b','#20d9e8','#ff34d2','#7a4dff','#f59e0b','#9ca3af'];
+    platformRows.forEach(([key,v],i)=>{const pct=v.views/totalPlatformViews*100;donutStops.push(`${donutColors[i%donutColors.length]} ${cursor}% ${cursor+pct}%`);cursor+=pct});
+    const donutStyle=donutStops.length?`background:conic-gradient(${donutStops.join(',')})`:'background:#171717';
+    const platformLegend=platformRows.length?platformRows.slice(0,6).map(([key,v],i)=>{const meta=platformMeta[key]||platformMeta.unknown;const pct=totals.views?Math.round(v.views/totals.views*100):0;return `<div><span><i style="background:${donutColors[i%donutColors.length]}"></i>${escapeHtml(meta.label)}</span><b>${formatCount(v.views)} <small>(${pct}%)</small></b></div>`}).join(''):'<div class="mint-stats-empty-inline">No tracked platform data yet.</div>';
+
+    const revenueBars=campaignsList.slice(0,12).map(c=>Number(c.totals?.estimatedRevenue||0));
+    const maxRevenue=Math.max(1,...revenueBars);
+    const revenueChart=revenueBars.length?revenueBars.map((v,i)=>`<i style="height:${Math.max(6,Math.round(v/maxRevenue*100))}%" title="${escapeHtml(campaignsList[i]?.name||'Campaign')}: ${formatMoney(v,campaignsList[i]?.currency||'USD')}"></i>`).join(''):'<span class="mint-stats-empty-inline">No campaign revenue yet.</span>';
+
+    const bucketCount=10,buckets=Array.from({length:bucketCount},()=>({campaign:0,organic:0}));
+    for(const p of allPosts){
+      const ts=p._date?new Date(p._date).getTime():Date.now();
+      if(ts<cutoff)continue;
+      const idx=Math.min(bucketCount-1,Math.max(0,Math.floor((ts-cutoff)/(periodDays*86400000)*bucketCount)));
+      buckets[idx][p._kind==='campaign'?'campaign':'organic']++;
+    }
+    const trendMax=Math.max(1,...buckets.flatMap(x=>[x.campaign,x.organic]));
+    const linePath=(key)=>buckets.map((b,i)=>`${i?'L':'M'} ${Math.round(i/(bucketCount-1)*100)} ${Math.round(42-(b[key]/trendMax)*34)}`).join(' ');
+    const trendSvg=`<svg viewBox="0 0 100 46" preserveAspectRatio="none"><path class="organic" d="${linePath('organic')}"/><path class="campaign" d="${linePath('campaign')}"/></svg>`;
+
+    const postThumb=p=>p?(`${p._thumb?`<img src="${escapeHtml(p._thumb)}" alt="">`:'<span class="mint-stat-thumb-fallback">▶</span>'}`):'<span class="mint-stat-thumb-fallback">—</span>';
+    const featureCard=(title,p,extra='')=>p?`<article class="mint-stat-feature"><h4>${title}</h4><div class="mint-stat-feature-body"><div class="mint-stat-feature-thumb">${postThumb(p)}</div><div><strong>${escapeHtml(p._title)}</strong><small>${escapeHtml((platformMeta[p._platform]||platformMeta.unknown).label)}${p._date?' · '+new Date(p._date).toLocaleDateString():''}</small><div class="mint-stat-feature-metrics"><span>◉ ${formatCount(p._views)}</span><span>♥ ${formatCount(p._likes)}</span><span>◌ ${formatCount(p._comments)}</span></div>${extra}</div></div></article>`:`<article class="mint-stat-feature"><h4>${title}</h4><div class="mint-stat-feature-empty">No tracked post yet.</div></article>`;
+
+    const rows=filtered.sort((a,b)=>new Date(b._date||0)-new Date(a._date||0)).map(p=>{
+      const meta=platformMeta[p._platform]||platformMeta.unknown;
+      const er=p._views?((p._likes+p._comments+p._shares)/p._views*100):0;
+      return `<tr>
+        <td><span class="mint-post-thumb">${postThumb(p)}</span></td>
+        <td><strong>${escapeHtml(p._title)}</strong></td>
+        <td><span class="mint-platform-cell">${meta.icon} ${escapeHtml(meta.label)}</span></td>
+        <td><span class="mint-type-pill ${p._kind}">${p._kind==='campaign'?'Campaign':'Organic'}</span></td>
+        <td>${p._kind==='campaign'?escapeHtml(p._campaignName||'Campaign'):'—'}</td>
+        <td>${p._date?new Date(p._date).toLocaleDateString():'—'}</td>
+        <td>${formatCount(p._views)}</td><td>${p._likes?formatCount(p._likes):'—'}</td><td>${p._comments?formatCount(p._comments):'—'}</td><td>${p._shares?formatCount(p._shares):'—'}</td>
+        <td>${er?er.toFixed(1)+'%':'—'}</td><td class="mint-revenue-cell">${p._revenue?formatMoney(p._revenue,p._currency||'USD'):'—'}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="content mint-stats-page">
+      <section class="mint-stats-heading">
+        <div><div class="eyebrow">ANALYTICS</div><h1>Stats & <span>Performance</span></h1><p>Track all your posts, campaign results and growth across platforms.</p></div>
+        <label class="mint-period-select">▣ <select id="analyticsPeriod"><option value="7" ${periodDays===7?'selected':''}>Last 7 days</option><option value="30" ${periodDays===30?'selected':''}>Last 30 days</option><option value="90" ${periodDays===90?'selected':''}>Last 90 days</option><option value="365" ${periodDays===365?'selected':''}>Last year</option></select></label>
+      </section>
+      <section class="mint-stats-toolbar">
+        <div class="mint-scope-tabs">${scopeTab('all','All Posts',allPosts.length)}${scopeTab('campaign','Campaign Posts',campaignPosts.length)}${scopeTab('organic','Organic Posts',organicPosts.length)}</div>
+        <div class="mint-platform-tabs">${platformBtn('all','All Platforms','')}${platformBtn('tiktok','TikTok','♪')}${platformBtn('youtube','YouTube','▶')}${platformBtn('instagram','Instagram','◎')}${platformBtn('twitch','Twitch','▣')}${platformBtn('x','X','𝕏')}</div>
+      </section>
+      <section class="mint-stat-grid">
+        ${metricCard('◉','Total Views',formatCount(totals.views),'red',totals.posts?`${formatCount(avgViews)} avg / post`:'No tracked posts')}
+        ${metricCard('♥','Total Likes',totals.likes?formatCount(totals.likes):'—','pink','Available when platform metrics sync')}
+        ${metricCard('◌','Total Comments',totals.comments?formatCount(totals.comments):'—','cyan','Available when platform metrics sync')}
+        ${metricCard('↗','Total Shares',totals.shares?formatCount(totals.shares):'—','orange','Available when platform metrics sync')}
+        ${metricCard('▥','Engagement Rate',engagement?engagement.toFixed(1)+'%':'—','green','Likes + comments + shares / views')}
+        ${metricCard('▤','Posts Published',String(totals.posts),'purple',scope==='organic'?'Organic tracking ready':'Tracked publications')}
+      </section>
+      <section class="mint-stats-charts">
+        <article class="mint-stat-panel revenue"><header><div><span>●</span><b>Estimated Revenue (Campaigns)</b></div><strong>${formatMoney(campaignSummary.estimated,campaignsList[0]?.currency||'USD')}</strong></header><div class="mint-revenue-bars">${revenueChart}</div></article>
+        <article class="mint-stat-panel platform"><header><b>Views by Platform</b></header><div class="mint-platform-chart"><div class="mint-donut" style="${donutStyle}"><span><b>${formatCount(totals.views)}</b><small>Total Views</small></span></div><div class="mint-platform-legend">${platformLegend}</div></div></article>
+        <article class="mint-stat-panel trend"><header><b>Posts Trend</b><div><span class="campaign-dot">●</span> Campaign <span class="organic-dot">●</span> Organic</div></header><div class="mint-trend-chart">${trendSvg}</div></article>
+      </section>
+      <section class="mint-stat-features">
+        ${featureCard('Best Performing Post',bestPost)}
+        ${bestPlatform?`<article class="mint-stat-feature compact"><h4>Top Platform</h4><div class="mint-stat-platform-top"><span>${(platformMeta[bestPlatform[0]]||platformMeta.unknown).icon}</span><div><strong>${escapeHtml((platformMeta[bestPlatform[0]]||platformMeta.unknown).label)}</strong><small>${formatCount(bestPlatform[1].views)} views</small></div></div></article>`:'<article class="mint-stat-feature compact"><h4>Top Platform</h4><div class="mint-stat-feature-empty">No tracked data yet.</div></article>'}
+        ${bestCampaign?`<article class="mint-stat-feature compact"><h4>Top Campaign</h4><div><strong>${escapeHtml(bestCampaign.c.name||'Campaign')}</strong><small>${formatMoney(bestCampaign.revenue,bestCampaign.c.currency||'USD')} estimated</small><b class="mint-feature-big">${formatCount(bestCampaign.views)} views</b></div></article>`:'<article class="mint-stat-feature compact"><h4>Top Campaign</h4><div class="mint-stat-feature-empty">No campaign data yet.</div></article>'}
+        ${featureCard('Top Organic Post',bestOrganic)}
+      </section>
+      <section class="mint-posts-panel">
+        <header><div><h3>All Posts</h3><div class="mint-posts-tabs">${scopeTab('all','All',allPosts.length)}${scopeTab('campaign','Campaign',campaignPosts.length)}${scopeTab('organic','Organic',organicPosts.length)}</div></div><div class="mint-post-actions"><input id="analyticsSearch" value="${escapeHtml(state.analyticsSearch||'')}" placeholder="Search posts…"><button id="analyticsExport" type="button">⇩ Export</button></div></header>
+        <div class="mint-posts-scroll"><table><thead><tr><th>Thumbnail</th><th>Title</th><th>Platform</th><th>Type</th><th>Campaign</th><th>Date ↓</th><th>Views</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Eng. Rate</th><th>Revenue</th></tr></thead><tbody>${rows||`<tr><td colspan="12"><div class="mint-table-empty">No tracked posts for this filter yet.</div></td></tr>`}</tbody></table></div>
+      </section>
+    </div>`;
   }
   function formatCount(n){const x=Number(n||0);if(x>=1e9)return (x/1e9).toFixed(x>=1e10?0:1)+'B';if(x>=1e6)return (x/1e6).toFixed(x>=1e7?0:1)+'M';if(x>=1e3)return (x/1e3).toFixed(x>=1e4?0:1)+'K';return String(x)}
   function formatDuration(sec){const n=Math.max(0,Math.floor(Number(sec)||0));const h=Math.floor(n/3600),m=Math.floor((n%3600)/60),ss=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`}
@@ -1591,6 +1730,11 @@
     document.querySelectorAll('[data-shorts-count]').forEach(el=>el.onclick=()=>{state.shortsCount=[5,10,20].includes(Number(el.dataset.shortsCount))?Number(el.dataset.shortsCount):10;persistEditorPrefs();render()});
     document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{const next=el.dataset.studioMode==='long'?'long':'shorts';if(next===state.studioMode)return;state.studioMode=next;invalidateRenderedPreviews();persistEditorPrefs();render();if(state.video?.candidates?.length&&state.video?.sourceUrl)setTimeout(()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true}),0)});
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
+    document.querySelectorAll('[data-analytics-scope]').forEach(el=>el.onclick=()=>{state.analyticsScope=el.dataset.analyticsScope||'all';render()});
+    document.querySelectorAll('[data-analytics-platform]').forEach(el=>el.onclick=()=>{state.analyticsPlatform=el.dataset.analyticsPlatform||'all';render()});
+    const analyticsPeriod=document.getElementById('analyticsPeriod');if(analyticsPeriod)analyticsPeriod.onchange=e=>{state.analyticsPeriod=String(e.target.value||'30');render()};
+    const analyticsSearch=document.getElementById('analyticsSearch');if(analyticsSearch)analyticsSearch.oninput=e=>{state.analyticsSearch=String(e.target.value||'');render();setTimeout(()=>{const x=document.getElementById('analyticsSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},0)};
+    const analyticsExport=document.getElementById('analyticsExport');if(analyticsExport)analyticsExport.onclick=()=>{const table=document.querySelector('.mint-posts-panel table');if(!table)return;const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>`"${String(td.innerText||'').replaceAll('"','""')}"`).join(',')).join('\n');const blob=new Blob([rows],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mint-stats.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaign-discover')});
     document.querySelectorAll('[data-campaign-open-studio]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.campaignOpenStudio;state.campaignDetailsOpen=false;state.campaignEditorOpen=true;navigate('campaigns')});
