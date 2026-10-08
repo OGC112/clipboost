@@ -19,3 +19,10 @@
 .mint-precision-trim-actions button:hover{border-color:#f33a50}
 .mint-precision-trim-tools>small{display:block;color:#999;font-size:9px;margin-top:8px}
 @media(max-width:700px){.mint-precision-trim-title{display:block}.mint-precision-trim-title small{display:block;margin-top:3px}}
+
+/* Final-preview mode plays FFmpeg's actual subtitle/title/watermark render,
+   without the interactive HTML layers that would otherwise double-render them. */
+.mint-final-render-mode #liveCaption,
+.mint-final-render-mode #liveHookTitle,
+.mint-final-render-mode #liveWatermark{display:none!important}
+.mint-final-preview-button{display:block;width:100%;margin:9px 0}
