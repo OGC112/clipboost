@@ -1,5 +1,5 @@
 import { youtubeGet, searchYoutubeCreators, fetchYoutubeUploadsPage, mergeYoutubeVideos, fetchYoutubeCreator } from '../integrations/youtube.js';
-import { twitchGet, twitchThumb, searchTwitchCreators, fetchTwitchCreator } from '../integrations/twitch.js';
+import { twitchGet, twitchThumb, searchTwitchCreators, fetchTwitchCreator, fetchRecentTwitchClips } from '../integrations/twitch.js';
 
 export function registerLibraryRoutes(app, deps) {
   const { readLibrary, writeLibrary } = deps;
@@ -141,6 +141,28 @@ export function registerLibraryRoutes(app, deps) {
     } catch (e) { next(e); }
   });
   
+  app.post('/api/library/twitch/clips/refresh', async (req, res, next) => {
+    try {
+      const library = await readLibrary();
+      const requestedId=String(req.body?.userId||'').trim();
+      const targets=library.creators.filter(c=>c.platform==='twitch'&&c.id&&(!requestedId||String(c.id)===requestedId));
+      let refreshed=0;
+      const errors=[];
+      for(const creator of targets){
+        try{
+          const clips=await fetchRecentTwitchClips(creator.id,creator.clips||[]);
+          const index=library.creators.findIndex(c=>c.platform==='twitch'&&c.id===creator.id);
+          if(index>=0) library.creators[index]={...creator,clips,clipsRefreshedAt:new Date().toISOString()};
+          refreshed++;
+        }catch(error){
+          errors.push({id:creator.id,name:creator.name||creator.login||creator.id,error:error?.message||'Clip refresh failed'});
+        }
+      }
+      await writeLibrary(library);
+      res.json({library,refreshed,errors,refreshedAt:new Date().toISOString()});
+    } catch (e) { next(e); }
+  });
+
   app.post('/api/library/twitch/live', async (req, res, next) => {
     try {
       const library = await readLibrary();
