@@ -82,6 +82,7 @@
     render();
     window.scrollTo(0,0);
     if(page==='studio'&&!state.video) setTimeout(restoreLastStudioProject,0);
+    if(page==='analytics'&&!state.campaigns&&!state.campaignsLoading) setTimeout(loadCampaigns,0);
   }
   const nav=[['home','⌂','Home'],['studio','✦','AI Studio'],['campaigns','◎','Campaign Studio'],['library','▣','Library'],['projects','▤','Projects']];
   const vods=[
