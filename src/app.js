@@ -75,6 +75,7 @@
   function navigate(page,{replace=false}={}){
     if(!validPages.has(page)) page='home';
     state.page=page;
+    if(page!=='analytics')clearTimeout(window.__clipboostYouTubeAnalyticsRefresh);
     const next=`#/${page}`;
     if(location.hash!==next){
       if(replace) history.replaceState(null,'',next); else history.pushState(null,'',next);
@@ -658,7 +659,13 @@
     }finally{
       state.youtubeAnalyticsLoading=false;
       render();
+      scheduleYouTubeAnalyticsRefresh();
     }
+  }
+  function scheduleYouTubeAnalyticsRefresh(){
+    clearTimeout(window.__clipboostYouTubeAnalyticsRefresh);
+    if(state.page!=='analytics'||!state.platformConnections?.youtube?.connected)return;
+    window.__clipboostYouTubeAnalyticsRefresh=setTimeout(()=>loadYouTubeAnalytics({force:true,quiet:true}),300000);
   }
   async function connectPlatformAccount(provider){
     if(state.platformConnectBusy)return;
