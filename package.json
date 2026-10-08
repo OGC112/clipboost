@@ -13,7 +13,7 @@
     "desktop": "npm run build && electron .",
     "desktop:build": "npm run build && electron-builder --win nsis",
     "desktop:dir": "npm run build && electron-builder --win dir",
-    "test": "node --test server/campaigns/core.test.js server/security/network.test.js server/settings/env.test.js server/storage/storage.test.js server/integrations/parsers.test.js server/video/analysis.test.js server/video/format.test.js server/video/captions.test.js"
+    "test": "node --test server/campaigns/core.test.js server/security/network.test.js server/settings/env.test.js server/storage/storage.test.js server/integrations/parsers.test.js server/video/analysis.test.js server/video/format.test.js server/video/captions.test.js server/video/precision-cut.test.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",
