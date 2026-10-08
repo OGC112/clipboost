@@ -1,0 +1,21 @@
+/* Keep updater status away from the centered workflow navigation.
+   Window controls are fixed in the upper-right corner and the Settings gear
+   sits below them, so the update pill lives immediately to the left of Settings. */
+.mint-clean-actions .update-pill{
+  position:fixed!important;
+  top:38px!important;
+  right:78px!important;
+  left:auto!important;
+  margin:0!important;
+  max-width:170px!important;
+  z-index:10035!important;
+  -webkit-app-region:no-drag!important;
+}
+
+@media(max-width:1100px){
+  .mint-clean-actions .update-pill{max-width:138px!important;font-size:9px!important;padding:0 9px!important}
+}
+
+@media(max-width:950px){
+  .mint-clean-actions .update-pill{display:none!important}
+}
