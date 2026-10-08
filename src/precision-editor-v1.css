@@ -1,0 +1,28 @@
+
+/* Precision editor v1: scoped enhancements shared by AI and Campaign studios. */
+.mint-tool-group{border:1px solid rgba(255,255,255,.09);border-radius:13px;margin:9px 0;background:rgba(255,255,255,.018);overflow:hidden}
+.mint-tool-group>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:13px 14px;list-style:none;color:#f4f4f6}
+.mint-tool-group>summary::-webkit-details-marker{display:none}
+.mint-tool-group>summary>b{font-size:13px}
+.mint-tool-group>summary>span{font-size:10px;color:#aaa;max-width:50%;text-align:right}
+.mint-tool-group[open]>summary{border-bottom:1px solid rgba(255,255,255,.08)}
+.mint-tool-group-content{padding:10px;min-width:0}
+.mint-tool-group-content .auto-director-card{margin:0}
+.mint-social-caption-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:12px}
+.mint-social-caption-presets button{cursor:pointer;border:1px solid #39323d;background:#211b25;border-radius:9px;padding:13px 7px;font-size:11px;font-weight:700;color:#fff}
+.mint-social-caption-presets button:hover,.mint-social-caption-presets button:focus-visible{border-color:#f34453;background:#362029}
+.mint-precision-trim-tools{margin:12px 0;padding:10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
+.mint-precision-trim-title{font-size:12px;font-weight:800;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.mint-precision-trim-title small{font-size:9px;color:#aaa;font-weight:400}
+.mint-precision-trim-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:9px}
+.mint-precision-trim-actions button{background:#1f1b22;color:#f6f6f6;border:1px solid #443842;border-radius:8px;padding:9px 3px;font-size:10px;cursor:pointer}
+.mint-precision-trim-actions button:hover{border-color:#f33a50}
+.mint-precision-trim-tools>small{display:block;color:#999;font-size:9px;margin-top:8px}
+@media(max-width:700px){.mint-precision-trim-title{display:block}.mint-precision-trim-title small{display:block;margin-top:3px}}
+
+/* Final-preview mode plays FFmpeg's actual subtitle/title/watermark render,
+   without the interactive HTML layers that would otherwise double-render them. */
+.mint-final-render-mode #liveCaption,
+.mint-final-render-mode #liveHookTitle,
+.mint-final-render-mode #liveWatermark{display:none!important}
+.mint-final-preview-button{display:block;width:100%;margin:9px 0}
