@@ -19,7 +19,7 @@
     sourceSubtitleMode:['keep','crop','hide'].includes(editorPrefs.sourceSubtitleMode)?editorPrefs.sourceSubtitleMode:'keep',
     sourceSubtitleBottom:Number.isFinite(Number(editorPrefs.sourceSubtitleBottom))?Math.max(.06,Math.min(.28,Number(editorPrefs.sourceSubtitleBottom))):.15,
     watermarkUrl:editorPrefs.watermarkUrl||'', watermarkName:editorPrefs.watermarkName||'', watermarkX:Number.isFinite(Number(editorPrefs.watermarkX))?Number(editorPrefs.watermarkX):.86, watermarkY:Number.isFinite(Number(editorPrefs.watermarkY))?Number(editorPrefs.watermarkY):.12, watermarkScale:Number.isFinite(Number(editorPrefs.watermarkScale))?Number(editorPrefs.watermarkScale):.18, watermarkOpacity:Number.isFinite(Number(editorPrefs.watermarkOpacity))?Number(editorPrefs.watermarkOpacity):.9,
-    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsSearch:'',lastExport:null,uiModal:null};
+    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsPeriodOpen:false,analyticsSearch:'',lastExport:null,uiModal:null};
   const autoIngestAttempted=new Set();
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionFont:state.captionFont||'social',captionEffect:state.captionEffect||'active-word',hookTitleEnabled:Boolean(state.hookTitleEnabled),hookTitleText:String(state.hookTitleText||''),hookTitleDuration:String(state.hookTitleDuration||'5'),hookTitleX:Number(state.hookTitleX||.5),hookTitleY:Number(state.hookTitleY||.12),captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:Number.isFinite(Number(state.captionY))?Number(state.captionY):null,sourceSubtitleMode:state.sourceSubtitleMode||'keep',sourceSubtitleBottom:Number(state.sourceSubtitleBottom||.15),watermarkUrl:state.watermarkUrl||'',watermarkName:state.watermarkName||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9),studioMode:state.studioMode||'shorts'}))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
@@ -83,6 +83,7 @@
     window.scrollTo(0,0);
     if(page==='studio'&&!state.video) setTimeout(restoreLastStudioProject,0);
     if(page==='analytics'&&!state.campaigns&&!state.campaignsLoading) setTimeout(loadCampaigns,0);
+    if(page==='analytics'&&!state.platformConnections&&!state.platformConnectionsLoading) setTimeout(()=>loadPlatformConnections({quiet:true}),0);
   }
   const nav=[['home','⌂','Home'],['studio','✦','AI Studio'],['campaigns','◎','Campaign Studio'],['library','▣','Library'],['projects','▤','Projects']];
   const vods=[
@@ -771,7 +772,32 @@
     const bestCampaign=campaignsList.map(c=>({c,views:Number(c.totals?.totalViews||0),revenue:Number(c.totals?.estimatedRevenue||0)})).sort((a,b)=>b.views-a.views)[0]||null;
     const bestOrganic=[...organicPosts].sort((a,b)=>Number(b._views||0)-Number(a._views||0))[0]||null;
 
-    const metricCard=(icon,label,value,accent='red',sub='Tracked data')=>`<div class="mint-stat-card"><div class="mint-stat-label"><span class="mint-stat-icon ${accent}">${icon}</span><small>${label}</small></div><strong>${value}</strong><span class="mint-stat-sub">${sub}</span><i class="mint-stat-spark ${accent}"></i></div>`;
+    const statIcon=name=>{
+      const icons={
+        views:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
+        likes:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.2 4.7 13C1 9.3 3.5 4 7.8 4c2 0 3.3 1 4.2 2.3C12.9 5 14.2 4 16.2 4 20.5 4 23 9.3 19.3 13L12 20.2Z"/></svg>',
+        comments:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 9 9 0 0 1-3.6-.8L4 20l1.4-4A7 7 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/></svg>',
+        shares:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/></svg>',
+        engagement:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V10M10 19V5M15 19v-7M20 19V8"/></svg>',
+        posts:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7Z"/><path d="M15 3v5h4M10 12h6M10 16h6"/></svg>',
+        youtube:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8.3a3 3 0 0 0-2.1-2.1C17 5.7 12 5.7 12 5.7s-5 0-6.9.5A3 3 0 0 0 3 8.3 31 31 0 0 0 2.5 12 31 31 0 0 0 3 15.7a3 3 0 0 0 2.1 2.1c1.9.5 6.9.5 6.9.5s5 0 6.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-3.7 31 31 0 0 0-.5-3.7Z"/><path class="fill-bg" d="m10 9 5 3-5 3Z"/></svg>'
+      };
+      return icons[name]||icons.views;
+    };
+    const miniSeries=metric=>{
+      const n=7,arr=Array(n).fill(0),span=Math.max(1,periodDays*86400000);
+      for(const p of filtered){const ts=p._date?new Date(p._date).getTime():Date.now();const idx=Math.max(0,Math.min(n-1,Math.floor((ts-cutoff)/span*n)));arr[idx]+=Number(p[metric]||0)}
+      return arr;
+    };
+    const sparkSvg=(metric,accent)=>{
+      const values=miniSeries(metric),max=Math.max(...values,0);
+      if(!max)return '<svg class="mint-kpi-spark empty" viewBox="0 0 100 34" preserveAspectRatio="none"><path d="M2 28 L98 28"/></svg>';
+      const pts=values.map((v,i)=>[2+i*(96/(values.length-1)),30-(v/max)*24]);
+      const d=pts.map((p,i)=>`${i?'L':'M'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+      const area=`${d} L 98 32 L 2 32 Z`;
+      return `<svg class="mint-kpi-spark ${accent}" viewBox="0 0 100 34" preserveAspectRatio="none"><path class="area" d="${area}"/><path class="line" d="${d}"/></svg>`;
+    };
+    const metricCard=(iconName,label,value,accent='red',sub='Tracked data',metric='_views')=>`<div class="mint-stat-card"><div class="mint-stat-label"><span class="mint-stat-icon ${accent}">${statIcon(iconName)}</span><small>${label}</small></div><strong>${value}</strong><span class="mint-stat-sub">${sub}</span>${sparkSvg(metric,accent)}</div>`;
     const scopeTab=(id,label,count='')=>`<button type="button" data-analytics-scope="${id}" class="${scope===id?'active':''}">${label}${count!==''?` <em>(${count})</em>`:''}</button>`;
     const platformBtn=(id,label,icon)=>`<button type="button" data-analytics-platform="${id}" class="${platform===id?'active':''}"><span>${icon}</span>${label}</button>`;
 
@@ -818,19 +844,34 @@
     return `<div class="content mint-stats-page">
       <section class="mint-stats-heading">
         <div><div class="eyebrow">ANALYTICS</div><h1>Stats & <span>Performance</span></h1><p>Track all your posts, campaign results and growth across platforms.</p></div>
-        <label class="mint-period-select">▣ <select id="analyticsPeriod"><option value="7" ${periodDays===7?'selected':''}>Last 7 days</option><option value="30" ${periodDays===30?'selected':''}>Last 30 days</option><option value="90" ${periodDays===90?'selected':''}>Last 90 days</option><option value="365" ${periodDays===365?'selected':''}>Last year</option></select></label>
+        <div class="mint-stats-heading-actions">
+          <div class="mint-youtube-connect ${state.platformConnections?.youtube?.connected?'connected':''}">
+            <span class="mint-youtube-mark">${statIcon('youtube')}</span>
+            <div><b>YouTube</b><small>${state.platformConnections?.youtube?.connected?'Connected':'Connect your channel'}</small></div>
+            <button type="button" id="analyticsYoutubeConnect">${state.platformConnectBusy==='youtube'?'Connecting…':state.platformConnections?.youtube?.connected?'Reconnect':'Connect'}</button>
+          </div>
+          <div class="mint-period-dropdown ${state.analyticsPeriodOpen?'open':''}">
+            <button type="button" id="analyticsPeriodToggle"><span class="mint-calendar-icon">▣</span><b>${periodDays===7?'Last 7 days':periodDays===30?'Last 30 days':periodDays===90?'Last 90 days':'Last year'}</b><span>⌄</span></button>
+            <div class="mint-period-menu">
+              <button type="button" data-analytics-period="7" class="${periodDays===7?'active':''}">Last 7 days</button>
+              <button type="button" data-analytics-period="30" class="${periodDays===30?'active':''}">Last 30 days</button>
+              <button type="button" data-analytics-period="90" class="${periodDays===90?'active':''}">Last 90 days</button>
+              <button type="button" data-analytics-period="365" class="${periodDays===365?'active':''}">Last year</button>
+            </div>
+          </div>
+        </div>
       </section>
       <section class="mint-stats-toolbar">
         <div class="mint-scope-tabs">${scopeTab('all','All Posts',allPosts.length)}${scopeTab('campaign','Campaign Posts',campaignPosts.length)}${scopeTab('organic','Organic Posts',organicPosts.length)}</div>
         <div class="mint-platform-tabs">${platformBtn('all','All Platforms','')}${platformBtn('tiktok','TikTok','♪')}${platformBtn('youtube','YouTube','▶')}${platformBtn('instagram','Instagram','◎')}${platformBtn('twitch','Twitch','▣')}${platformBtn('x','X','𝕏')}</div>
       </section>
       <section class="mint-stat-grid">
-        ${metricCard('◉','Total Views',formatCount(totals.views),'red',totals.posts?`${formatCount(avgViews)} avg / post`:'No tracked posts')}
-        ${metricCard('♥','Total Likes',totals.likes?formatCount(totals.likes):'—','pink','Available when platform metrics sync')}
-        ${metricCard('◌','Total Comments',totals.comments?formatCount(totals.comments):'—','cyan','Available when platform metrics sync')}
-        ${metricCard('↗','Total Shares',totals.shares?formatCount(totals.shares):'—','orange','Available when platform metrics sync')}
-        ${metricCard('▥','Engagement Rate',engagement?engagement.toFixed(1)+'%':'—','green','Likes + comments + shares / views')}
-        ${metricCard('▤','Posts Published',String(totals.posts),'purple',scope==='organic'?'Organic tracking ready':'Tracked publications')}
+        ${metricCard('views','Total Views',formatCount(totals.views),'red',totals.posts?`${formatCount(avgViews)} avg / post`:'No tracked posts','_views')}
+        ${metricCard('likes','Total Likes',totals.likes?formatCount(totals.likes):'—','pink','Available when platform metrics sync','_likes')}
+        ${metricCard('comments','Total Comments',totals.comments?formatCount(totals.comments):'—','cyan','Available when platform metrics sync','_comments')}
+        ${metricCard('shares','Total Shares',totals.shares?formatCount(totals.shares):'—','orange','Available when platform metrics sync','_shares')}
+        ${metricCard('engagement','Engagement Rate',engagement?engagement.toFixed(1)+'%':'—','green','Likes + comments + shares / views','_views')}
+        ${metricCard('posts','Posts Published',String(totals.posts),'purple',scope==='organic'?'Organic tracking ready':'Tracked publications','_views')}
       </section>
       <section class="mint-stats-charts">
         <article class="mint-stat-panel revenue"><header><div><span>●</span><b>Estimated Revenue (Campaigns)</b></div><strong>${formatMoney(campaignSummary.estimated,campaignsList[0]?.currency||'USD')}</strong></header><div class="mint-revenue-bars">${revenueChart}</div></article>
@@ -1732,7 +1773,9 @@
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     document.querySelectorAll('[data-analytics-scope]').forEach(el=>el.onclick=()=>{state.analyticsScope=el.dataset.analyticsScope||'all';render()});
     document.querySelectorAll('[data-analytics-platform]').forEach(el=>el.onclick=()=>{state.analyticsPlatform=el.dataset.analyticsPlatform||'all';render()});
-    const analyticsPeriod=document.getElementById('analyticsPeriod');if(analyticsPeriod)analyticsPeriod.onchange=e=>{state.analyticsPeriod=String(e.target.value||'30');render()};
+    const analyticsPeriodToggle=document.getElementById('analyticsPeriodToggle');if(analyticsPeriodToggle)analyticsPeriodToggle.onclick=e=>{e.stopPropagation();state.analyticsPeriodOpen=!state.analyticsPeriodOpen;render()};
+    document.querySelectorAll('[data-analytics-period]').forEach(el=>el.onclick=()=>{state.analyticsPeriod=String(el.dataset.analyticsPeriod||'30');state.analyticsPeriodOpen=false;render()});
+    const analyticsYoutubeConnect=document.getElementById('analyticsYoutubeConnect');if(analyticsYoutubeConnect)analyticsYoutubeConnect.onclick=()=>connectPlatformAccount('youtube');
     const analyticsSearch=document.getElementById('analyticsSearch');if(analyticsSearch)analyticsSearch.oninput=e=>{state.analyticsSearch=String(e.target.value||'');render();setTimeout(()=>{const x=document.getElementById('analyticsSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},0)};
     const analyticsExport=document.getElementById('analyticsExport');if(analyticsExport)analyticsExport.onclick=()=>{const table=document.querySelector('.mint-posts-panel table');if(!table)return;const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>`"${String(td.innerText||'').replaceAll('"','""')}"`).join(',')).join('\n');const blob=new Blob([rows],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mint-stats.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
@@ -1966,7 +2009,7 @@
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.status==='linked'&&!state.video?.sourceUrl&&state.video?.externalSource)maybeAutoIngestCurrentProject();
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
     document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
-    if(state.page==='publish'&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
+    if((state.page==='publish'||state.page==='analytics')&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
         if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
     if(state.page==='settings'&&!state.systemHealth&&!state.systemHealthLoading)setTimeout(loadSystemHealth,120);
     if(state.page==='settings'){
@@ -2099,7 +2142,7 @@
     reportActivity();
   }
   if(!location.hash) history.replaceState(null,'','#/home');
-  const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0)}};
+  const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0);if(page==='analytics'&&!state.campaigns&&!state.campaignsLoading)setTimeout(loadCampaigns,0);if(page==='analytics'&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0)}};
   window.addEventListener('hashchange',syncRouteFromLocation);
   window.addEventListener('popstate',syncRouteFromLocation);
   render();
