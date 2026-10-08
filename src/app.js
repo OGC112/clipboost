@@ -373,6 +373,18 @@
                 <span class="eyebrow">AUTO SHORTS</span>
                 <strong>Social format applied automatically</strong>
                 <p>Mint reframes the source vertically, follows faces and speakers, and renders captions inside a 9:16 safe area.</p>
+                <div class="mint-manual-trim">
+                  <div class="mint-manual-trim-head"><div><span>MANUAL CUT</span><b>Retouch start / end</b></div><em>${c.manualTrim?'Adjusted':'AI cut'}</em></div>
+                  <div class="mint-trim-row">
+                    <div class="mint-trim-label"><span>Start</span><b id="manualTrimStartValue">${formatTime(clipStartValue)}</b></div>
+                    <div class="mint-trim-control"><button type="button" data-trim-boundary="start" data-trim-delta="-0.25">−0.25s</button><input id="manualTrimStart" type="range" min="0" max="${Math.max(0,clipEndValue-.25)}" step="0.05" value="${clipStartValue.toFixed(2)}"><button type="button" data-trim-boundary="start" data-trim-delta="0.25">+0.25s</button></div>
+                  </div>
+                  <div class="mint-trim-row">
+                    <div class="mint-trim-label"><span>End</span><b id="manualTrimEndValue">${formatTime(clipEndValue)}</b></div>
+                    <div class="mint-trim-control"><button type="button" data-trim-boundary="end" data-trim-delta="-0.25">−0.25s</button><input id="manualTrimEnd" type="range" min="${Math.min(timelineDuration,clipStartValue+.25)}" max="${timelineDuration}" step="0.05" value="${clipEndValue.toFixed(2)}"><button type="button" data-trim-boundary="end" data-trim-delta="0.25">+0.25s</button></div>
+                  </div>
+                  <div class="mint-manual-trim-foot"><span id="manualTrimDuration">${clipDuration.toFixed(1)}s selected</span><button type="button" id="resetManualTrim" ${c.manualTrim?'':'disabled'}>Reset AI cut</button></div>
+                </div>
                 <div class="mint-shorts-preview-actions-v220">
                   <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
                   <span>Clip ${selected+1} / ${candidates.length}</span>
@@ -1797,6 +1809,31 @@
     }catch(e){state.settingsMessage=e.message||'Could not save settings'}finally{state.settingsSaving=false;render()}
   }
 
+  async function saveManualCandidateTrim(index,start,end,{reset=false}={}){
+    const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand)return;
+    const duration=Math.max(.25,Number(v?.details?.duration||cand.end||0));
+    let safeStart=Math.max(0,Math.min(duration-.25,Number(start)));
+    let safeEnd=Math.min(duration,Math.max(safeStart+.25,Number(end)));
+    if(!Number.isFinite(safeStart)||!Number.isFinite(safeEnd))return;
+    if(safeEnd-safeStart>60)safeEnd=safeStart+60;
+    state.candidatePreviewRequestId++;
+    state.candidatePreviewLoading=false;
+    state.candidatePreviewError='';
+    try{
+      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/candidates/${index}/trim`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:safeStart,end:safeEnd,reset})});
+      const data=await readJsonResponse(r,'Could not save manual cut');
+      if(!data?.candidate)throw new Error('Manual cut was not saved.');
+      v.candidates[index]={...cand,...data.candidate,previewUrl:null,previewMeta:null,previewEdited:false};
+      state.timelineSeek=Number(v.candidates[index].start||0);
+      state.campaignCompliance=null;state.campaignVariants=null;
+      render();
+      setTimeout(()=>prepareCandidatePreview(index,{autoplay:false,force:true}),0);
+    }catch(e){
+      showNotice({kind:'danger',eyebrow:'Manual cut',title:'Could not apply cut',message:e.message||'The manual start/end adjustment could not be saved.'});
+      render();
+    }
+  }
+
   async function prepareCandidatePreview(index,{autoplay=false,force=false}={}){
     const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand||!v?.sourceUrl)return;
     if(state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force)return;
@@ -1950,6 +1987,42 @@
         if(shortVideo.readyState>=2)setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true});
       }
       syncCaption();
+    }
+    const manualTrimStart=document.getElementById('manualTrimStart');
+    const manualTrimEnd=document.getElementById('manualTrimEnd');
+    const updateManualTrimLabels=()=>{
+      if(!manualTrimStart||!manualTrimEnd)return;
+      let start=Number(manualTrimStart.value||0),end=Number(manualTrimEnd.value||start+.25);
+      if(end<start+.25){
+        if(document.activeElement===manualTrimStart)start=Math.max(0,end-.25);
+        else end=start+.25;
+      }
+      const total=Math.max(.25,Number(state.video?.details?.duration||end));
+      start=Math.max(0,Math.min(total-.25,start));
+      end=Math.min(total,Math.max(start+.25,end));
+      if(end-start>60){
+        if(document.activeElement===manualTrimStart)start=Math.max(0,end-60);
+        else end=Math.min(total,start+60);
+      }
+      manualTrimStart.value=start.toFixed(2);manualTrimEnd.value=end.toFixed(2);
+      manualTrimStart.max=Math.max(0,end-.25).toFixed(2);
+      manualTrimEnd.min=Math.min(total,start+.25).toFixed(2);
+      const sv=document.getElementById('manualTrimStartValue'),ev=document.getElementById('manualTrimEndValue'),dv=document.getElementById('manualTrimDuration');
+      if(sv)sv.textContent=formatTime(start);if(ev)ev.textContent=formatTime(end);if(dv)dv.textContent=(end-start).toFixed(1)+'s selected';
+      const range=document.querySelector('.timeline-selected-range');
+      if(range&&total>0){range.style.left=(start/total*100)+'%';range.style.width=((end-start)/total*100)+'%'}
+      return {start,end};
+    };
+    if(manualTrimStart&&manualTrimEnd){
+      manualTrimStart.oninput=updateManualTrimLabels;manualTrimEnd.oninput=updateManualTrimLabels;
+      manualTrimStart.onchange=()=>{const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end)};
+      manualTrimEnd.onchange=()=>{const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end)};
+      document.querySelectorAll('[data-trim-boundary][data-trim-delta]').forEach(btn=>btn.onclick=()=>{
+        const target=btn.dataset.trimBoundary==='start'?manualTrimStart:manualTrimEnd;
+        const delta=Number(btn.dataset.trimDelta||0);target.value=(Number(target.value||0)+delta).toFixed(2);
+        const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end);
+      });
+      const resetManualTrim=document.getElementById('resetManualTrim');if(resetManualTrim)resetManualTrim.onclick=()=>saveManualCandidateTrim(state.selectedCandidate||0,Number(manualTrimStart.value||0),Number(manualTrimEnd.value||0),{reset:true});
     }
     const retryPreview=document.getElementById('retryClipPreview');if(retryPreview)retryPreview.onclick=()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
     const previousCandidateBtn=document.getElementById('previousCandidateBtn');if(previousCandidateBtn)previousCandidateBtn.onclick=()=>selectCandidatePreview(Math.max(0,(state.selectedCandidate||0)-1),{autoplay:true});

@@ -8,6 +8,7 @@ export function registerVideoRoutes(app, deps) {
     deletedProjectIds,
     startBackgroundAnalysis,
     readMeta,
+    writeMeta,
     clipTextAbsolute,
     finalizeCandidate,
     ensureCandidatePreview,
@@ -51,6 +52,42 @@ export function registerVideoRoutes(app, deps) {
   });
   
   
+  app.patch('/api/videos/:id/candidates/:index/trim', async (req,res,next) => {
+    try {
+      const meta=await readMeta(req.params.id);
+      const index=Number(req.params.index);
+      if(!Number.isInteger(index)||index<0||!meta.candidates?.[index])return res.status(404).json({error:'Clip candidate not found.'});
+      const current=meta.candidates[index];
+      const sourceDuration=Math.max(.25,Number(meta.details?.duration||current.end||0));
+      const requestedStart=Number(req.body?.start);
+      const requestedEnd=Number(req.body?.end);
+      if(!Number.isFinite(requestedStart)||!Number.isFinite(requestedEnd))return res.status(400).json({error:'Start and end times are required.'});
+      const start=Math.max(0,Math.min(sourceDuration-.25,requestedStart));
+      const end=Math.min(sourceDuration,Math.max(start+.25,requestedEnd));
+      const duration=end-start;
+      if(duration>.001+60)return res.status(400).json({error:'Short clips cannot exceed 60 seconds.'});
+      const reset=Boolean(req.body?.reset);
+      const originalAiStart=Number.isFinite(Number(current.originalAiStart))?Number(current.originalAiStart):Number(current.start||0);
+      const originalAiEnd=Number.isFinite(Number(current.originalAiEnd))?Number(current.originalAiEnd):Number(current.end||end);
+      const nextStart=reset?Math.max(0,Math.min(sourceDuration-.25,originalAiStart)):start;
+      const nextEnd=reset?Math.min(sourceDuration,Math.max(nextStart+.25,originalAiEnd)):end;
+      const next={
+        ...current,
+        originalAiStart,
+        originalAiEnd,
+        start:nextStart,
+        end:nextEnd,
+        duration:Math.max(.25,nextEnd-nextStart),
+        selectionText:meta.transcript?clipTextAbsolute(meta.transcript,nextStart,nextEnd):String(current.selectionText||''),
+        manualTrim:reset?null:{start:nextStart,end:nextEnd,updatedAt:new Date().toISOString()}
+      };
+      meta.candidates[index]=next;
+      meta.updatedAt=new Date().toISOString();
+      await writeMeta(meta);
+      res.json({ok:true,candidate:next});
+    } catch(e){next(e)}
+  });
+
   app.post('/api/videos/:id/preview', async (req, res, next) => {
     try {
       const meta = await readMeta(req.params.id);
