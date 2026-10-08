@@ -2522,7 +2522,7 @@ async function startBackgroundAnalysis(projectId, options = {}) {
   return meta;
 }
 
-registerVideoRoutes(app, { deletedProjectIds, startBackgroundAnalysis, readMeta, clipTextAbsolute, finalizeCandidate, ensureCandidatePreview, renderEditedClip, updateCampaigns, exportsDir, recoverInterruptedProject });
+registerVideoRoutes(app, { deletedProjectIds, startBackgroundAnalysis, readMeta, writeMeta, clipTextAbsolute, finalizeCandidate, ensureCandidatePreview, renderEditedClip, updateCampaigns, exportsDir, recoverInterruptedProject });
 
 app.use((err, req, res, next) => {
   console.error(err);
