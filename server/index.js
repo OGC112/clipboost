@@ -23,6 +23,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analysis.js';
 import { refineClipEdges, preserveNarrativePause } from './video/precision-cut.js';
+import { contextSignalsForCandidate } from './video/context-signals.js';
 import { renderDimensions } from './video/format.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
@@ -2367,7 +2368,7 @@ async function analyzeProject(projectId, options = {}) {
       }
     }
 
-    candidates = candidates.map(c => refineClipEdges(c, transcript, duration));
+    candidates = candidates.map(c => { const refined=refineClipEdges(c, transcript, duration); return {...refined,contextSignals:contextSignalsForCandidate(refined,scenes,silences)}; });
     for (let i=0; i<candidates.length; i++) {
       candidates[i].thumbnailUrl = await makeThumbnail(input, meta.id, candidates[i], i).catch(() => null);
       if (transcript) {
