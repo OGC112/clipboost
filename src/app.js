@@ -925,6 +925,38 @@
       scheduleTwitchLiveRefresh();
     },60000);
   }
+  async function refreshTwitchClips({silent=true}={}){
+    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
+    if(state.twitchClipsRefreshing)return;
+    state.twitchClipsRefreshing=true;
+    if(!silent){state.libraryError='';render()}
+    try{
+      const userId=state.libraryCreatorFilter&&state.libraryCreatorFilter!=='all'?state.libraryCreatorFilter:'';
+      const r=await fetch('/api/library/twitch/clips/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId})});
+      const data=await readJsonResponse(r,'Could not refresh Twitch clips');
+      if(data?.library)state.library=data.library;
+      state.twitchClipsLastRefresh=Date.now();
+      if(!silent){
+        const failed=Array.isArray(data.errors)?data.errors.length:0;
+        state.libraryRefreshMessage=failed?'Clips refreshed · '+failed+' failed':'Twitch clips refreshed just now';
+      }
+    }catch(e){
+      if(!silent)state.libraryError=e.message||'Could not refresh Twitch clips';
+    }finally{
+      state.twitchClipsRefreshing=false;
+      render();
+    }
+  }
+  function scheduleTwitchClipsRefresh(){
+    clearTimeout(window.__clipboostTwitchClipsRefresh);
+    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
+    const age=Date.now()-Number(state.twitchClipsLastRefresh||0);
+    if(age>15000)setTimeout(()=>refreshTwitchClips({silent:true}),100);
+    window.__clipboostTwitchClipsRefresh=setTimeout(async()=>{
+      await refreshTwitchClips({silent:true});
+      scheduleTwitchClipsRefresh();
+    },45000);
+  }
   async function loadLibrary(){if(state.libraryLoading)return;state.libraryLoading=true;state.libraryError='';render();try{const [lib,status]=await Promise.all([fetch('/api/library/creators'),fetch('/api/integrations/status')]);const data=await readJsonResponse(lib,'Could not load library');const st=await readJsonResponse(status,'Could not read integration status');state.library=data;state.youtubeConfigured=Boolean(st?.youtube?.configured);state.twitchConfigured=Boolean(st?.twitch?.configured);state.libraryLoaded=true;}catch(e){state.libraryError=e.message||'Could not load library';state.libraryLoaded=true;}finally{state.libraryLoading=false;render()}}
   async function addCreatorByPlatform(input){const platform=state.creatorPlatform||state.libraryPlatform||'youtube';state.addCreatorBusy=true;state.libraryError='';render();try{const r=await fetch(`/api/library/${platform}/creator`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input})});const data=await readJsonResponse(r,'Could not add creator');state.library=data.library;state.libraryLoaded=true;state.addCreatorOpen=false;state.libraryPlatform=platform;state.librarySection=platform==='youtube'?'videos':'vods';}catch(e){state.libraryError=e.message||'Could not add creator'}finally{state.addCreatorBusy=false;render()}}
   async function searchCreators(query){
@@ -1884,11 +1916,12 @@
     }
     if(reloadLive)reloadLive.onclick=()=>{if(liveLoading)liveLoading.classList.remove('hidden');if(liveView)liveView.reload()};
     const refresh=document.getElementById('refreshLibrary');if(refresh)refresh.onclick=refreshCurrentLibrary;const emptyRefresh=document.getElementById('emptyRefreshTwitch');if(emptyRefresh)emptyRefresh.onclick=refreshCurrentLibrary;document.querySelectorAll('[data-refresh-live]').forEach(el=>el.onclick=()=>refreshTwitchLive({silent:false}));const loadMore=document.getElementById('loadMoreYoutube');if(loadMore)loadMore.onclick=loadMoreYoutubeHistory;
-    document.querySelectorAll('[data-library-platform]').forEach(el=>el.onclick=()=>{state.libraryPlatform=el.dataset.libraryPlatform;state.librarySection=state.libraryPlatform==='youtube'?'videos':'vods';state.libraryCreatorFilter='all';state.youtubeHistoryExpanded=false;state.libraryError='';state.libraryRefreshMessage='';clearTimeout(window.__clipboostTwitchLiveRefresh);render()});
-    document.querySelectorAll('[data-library-section]').forEach(el=>el.onclick=()=>{state.librarySection=el.dataset.librarySection;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh()});
+    document.querySelectorAll('[data-library-platform]').forEach(el=>el.onclick=()=>{state.libraryPlatform=el.dataset.libraryPlatform;state.librarySection=state.libraryPlatform==='youtube'?'videos':'vods';state.libraryCreatorFilter='all';state.youtubeHistoryExpanded=false;state.libraryError='';state.libraryRefreshMessage='';clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render()});
+    document.querySelectorAll('[data-library-section]').forEach(el=>el.onclick=()=>{state.librarySection=el.dataset.librarySection;clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render();if(state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()});
     const sort=document.getElementById('librarySort');if(sort)sort.onchange=e=>{state.librarySort=e.target.value;render()};
-    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;render()};
+    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();
+    if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh();
     document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
   async function handleDesktopUpdateEvent(evt={}){

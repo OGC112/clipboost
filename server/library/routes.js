@@ -1,5 +1,5 @@
 import { youtubeGet, searchYoutubeCreators, fetchYoutubeUploadsPage, mergeYoutubeVideos, fetchYoutubeCreator } from '../integrations/youtube.js';
-import { twitchGet, twitchThumb, searchTwitchCreators, fetchTwitchCreator } from '../integrations/twitch.js';
+import { twitchGet, twitchThumb, searchTwitchCreators, fetchTwitchCreator, fetchRecentTwitchClips } from '../integrations/twitch.js';
 
 export function registerLibraryRoutes(app, deps) {
   const { readLibrary, writeLibrary } = deps;
@@ -132,7 +132,7 @@ export function registerLibraryRoutes(app, deps) {
       const library = await readLibrary();
       const existingCreator = library.creators.find(c => c.platform === 'twitch' && c.id === req.params.userId);
       if (!existingCreator) throw Object.assign(new Error('Twitch creator not found in library.'), { status: 404 });
-      const creator = await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name);
+      const creator = await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name, existingCreator);
       const existing = library.creators.findIndex(c => c.platform === 'twitch' && c.id === creator.id);
       if (existing >= 0) library.creators[existing] = creator;
       else library.creators.unshift(creator);
@@ -141,6 +141,28 @@ export function registerLibraryRoutes(app, deps) {
     } catch (e) { next(e); }
   });
   
+  app.post('/api/library/twitch/clips/refresh', async (req, res, next) => {
+    try {
+      const library = await readLibrary();
+      const requestedId=String(req.body?.userId||'').trim();
+      const targets=library.creators.filter(c=>c.platform==='twitch'&&c.id&&(!requestedId||String(c.id)===requestedId));
+      let refreshed=0;
+      const errors=[];
+      for(const creator of targets){
+        try{
+          const clips=await fetchRecentTwitchClips(creator.id,creator.clips||[]);
+          const index=library.creators.findIndex(c=>c.platform==='twitch'&&c.id===creator.id);
+          if(index>=0) library.creators[index]={...creator,clips,clipsRefreshedAt:new Date().toISOString()};
+          refreshed++;
+        }catch(error){
+          errors.push({id:creator.id,name:creator.name||creator.login||creator.id,error:error?.message||'Clip refresh failed'});
+        }
+      }
+      await writeLibrary(library);
+      res.json({library,refreshed,errors,refreshedAt:new Date().toISOString()});
+    } catch (e) { next(e); }
+  });
+
   app.post('/api/library/twitch/live', async (req, res, next) => {
     try {
       const library = await readLibrary();
@@ -196,7 +218,7 @@ export function registerLibraryRoutes(app, deps) {
       try {
         const fresh = platform === 'youtube'
           ? await fetchYoutubeCreator(existingCreator.id, existingCreator)
-          : await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name);
+          : await fetchTwitchCreator(existingCreator.login || existingCreator.handle || existingCreator.name, existingCreator);
         const index = library.creators.findIndex(c => c.platform === platform && c.id === fresh.id);
         if (index >= 0) library.creators[index] = fresh;
         else library.creators.unshift(fresh);
