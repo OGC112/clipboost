@@ -110,7 +110,7 @@ async function fetchTwitchClipWindow(broadcasterId,{startedAt,endedAt,maxPages=3
   return out;
 }
 
-async function fetchRecentTwitchClips(broadcasterId, previousClips=[]) {
+export async function fetchRecentTwitchClips(broadcasterId, previousClips=[]) {
   const now=new Date();
   const iso=d=>d.toISOString();
   const since48h=new Date(now.getTime()-48*3600_000);
