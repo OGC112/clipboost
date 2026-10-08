@@ -2009,7 +2009,7 @@
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.status==='linked'&&!state.video?.sourceUrl&&state.video?.externalSource)maybeAutoIngestCurrentProject();
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
     document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
-    if(state.page==='publish'&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
+    if((state.page==='publish'||state.page==='analytics')&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
         if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
     if(state.page==='settings'&&!state.systemHealth&&!state.systemHealthLoading)setTimeout(loadSystemHealth,120);
     if(state.page==='settings'){
@@ -2142,7 +2142,7 @@
     reportActivity();
   }
   if(!location.hash) history.replaceState(null,'','#/home');
-  const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0)}};
+  const syncRouteFromLocation=()=>{const page=pageFromHash();if(page!==state.page){state.page=page;render();window.scrollTo(0,0);if(page==='studio'&&!state.video)setTimeout(restoreLastStudioProject,0);if(page==='analytics'&&!state.campaigns&&!state.campaignsLoading)setTimeout(loadCampaigns,0);if(page==='analytics'&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0)}};
   window.addEventListener('hashchange',syncRouteFromLocation);
   window.addEventListener('popstate',syncRouteFromLocation);
   render();
