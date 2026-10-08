@@ -221,6 +221,113 @@ function disconnectPlatformOAuth(provider) {
   if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('desktop:platform-auth-event',{provider,status:'disconnected'});
   return {ok:true,connection:platformConnectionSnapshot()[provider]};
 }
+
+async function refreshPlatformAccessToken(provider) {
+  const cfg=oauthProviderConfig(provider);
+  const tokens=readPlatformTokens();
+  const token=tokens[provider];
+  if(!cfg||!token) throw new Error('Platform is not connected.');
+  const expiresAt=token.expiresAt?new Date(token.expiresAt).getTime():0;
+  if(token.access_token && (!expiresAt || expiresAt>Date.now()+60_000)) return token;
+  if(!token.refresh_token) throw new Error('The platform session expired. Reconnect the account.');
+  const body=new URLSearchParams();
+  body.set('grant_type','refresh_token');
+  body.set('refresh_token',token.refresh_token);
+  body.set(cfg.clientParam,cfg.clientId);
+  if(cfg.clientSecret && cfg.tokenAuth!=='basic') body.set('client_secret',cfg.clientSecret);
+  const headers={'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'};
+  if(cfg.clientSecret && cfg.tokenAuth==='basic') headers.Authorization='Basic '+Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64');
+  const res=await fetch(cfg.tokenUrl,{method:'POST',headers,body});
+  const raw=await res.text();
+  let next;try{next=JSON.parse(raw)}catch{throw new Error(`${cfg.label} returned an invalid refresh response.`)}
+  if(!res.ok||!next?.access_token) throw new Error(next?.error_description||next?.message||next?.error||`${cfg.label} token refresh failed.`);
+  const expiresIn=Number(next.expires_in||0);
+  const merged={...token,...next,refresh_token:next.refresh_token||token.refresh_token,expiresAt:expiresIn?new Date(Date.now()+expiresIn*1000).toISOString():token.expiresAt||null};
+  tokens[provider]=merged;writePlatformTokens(tokens);return merged;
+}
+
+let youtubeStatsCache={at:0,data:null};
+function youtubeVideoIdFromUrl(value='') {
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  if(/^[A-Za-z0-9_-]{11}$/.test(raw))return raw;
+  try{
+    const u=new URL(raw);
+    if(/youtu\.be$/i.test(u.hostname)) return String(u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);
+    if(/youtube\.com$/i.test(u.hostname)||/\.youtube\.com$/i.test(u.hostname)){
+      if(u.searchParams.get('v'))return String(u.searchParams.get('v')).slice(0,11);
+      const parts=u.pathname.split('/').filter(Boolean);
+      const idx=parts.findIndex(x=>['shorts','live','embed'].includes(x));
+      if(idx>=0&&parts[idx+1])return String(parts[idx+1]).slice(0,11);
+    }
+  }catch{}
+  return '';
+}
+async function youtubeApi(pathname,params={},token) {
+  const u=new URL('https://www.googleapis.com/youtube/v3/'+pathname);
+  for(const [k,v] of Object.entries(params||{})){if(v!==undefined&&v!==null&&v!=='')u.searchParams.set(k,String(v))}
+  const res=await fetch(u,{headers:{Authorization:`Bearer ${token.access_token}`,Accept:'application/json'}});
+  const raw=await res.text();let data;try{data=JSON.parse(raw)}catch{throw new Error('YouTube returned an invalid response.')}
+  if(!res.ok)throw new Error(data?.error?.message||`YouTube API request failed (${res.status}).`);
+  return data;
+}
+async function fetchYouTubeAnalytics({force=false,maxAgeMs=60_000}={}) {
+  if(!force&&youtubeStatsCache.data&&Date.now()-youtubeStatsCache.at<maxAgeMs)return youtubeStatsCache.data;
+  const token=await refreshPlatformAccessToken('youtube');
+  const channelRes=await youtubeApi('channels',{part:'snippet,contentDetails,statistics',mine:'true'},token);
+  const channel=channelRes.items?.[0];
+  if(!channel)throw new Error('No YouTube channel was found for this account.');
+  const uploads=channel.contentDetails?.relatedPlaylists?.uploads;
+  if(!uploads)throw new Error('YouTube did not return the uploads playlist for this channel.');
+  const cutoff=Date.now()-366*86400_000;
+  const refs=[];let pageToken='';let done=false;
+  for(let page=0;page<12&&!done;page++){
+    const pageRes=await youtubeApi('playlistItems',{part:'snippet,contentDetails',playlistId:uploads,maxResults:50,pageToken:pageToken||undefined},token);
+    for(const item of pageRes.items||[]){
+      const id=item.contentDetails?.videoId||item.snippet?.resourceId?.videoId;
+      const publishedAt=item.contentDetails?.videoPublishedAt||item.snippet?.publishedAt||null;
+      if(!id)continue;
+      if(publishedAt&&new Date(publishedAt).getTime()<cutoff){done=true;break}
+      refs.push({id,publishedAt});
+    }
+    pageToken=pageRes.nextPageToken||'';
+    if(!pageToken)break;
+  }
+  const details=[];
+  for(let i=0;i<refs.length;i+=50){
+    const ids=refs.slice(i,i+50).map(x=>x.id).join(',');
+    const r=await youtubeApi('videos',{part:'snippet,statistics,contentDetails',id:ids,maxResults:50},token);
+    details.push(...(r.items||[]));
+  }
+  const posts=details.map(v=>({
+    id:v.id,
+    postId:v.id,
+    platform:'youtube',
+    title:v.snippet?.title||'YouTube video',
+    description:v.snippet?.description||'',
+    publishedAt:v.snippet?.publishedAt||null,
+    thumbnail:v.snippet?.thumbnails?.medium?.url||v.snippet?.thumbnails?.default?.url||'',
+    url:`https://www.youtube.com/watch?v=${v.id}`,
+    views:Math.max(0,Number(v.statistics?.viewCount||0)),
+    likes:Math.max(0,Number(v.statistics?.likeCount||0)),
+    comments:Math.max(0,Number(v.statistics?.commentCount||0)),
+    shares:null
+  })).sort((a,b)=>new Date(b.publishedAt||0)-new Date(a.publishedAt||0));
+  const data={
+    channel:{
+      id:channel.id,
+      title:channel.snippet?.title||'YouTube',
+      thumbnail:channel.snippet?.thumbnails?.default?.url||'',
+      subscribers:Math.max(0,Number(channel.statistics?.subscriberCount||0)),
+      totalViews:Math.max(0,Number(channel.statistics?.viewCount||0)),
+      videoCount:Math.max(0,Number(channel.statistics?.videoCount||0))
+    },
+    posts,
+    syncedAt:new Date().toISOString()
+  };
+  youtubeStatsCache={at:Date.now(),data};
+  return data;
+}
 function readDesktopSettings() {
   const defaults = { startWithWindows:false, closeToTray:true, ecoMode:true, idleTimeoutMinutes:5, checkUpdatesOnStartup:true, autoDownloadUpdates:true };
   try { return { ...defaults, ...JSON.parse(fs.readFileSync(desktopSettingsPath(),'utf8')) }; } catch { return defaults; }
@@ -1167,6 +1274,7 @@ ipcMain.handle('desktop:import-campaign-asset', async (_event, payload={}) => { 
 ipcMain.handle('desktop:clear-campaign-import-session', async () => { await session.fromPartition(CAMPAIGN_IMPORT_PARTITION).clearStorageData(); return { ok:true }; });
 ipcMain.handle('desktop:get-settings', () => ({ ...readDesktopSettings(), updateState, version:app.getVersion(), packaged:app.isPackaged }));
 ipcMain.handle('desktop:get-platform-connections', () => platformConnectionSnapshot());
+ipcMain.handle('desktop:get-youtube-analytics', async (_event, options={}) => { try { return {ok:true,...await fetchYouTubeAnalytics(options||{})}; } catch (err) { return {ok:false,error:err?.message||'Could not load YouTube analytics.'}; } });
 ipcMain.handle('desktop:connect-platform', async (_event, provider) => connectPlatformOAuth(String(provider||'').toLowerCase()));
 ipcMain.handle('desktop:disconnect-platform', async (_event, provider) => disconnectPlatformOAuth(String(provider||'').toLowerCase()));
 ipcMain.handle('desktop:save-settings', (_event, settings) => { const saved=writeDesktopSettings(settings); markRendererActivity(); startEcoMonitor(); return { ok:true, settings:saved }; });

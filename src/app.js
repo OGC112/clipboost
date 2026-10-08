@@ -19,7 +19,7 @@
     sourceSubtitleMode:['keep','crop','hide'].includes(editorPrefs.sourceSubtitleMode)?editorPrefs.sourceSubtitleMode:'keep',
     sourceSubtitleBottom:Number.isFinite(Number(editorPrefs.sourceSubtitleBottom))?Math.max(.06,Math.min(.28,Number(editorPrefs.sourceSubtitleBottom))):.15,
     watermarkUrl:editorPrefs.watermarkUrl||'', watermarkName:editorPrefs.watermarkName||'', watermarkX:Number.isFinite(Number(editorPrefs.watermarkX))?Number(editorPrefs.watermarkX):.86, watermarkY:Number.isFinite(Number(editorPrefs.watermarkY))?Number(editorPrefs.watermarkY):.12, watermarkScale:Number.isFinite(Number(editorPrefs.watermarkScale))?Number(editorPrefs.watermarkScale):.18, watermarkOpacity:Number.isFinite(Number(editorPrefs.watermarkOpacity))?Number(editorPrefs.watermarkOpacity):.9,
-    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsPeriodOpen:false,analyticsSearch:'',lastExport:null,uiModal:null};
+    cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsPeriodOpen:false,analyticsSearch:'',analyticsOrganicPosts:[],youtubeAnalytics:null,youtubeAnalyticsLoading:false,youtubeAnalyticsError:'',lastExport:null,uiModal:null};
   const autoIngestAttempted=new Set();
   function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionFont:state.captionFont||'social',captionEffect:state.captionEffect||'active-word',hookTitleEnabled:Boolean(state.hookTitleEnabled),hookTitleText:String(state.hookTitleText||''),hookTitleDuration:String(state.hookTitleDuration||'5'),hookTitleX:Number(state.hookTitleX||.5),hookTitleY:Number(state.hookTitleY||.12),captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:Number.isFinite(Number(state.captionY))?Number(state.captionY):null,sourceSubtitleMode:state.sourceSubtitleMode||'keep',sourceSubtitleBottom:Number(state.sourceSubtitleBottom||.15),watermarkUrl:state.watermarkUrl||'',watermarkName:state.watermarkName||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9),studioMode:state.studioMode||'shorts'}))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
@@ -75,6 +75,7 @@
   function navigate(page,{replace=false}={}){
     if(!validPages.has(page)) page='home';
     state.page=page;
+    if(page!=='analytics')clearTimeout(window.__clipboostYouTubeAnalyticsRefresh);
     const next=`#/${page}`;
     if(location.hash!==next){
       if(replace) history.replaceState(null,'',next); else history.pushState(null,'',next);
@@ -609,7 +610,62 @@
       state.platformConnections=await window.clipboostDesktop?.getPlatformConnections?.()||{};
     }catch(e){
       if(!quiet)showNotice({kind:'danger',eyebrow:'Platform connections',title:'Could not load connections',message:e.message||'Could not read platform connection status.'});
-    }finally{state.platformConnectionsLoading=false;render()}
+    }finally{state.platformConnectionsLoading=false;render();if(state.page==='analytics'&&state.platformConnections?.youtube?.connected&&!state.youtubeAnalytics&&!state.youtubeAnalyticsLoading)setTimeout(()=>loadYouTubeAnalytics({quiet:true}),0)}
+  }
+  function youtubeVideoId(value=''){
+    const raw=String(value||'').trim();if(!raw)return '';
+    if(/^[A-Za-z0-9_-]{11}$/.test(raw))return raw;
+    try{
+      const u=new URL(raw);
+      if(/youtu\.be$/i.test(u.hostname))return String(u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);
+      if(/youtube\.com$/i.test(u.hostname)||/\.youtube\.com$/i.test(u.hostname)){
+        if(u.searchParams.get('v'))return String(u.searchParams.get('v')).slice(0,11);
+        const parts=u.pathname.split('/').filter(Boolean),idx=parts.findIndex(x=>['shorts','live','embed'].includes(x));
+        if(idx>=0&&parts[idx+1])return String(parts[idx+1]).slice(0,11);
+      }
+    }catch{}
+    return '';
+  }
+  async function loadYouTubeAnalytics({force=false,quiet=true}={}){
+    if(state.youtubeAnalyticsLoading||!state.platformConnections?.youtube?.connected||!window.clipboostDesktop?.getYouTubeAnalytics)return;
+    state.youtubeAnalyticsLoading=true;
+    state.youtubeAnalyticsError='';
+    if(!quiet)render();
+    try{
+      const data=await window.clipboostDesktop.getYouTubeAnalytics({force});
+      if(data?.ok===false)throw new Error(data.error||'Could not load YouTube analytics');
+      state.youtubeAnalytics=data||null;
+      state.analyticsOrganicPosts=(data?.posts||[]).map(p=>({
+        ...p,
+        _id:String(p.id||p.postId||p.url||''),
+        _kind:'organic',
+        _campaignId:'',
+        _campaignName:'',
+        _currency:'USD',
+        _platform:'youtube',
+        _title:String(p.title||'YouTube video'),
+        _date:p.publishedAt||null,
+        _views:Math.max(0,Number(p.views||0)),
+        _likes:Number.isFinite(Number(p.likes))?Math.max(0,Number(p.likes)):null,
+        _comments:Number.isFinite(Number(p.comments))?Math.max(0,Number(p.comments)):null,
+        _shares:null,
+        _revenue:0,
+        _thumb:p.thumbnail||'',
+        _youtubeId:String(p.id||p.postId||youtubeVideoId(p.url)||'')
+      }));
+    }catch(e){
+      state.youtubeAnalyticsError=e.message||'Could not load YouTube analytics';
+      if(!quiet)showNotice({kind:'danger',eyebrow:'YouTube analytics',title:'Sync failed',message:state.youtubeAnalyticsError});
+    }finally{
+      state.youtubeAnalyticsLoading=false;
+      render();
+      scheduleYouTubeAnalyticsRefresh();
+    }
+  }
+  function scheduleYouTubeAnalyticsRefresh(){
+    clearTimeout(window.__clipboostYouTubeAnalyticsRefresh);
+    if(state.page!=='analytics'||!state.platformConnections?.youtube?.connected)return;
+    window.__clipboostYouTubeAnalyticsRefresh=setTimeout(()=>loadYouTubeAnalytics({force:true,quiet:true}),300000);
   }
   async function connectPlatformAccount(provider){
     if(state.platformConnectBusy)return;
@@ -622,6 +678,7 @@
       const result=await window.clipboostDesktop?.connectPlatform?.(provider);
       if(result?.ok===false)throw new Error(result.error||'Connection failed.');
       state.platformConnections=await window.clipboostDesktop?.getPlatformConnections?.()||state.platformConnections;
+      if(provider==='youtube')await loadYouTubeAnalytics({force:true,quiet:true});
       showNotice({kind:'success',eyebrow:'Platform connections',title:`${state.platformConnections?.[provider]?.label||provider} connected`,message:'The account authorization was completed and stored securely on this computer.'});
     }catch(e){
       showNotice({kind:'danger',eyebrow:'Platform connections',title:'Connection failed',message:e.message||'The platform could not be connected.'});
@@ -716,30 +773,34 @@
       facebook:{label:'Facebook',icon:'f'},
       unknown:{label:'Other',icon:'•'}
     };
-    const campaignPosts=campaignsList.flatMap(c=>{
-      const totals=c.totals||{};
-      return (Array.isArray(c.posts)?c.posts:[]).map((p,i)=>({
+    const youtubePosts=Array.isArray(state.analyticsOrganicPosts)?state.analyticsOrganicPosts:[];
+    const youtubeById=new Map(youtubePosts.map(p=>[String(p._youtubeId||p.id||p.postId||''),p]).filter(([id])=>id));
+    const campaignYoutubeIds=new Set();
+    const campaignPosts=campaignsList.flatMap(c=>(Array.isArray(c.posts)?c.posts:[]).map((p,i)=>{
+      const platform=String(p.platform||'unknown').toLowerCase();
+      const ytId=platform==='youtube'?String(p.postId||youtubeVideoId(p.url)||''):'';
+      if(ytId)campaignYoutubeIds.add(ytId);
+      const live=ytId?youtubeById.get(ytId):null;
+      return {
         ...p,
         _id:String(p.id||p.postId||p.url||`${c.id}-${i}`),
         _kind:'campaign',
         _campaignId:c.id,
         _campaignName:c.name||'Campaign',
         _currency:c.currency||'USD',
-        _platform:String(p.platform||'unknown').toLowerCase(),
-        _title:String(p.title||p.caption||p.description||p.url||`Campaign post ${i+1}`),
-        _date:p.publishedAt||p.submittedAt||p.createdAt||c.updatedAt||c.createdAt||null,
-        _views:Math.max(0,Number(p.views||0)),
-        _likes:Math.max(0,Number(p.likes||p.likeCount||0)),
-        _comments:Math.max(0,Number(p.comments||p.commentCount||0)),
-        _shares:Math.max(0,Number(p.shares||p.shareCount||0)),
+        _platform:platform,
+        _title:String(live?._title||p.title||p.caption||p.description||p.url||`Campaign post ${i+1}`),
+        _date:live?._date||p.publishedAt||p.submittedAt||p.createdAt||c.updatedAt||c.createdAt||null,
+        _views:live ? Number(live._views||0) : Math.max(0,Number(p.views||0)),
+        _likes:live ? live._likes : (Number.isFinite(Number(p.likes??p.likeCount))?Math.max(0,Number(p.likes??p.likeCount)):null),
+        _comments:live ? live._comments : (Number.isFinite(Number(p.comments??p.commentCount))?Math.max(0,Number(p.comments??p.commentCount)):null),
+        _shares:Number.isFinite(Number(p.shares??p.shareCount))?Math.max(0,Number(p.shares??p.shareCount)):null,
         _revenue:Math.max(0,Number(p.payoutConfirmed||p.revenue||0)),
-        _thumb:p.thumbnail||p.thumbnailUrl||p.previewUrl||''
-      }));
-    });
-    // Organic tracking store is intentionally separate from AI Studio projects.
-    // Until platform publishing stores post IDs/metrics, the organic tab stays truthful
-    // instead of treating source videos or drafts as published posts.
-    const organicPosts=Array.isArray(state.analyticsOrganicPosts)?state.analyticsOrganicPosts:[];
+        _thumb:live?._thumb||p.thumbnail||p.thumbnailUrl||p.previewUrl||'',
+        _youtubeId:ytId
+      };
+    }));
+    const organicPosts=youtubePosts.filter(p=>!campaignYoutubeIds.has(String(p._youtubeId||'')));
     const allPosts=[...campaignPosts,...organicPosts];
 
     const scope=state.analyticsScope||'all';
@@ -755,9 +816,9 @@
       (!query||[`${p._title}`,`${p._campaignName||""}`,`${p._platform}`].join(' ').toLowerCase().includes(query))
     );
 
-    const totals=filtered.reduce((a,p)=>{a.views+=p._views;a.likes+=p._likes;a.comments+=p._comments;a.shares+=p._shares;a.revenue+=p._revenue;a.posts++;return a;},{views:0,likes:0,comments:0,shares:0,revenue:0,posts:0});
+    const totals=filtered.reduce((a,p)=>{a.views+=Number(p._views||0);if(Number.isFinite(p._likes)){a.likes+=p._likes;a.likesKnown++}if(Number.isFinite(p._comments)){a.comments+=p._comments;a.commentsKnown++}if(Number.isFinite(p._shares)){a.shares+=p._shares;a.sharesKnown++}a.revenue+=Number(p._revenue||0);a.posts++;return a;},{views:0,likes:0,comments:0,shares:0,revenue:0,posts:0,likesKnown:0,commentsKnown:0,sharesKnown:0});
     const campaignSummary=campaignsList.reduce((a,c)=>{const t=c.totals||{};a.estimated+=Number(t.estimatedRevenue||0);a.confirmed+=Number(t.confirmedRevenue||c.confirmedPayout||0);return a;},{estimated:0,confirmed:0});
-    const engagement=totals.views?((totals.likes+totals.comments+totals.shares)/totals.views*100):0;
+    const engagement=totals.views?((totals.likes+totals.comments+(totals.sharesKnown?totals.shares:0))/totals.views*100):0;
     const avgViews=totals.posts?Math.round(totals.views/totals.posts):0;
 
     const platformTotals=new Map();
@@ -836,7 +897,7 @@
         <td><span class="mint-type-pill ${p._kind}">${p._kind==='campaign'?'Campaign':'Organic'}</span></td>
         <td>${p._kind==='campaign'?escapeHtml(p._campaignName||'Campaign'):'—'}</td>
         <td>${p._date?new Date(p._date).toLocaleDateString():'—'}</td>
-        <td>${formatCount(p._views)}</td><td>${p._likes?formatCount(p._likes):'—'}</td><td>${p._comments?formatCount(p._comments):'—'}</td><td>${p._shares?formatCount(p._shares):'—'}</td>
+        <td>${formatCount(p._views)}</td><td>${Number.isFinite(p._likes)?formatCount(p._likes):'—'}</td><td>${Number.isFinite(p._comments)?formatCount(p._comments):'—'}</td><td>${Number.isFinite(p._shares)?formatCount(p._shares):'—'}</td>
         <td>${er?er.toFixed(1)+'%':'—'}</td><td class="mint-revenue-cell">${p._revenue?formatMoney(p._revenue,p._currency||'USD'):'—'}</td>
       </tr>`;
     }).join('');
@@ -847,8 +908,8 @@
         <div class="mint-stats-heading-actions">
           <div class="mint-youtube-connect ${state.platformConnections?.youtube?.connected?'connected':''}">
             <span class="mint-youtube-mark">${statIcon('youtube')}</span>
-            <div><b>YouTube</b><small>${state.platformConnections?.youtube?.connected?'Connected':'Connect your channel'}</small></div>
-            <button type="button" id="analyticsYoutubeConnect">${state.platformConnectBusy==='youtube'?'Connecting…':state.platformConnections?.youtube?.connected?'Reconnect':'Connect'}</button>
+            <div><b>${escapeHtml(state.youtubeAnalytics?.channel?.title||'YouTube')}</b><small>${state.youtubeAnalyticsLoading?'Syncing metrics…':state.youtubeAnalyticsError?'Sync error':state.platformConnections?.youtube?.connected?(state.youtubeAnalytics?.syncedAt?'Synced '+new Date(state.youtubeAnalytics.syncedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'Connected'):'Connect your channel'}</small></div>
+            <button type="button" id="analyticsYoutubeConnect">${state.platformConnectBusy==='youtube'?'Connecting…':state.youtubeAnalyticsLoading?'Syncing…':state.platformConnections?.youtube?.connected?'Refresh':'Connect'}</button>
           </div>
           <div class="mint-period-dropdown ${state.analyticsPeriodOpen?'open':''}">
             <button type="button" id="analyticsPeriodToggle"><span class="mint-calendar-icon">▣</span><b>${periodDays===7?'Last 7 days':periodDays===30?'Last 30 days':periodDays===90?'Last 90 days':'Last year'}</b><span>⌄</span></button>
@@ -867,9 +928,9 @@
       </section>
       <section class="mint-stat-grid">
         ${metricCard('views','Total Views',formatCount(totals.views),'red',totals.posts?`${formatCount(avgViews)} avg / post`:'No tracked posts','_views')}
-        ${metricCard('likes','Total Likes',totals.likes?formatCount(totals.likes):'—','pink','Available when platform metrics sync','_likes')}
-        ${metricCard('comments','Total Comments',totals.comments?formatCount(totals.comments):'—','cyan','Available when platform metrics sync','_comments')}
-        ${metricCard('shares','Total Shares',totals.shares?formatCount(totals.shares):'—','orange','Available when platform metrics sync','_shares')}
+        ${metricCard('likes','Total Likes',totals.likesKnown?formatCount(totals.likes):'—','pink',totals.likesKnown?'Live platform metrics':'Not available','_likes')}
+        ${metricCard('comments','Total Comments',totals.commentsKnown?formatCount(totals.comments):'—','cyan',totals.commentsKnown?'Live platform metrics':'Not available','_comments')}
+        ${metricCard('shares','Total Shares',totals.sharesKnown?formatCount(totals.shares):'—','orange',totals.sharesKnown?'Live platform metrics':'YouTube does not expose shares','_shares')}
         ${metricCard('engagement','Engagement Rate',engagement?engagement.toFixed(1)+'%':'—','green','Likes + comments + shares / views','_views')}
         ${metricCard('posts','Posts Published',String(totals.posts),'purple',scope==='organic'?'Organic tracking ready':'Tracked publications','_views')}
       </section>
@@ -1775,7 +1836,7 @@
     document.querySelectorAll('[data-analytics-platform]').forEach(el=>el.onclick=()=>{state.analyticsPlatform=el.dataset.analyticsPlatform||'all';render()});
     const analyticsPeriodToggle=document.getElementById('analyticsPeriodToggle');if(analyticsPeriodToggle)analyticsPeriodToggle.onclick=e=>{e.stopPropagation();state.analyticsPeriodOpen=!state.analyticsPeriodOpen;render()};
     document.querySelectorAll('[data-analytics-period]').forEach(el=>el.onclick=()=>{state.analyticsPeriod=String(el.dataset.analyticsPeriod||'30');state.analyticsPeriodOpen=false;render()});
-    const analyticsYoutubeConnect=document.getElementById('analyticsYoutubeConnect');if(analyticsYoutubeConnect)analyticsYoutubeConnect.onclick=()=>connectPlatformAccount('youtube');
+    const analyticsYoutubeConnect=document.getElementById('analyticsYoutubeConnect');if(analyticsYoutubeConnect)analyticsYoutubeConnect.onclick=()=>state.platformConnections?.youtube?.connected?loadYouTubeAnalytics({force:true,quiet:false}):connectPlatformAccount('youtube');
     const analyticsSearch=document.getElementById('analyticsSearch');if(analyticsSearch)analyticsSearch.oninput=e=>{state.analyticsSearch=String(e.target.value||'');render();setTimeout(()=>{const x=document.getElementById('analyticsSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},0)};
     const analyticsExport=document.getElementById('analyticsExport');if(analyticsExport)analyticsExport.onclick=()=>{const table=document.querySelector('.mint-posts-panel table');if(!table)return;const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>`"${String(td.innerText||'').replaceAll('"','""')}"`).join(',')).join('\n');const blob=new Blob([rows],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mint-stats.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
@@ -2010,6 +2071,7 @@
     document.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.openProject));
     document.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();removeProject(el.dataset.deleteProject,el.dataset.deleteProjectName)});
     if((state.page==='publish'||state.page==='analytics')&&!state.platformConnections&&!state.platformConnectionsLoading)setTimeout(()=>loadPlatformConnections({quiet:true}),0);
+    if(state.page==='analytics'&&state.platformConnections?.youtube?.connected&&!state.youtubeAnalytics&&!state.youtubeAnalyticsLoading)setTimeout(()=>loadYouTubeAnalytics({quiet:true}),0);
         if(state.page==='settings'&&!state.settings&&!state.settingsLoading)setTimeout(loadSettings,0);
     if(state.page==='settings'&&!state.systemHealth&&!state.systemHealthLoading)setTimeout(loadSystemHealth,120);
     if(state.page==='settings'){
