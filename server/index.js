@@ -22,6 +22,7 @@ import { campaignTotals, campaignFitForCandidate } from './campaigns/core.js';
 
 import { localAiConfig, unloadOllamaModelIfLoaded, ollamaGenerateJson } from './ai/ollama.js';
 import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analysis.js';
+import { refineClipEdges, preserveNarrativePause } from './video/precision-cut.js';
 import { renderDimensions } from './video/format.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
@@ -1281,7 +1282,7 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
     const overlapStart = Math.max(start, Number(s.start || 0));
     const overlapEnd = Math.min(end, Number(s.end || 0));
     const dur = overlapEnd - overlapStart;
-    if (dur >= silenceThreshold) {
+    if (dur >= silenceThreshold && !preserveNarrativePause(candidate,overlapStart,overlapEnd)) {
       acousticSilences.push({ start:overlapStart, end:overlapEnd });
       events.push({ type:'remove-silence', start:Number((overlapStart-start).toFixed(2)), end:Number((overlapEnd-start).toFixed(2)), duration:Number(dur.toFixed(2)), source:'ffmpeg' });
     }
@@ -1298,7 +1299,7 @@ function buildEditPlan(candidate, transcript, silences = [], intensity = 'balanc
     if (overlapsAcoustic) continue;
     const relStart = Math.max(0, p.start-start);
     const relEnd = Math.min(clipDuration, p.end-start);
-    if (relEnd-relStart < transcriptGapThreshold) continue;
+    if (relEnd-relStart < transcriptGapThreshold || preserveNarrativePause(candidate,p.start,p.end)) continue;
     events.push({
       type:'remove-silence',
       start:Number(relStart.toFixed(3)),
@@ -2366,6 +2367,7 @@ async function analyzeProject(projectId, options = {}) {
       }
     }
 
+    candidates = candidates.map(c => refineClipEdges(c, transcript, duration));
     for (let i=0; i<candidates.length; i++) {
       candidates[i].thumbnailUrl = await makeThumbnail(input, meta.id, candidates[i], i).catch(() => null);
       if (transcript) {
