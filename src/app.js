@@ -547,8 +547,9 @@
   }
   function previewCaptionRowsForCandidate(cand){
     if(!cand)return[];
-    const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);
-    if(isCampaign)return cand.captions||[];
+    // AI Studio and Campaign Studio must consume the exact same transcript
+    // timeline. Campaign candidates may carry legacy caption rows, but those
+    // are now fallback-only when the project has no transcript captions.
     const absolute=(state.video?.transcript?.captions||[]).filter(row=>Number(row.end||0)>=Number(cand.start||0)&&Number(row.start||0)<=Number(cand.end||0)).map(row=>({
       ...row,
       start:Math.max(0,Number(row.start||0)-Number(cand.start||0)),

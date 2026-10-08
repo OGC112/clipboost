@@ -1930,7 +1930,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const speechCaptions=compactCaptionWords(remappedWords,{maxWords:4,maxChars:22,minWords:1,maxGap:.14});
   const captions = speechCaptions.length
     ? speechCaptions
-    : (meta?.campaignId ? remappedCaptions : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2,maxGap:.14}));
+    : compactCaptionRows(remappedCaptions,{maxWords:4,maxChars:22,minWords:2,maxGap:.14});
   const hookTitleActive=Boolean(options.hookTitleEnabled&&options.hookTitleText);
   if (!captions.length && !hookTitleActive) return null;
   const file = path.join(exportsDir, `${meta.id}-${Date.now()}-edited.ass`);
@@ -2458,7 +2458,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v14-center-dedupe',
+    captionRendererVersion: 'social-effects-v15-unified-campaign',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
