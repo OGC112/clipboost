@@ -4,6 +4,7 @@ import path from 'path';
 import { normalizeCampaign, campaignTotals, campaignPaymentModel, parseCampaignSourceUrl } from './core.js';
 import { detectCampaignAccessWall, extractCampaignPage, extractPlatformTermsProfile, extractAuthenticatedCampaignSnapshots } from './import.js';
 import { fetchPublicCampaignPage } from '../security/network.js';
+import { inspectPublicDriveFolder } from './drive-assets.js';
 
 export function registerCampaignRoutes(app, deps) {
   const {
@@ -14,6 +15,10 @@ export function registerCampaignRoutes(app, deps) {
     writeMeta,
     metaDir
   } = deps;
+
+  app.post('/api/campaigns/inspect-drive-folder', async (req,res,next)=>{
+    try{res.json(await inspectPublicDriveFolder(String(req.body?.url||'')))}catch(err){next(err)}
+  });
 
   app.get('/api/campaigns', async (req,res,next) => {
     try {
