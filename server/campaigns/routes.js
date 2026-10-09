@@ -134,8 +134,10 @@ export function registerCampaignRoutes(app, deps) {
       const source=campaign.sourceUrls.find(s=>s.id===sourceId)||(requested?{url:requested,label:requestedLabel||'Campaign asset'}:null);
       if(!source?.url)return res.status(400).json({error:'Campaign source not found.'});
       const parsed=parseCampaignSourceUrl(source.url); if(!parsed)return res.status(400).json({error:'Unsupported source URL.'});
+      const manualUpload=req.body?.manualUpload===true;
+      if(manualUpload&&!requested)return res.status(400).json({error:'Manual asset import requires the original asset link.'});
       const id=crypto.randomUUID();
-      const meta={id,originalName:source.label||`${campaign.name} source`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'linked',details:{duration:0},candidates:[],campaignId:campaign.id,campaign:{...campaign,totals:campaignTotals(campaign)},externalSource:{...parsed,thumbnail:null,title:source.label||null,creatorName:campaign.provider||'Campaign source',creatorId:campaign.id,viewCount:0}};
+      const meta={id,originalName:source.label||`${campaign.name} source`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'linked',details:{duration:0},candidates:[],campaignId:campaign.id,campaign:{...campaign,totals:campaignTotals(campaign)},externalSource:{...parsed,thumbnail:null,title:source.label||null,creatorName:campaign.provider||'Campaign source',creatorId:campaign.id,viewCount:0},importMethod:manualUpload?'manual-asset-upload':'automatic'};
       await writeMeta(meta); res.json(meta);
     } catch(e){next(e)}
   });
