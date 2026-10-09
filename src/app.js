@@ -383,7 +383,7 @@
                     <div class="mint-trim-label"><span>End</span><b id="manualTrimEndValue">${formatTime(clipEndValue)}</b></div>
                     <div class="mint-trim-control"><button type="button" data-trim-boundary="end" data-trim-delta="-0.25">−0.25s</button><input id="manualTrimEnd" type="range" min="${Math.min(timelineDuration,clipStartValue+.25)}" max="${timelineDuration}" step="0.01" value="${clipEndValue.toFixed(2)}"><button type="button" data-trim-boundary="end" data-trim-delta="0.25">+0.25s</button></div>
                   </div>
-                  <div class="mint-precision-trim-tools"><div class="mint-precision-trim-title">Precision cut <small>Zoom around each boundary · 0.01s resolution</small></div><div class="mint-precision-trim-actions"><button type="button" data-trim-boundary="start" data-trim-delta="-0.05">Start −0.05s</button><button type="button" data-trim-boundary="start" data-trim-delta="0.05">Start +0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="-0.05">End −0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="0.05">End +0.05s</button></div><div class="mint-precision-trim-actions"><button type="button" data-trim-play="start">▶ Check opening</button><button type="button" data-trim-play="end">▶ Check ending</button></div><small>Preview automatically regenerates after saving the cut.</small></div><div class="mint-manual-trim-foot"><span id="manualTrimDuration">${clipDuration.toFixed(1)}s selected</span><button type="button" id="resetManualTrim" ${c.manualTrim?'':'disabled'}>Reset AI cut</button></div>
+                  <div class="mint-precision-trim-tools"><div class="mint-precision-trim-title">Precision cut <small>Zoom around each boundary · 0.01s resolution</small></div><div class="mint-cut-zoom"><div class="mint-cut-zoom-head"><b>Zoomed Cut Timeline</b><label>Window <select id="precisionWindow"><option value="2">±2s</option><option value="5" selected>±5s</option><option value="10">±10s</option></select></label></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>IN point</b><output id="precisionStartLabel">Start</output></div><div class="mint-cut-ruler" id="precisionStartRuler"></div><input id="precisionStart" type="range" step="0.01" aria-label="Zoomed clip start"><div class="mint-cut-axis"><span id="precisionStartMin"></span><span id="precisionStartMax"></span></div></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>OUT point</b><output id="precisionEndLabel">End</output></div><div class="mint-cut-ruler" id="precisionEndRuler"></div><input id="precisionEnd" type="range" step="0.01" aria-label="Zoomed clip end"><div class="mint-cut-axis"><span id="precisionEndMin"></span><span id="precisionEndMax"></span></div></div><div class="mint-cut-legend"><span>┃ Scene</span><span>▨ Silence</span><span>◆ Cut</span></div></div><div class="mint-precision-trim-actions"><button type="button" data-trim-boundary="start" data-trim-delta="-0.05">Start −0.05s</button><button type="button" data-trim-boundary="start" data-trim-delta="0.05">Start +0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="-0.05">End −0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="0.05">End +0.05s</button></div><div class="mint-precision-trim-actions"><button type="button" data-trim-play="start">▶ Check opening</button><button type="button" data-trim-play="end">▶ Check ending</button></div><small>Preview automatically regenerates after saving the cut.</small></div><div class="mint-manual-trim-foot"><span id="manualTrimDuration">${clipDuration.toFixed(1)}s selected</span><button type="button" id="undoManualTrim" ${state.manualTrimUndo?.videoId===v?.id&&state.manualTrimUndo?.index===selected?'':'disabled'}>↶ Undo</button><button type="button" id="resetManualTrim" ${c.manualTrim?'':'disabled'}>Reset AI cut</button></div>
                 </div>
                 <button class="btn secondary mint-final-preview-button" type="button" id="validateFinalPreviewBtn">${state.previewFinalMode?'✓ Final render preview':'▶ Validate final preview (export renderer)'}</button><div class="mint-shorts-preview-actions-v220">
                   <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
@@ -1823,6 +1823,8 @@
       const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/candidates/${index}/trim`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:safeStart,end:safeEnd,reset})});
       const data=await readJsonResponse(r,'Could not save manual cut');
       if(!data?.candidate)throw new Error('Manual cut was not saved.');
+      if(!state.manualTrimUndoApplying)state.manualTrimUndo={videoId:v.id,index,start:Number(cand.start),end:Number(cand.end)};
+      state.manualTrimUndoApplying=false;
       v.candidates[index]={...cand,...data.candidate,previewUrl:null,previewMeta:null,previewEdited:false};
       state.timelineSeek=Number(v.candidates[index].start||0);
       state.campaignCompliance=null;state.campaignVariants=null;
@@ -2009,10 +2011,47 @@
       manualTrimEnd.min=Math.min(total,start+.25).toFixed(2);
       const sv=document.getElementById('manualTrimStartValue'),ev=document.getElementById('manualTrimEndValue'),dv=document.getElementById('manualTrimDuration');
       if(sv)sv.textContent=formatTime(start);if(ev)ev.textContent=formatTime(end);if(dv)dv.textContent=(end-start).toFixed(1)+'s selected';
+      syncPrecisionZoom(start,end);
       const range=document.querySelector('.timeline-selected-range');
       if(range&&total>0){range.style.left=(start/total*100)+'%';range.style.width=((end-start)/total*100)+'%'}
       return {start,end};
     };
+    const precisionWindow=document.getElementById('precisionWindow');
+    const precisionStart=document.getElementById('precisionStart');
+    const precisionEnd=document.getElementById('precisionEnd');
+    const precisionScenes=(state.video?.analysis?.timeline?.scenes||[]).map(Number).filter(Number.isFinite);
+    const precisionSilences=(state.video?.analysis?.timeline?.silences||[]);
+    const precisionCenters={Start:Number(manualTrimStart?.value||0),End:Number(manualTrimEnd?.value||0)};
+    const syncPrecisionZoom=(start,end)=>{
+      const total=Math.max(.25,Number(state.video?.details?.duration||end));
+      const radius=Number(precisionWindow?.value||5);
+      for(const [name,value] of [['Start',start],['End',end]]){
+        const input=name==='Start'?precisionStart:precisionEnd;
+        if(!input)continue;
+        if(value<precisionCenters[name]-radius||value>precisionCenters[name]+radius)precisionCenters[name]=value;
+        const min=Math.max(0,precisionCenters[name]-radius),max=Math.min(total,precisionCenters[name]+radius);
+        input.min=min.toFixed(2);input.max=max.toFixed(2);input.value=value.toFixed(2);
+        const label=document.getElementById('precision'+name+'Label');
+        if(label)label.textContent=formatTime(value);
+        const minLabel=document.getElementById('precision'+name+'Min'),maxLabel=document.getElementById('precision'+name+'Max');
+        if(minLabel)minLabel.textContent=formatTime(min);
+        if(maxLabel)maxLabel.textContent=formatTime(max);
+        const ruler=document.getElementById('precision'+name+'Ruler');
+        if(ruler){
+          const pct=t=>Math.max(0,Math.min(100,(t-min)/Math.max(.01,max-min)*100));
+          ruler.innerHTML=precisionSilences.filter(x=>Number(x.end)>=min&&Number(x.start)<=max).slice(0,100).map(x=>'<i class="mint-cut-silence" style="left:'+pct(Number(x.start))+'%;width:'+Math.max(.3,pct(Number(x.end))-pct(Number(x.start)))+'%"></i>').join('')+
+          precisionScenes.filter(t=>t>=min&&t<=max).slice(0,100).map(t=>'<i class="mint-cut-scene" style="left:'+pct(t)+'%"></i>').join('')+
+          '<i class="mint-cut-marker" style="left:'+pct(value)+'%"></i>';
+        }
+      }
+    };
+    if(precisionWindow)precisionWindow.onchange=()=>{precisionCenters.Start=Number(manualTrimStart?.value||0);precisionCenters.End=Number(manualTrimEnd?.value||0);syncPrecisionZoom(precisionCenters.Start,precisionCenters.End)};
+    for(const [boundary,input] of [['start',precisionStart],['end',precisionEnd]]){
+      if(!input)continue;
+      input.oninput=()=>{const target=boundary==='start'?manualTrimStart:manualTrimEnd;if(target)target.value=input.value;updateManualTrimLabels();};
+      input.onchange=()=>{const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end)};
+    }
+    syncPrecisionZoom(Number(manualTrimStart?.value||0),Number(manualTrimEnd?.value||0));
     if(manualTrimStart&&manualTrimEnd){
       manualTrimStart.oninput=updateManualTrimLabels;manualTrimEnd.oninput=updateManualTrimLabels;
       manualTrimStart.onchange=()=>{const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end)};
@@ -2022,6 +2061,7 @@
         const delta=Number(btn.dataset.trimDelta||0);target.value=(Number(target.value||0)+delta).toFixed(2);
         const x=updateManualTrimLabels();if(x)saveManualCandidateTrim(state.selectedCandidate||0,x.start,x.end);
       });
+      const undoManualTrim=document.getElementById('undoManualTrim');if(undoManualTrim)undoManualTrim.onclick=()=>{const undo=state.manualTrimUndo;if(!undo||undo.videoId!==state.video?.id||undo.index!==(state.selectedCandidate||0))return;state.manualTrimUndo=null;state.manualTrimUndoApplying=true;saveManualCandidateTrim(undo.index,undo.start,undo.end);};
       const resetManualTrim=document.getElementById('resetManualTrim');if(resetManualTrim)resetManualTrim.onclick=()=>saveManualCandidateTrim(state.selectedCandidate||0,Number(manualTrimStart.value||0),Number(manualTrimEnd.value||0),{reset:true});
     }
     document.querySelectorAll('[data-trim-play]').forEach(btn=>btn.onclick=()=>{const boundary=btn.dataset.trimPlay;const start=Number(manualTrimStart?.value||0),end=Number(manualTrimEnd?.value||0);const source=document.getElementById('sourceVideo');if(source){source.currentTime=Math.max(0,(boundary==='start'?start:end)-1);source.play().catch(()=>{});}else{const preview=document.getElementById('shortVideo');if(preview){preview.currentTime=boundary==='start'?0:Math.max(0,end-start-2);preview.play().catch(()=>{});}}});

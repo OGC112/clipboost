@@ -26,3 +26,19 @@
 .mint-final-render-mode #liveHookTitle,
 .mint-final-render-mode #liveWatermark{display:none!important}
 .mint-final-preview-button{display:block;width:100%;margin:9px 0}
+
+/* Zoomed precision trimming: local ruler, measured scene and silence markers. */
+.mint-cut-zoom{border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:11px;margin:10px 0;background:rgba(11,12,18,.55)}
+.mint-cut-zoom-head,.mint-cut-boundary-head,.mint-cut-axis,.mint-cut-legend{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mint-cut-zoom-head>b{font-size:12px}
+.mint-cut-zoom-head label,.mint-cut-boundary-head,.mint-cut-legend,.mint-cut-axis{font-size:10px;color:#aaa}
+.mint-cut-zoom-head select{background:#25232d;color:#fff;border:1px solid #605260;border-radius:5px;padding:5px;font-size:11px}
+.mint-cut-boundary{padding:12px 0 4px}
+.mint-cut-boundary-head>b{color:#fff}
+.mint-cut-boundary input[type=range]{display:block;width:100%;margin:8px 0;accent-color:#f24b64}
+.mint-cut-ruler{position:relative;overflow:hidden;height:29px;border-radius:5px;background:repeating-linear-gradient(90deg,#2b2c38 0 1px,transparent 1px 10%),#1b1c25}
+.mint-cut-ruler i{display:block;position:absolute;top:0;height:100%;pointer-events:none}
+.mint-cut-silence{background:rgba(113,141,183,.35)}
+.mint-cut-scene{width:2px;background:#eeaf55}
+.mint-cut-marker{width:3px;background:#ff4f7a;box-shadow:0 0 7px #ff4f7a}
+.mint-cut-legend{justify-content:flex-start;margin-top:10px}
