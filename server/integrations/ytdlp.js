@@ -85,7 +85,20 @@ export function createExternalIngestion(deps) {
       let stdout = '';
       let lastWrite = 0;
       let lastProgress = 3;
+      let lastActivity=Date.now();
+      let settled=false;
+      const stallMs=3*60*1000;
+      const watchdog=setInterval(()=>{
+        if(settled)return;
+        if(Date.now()-lastActivity<stallMs)return;
+        settled=true;
+        clearInterval(watchdog);
+        try{proc.kill('SIGKILL')}catch{}
+        reject(new Error('Download stalled for 3 minutes without output. Check the campaign source link, connection or source permissions, then retry.'));
+      },10_000);
+      const finish=(error,result)=>{if(settled)return;settled=true;clearInterval(watchdog);if(error)reject(error);else resolve(result)};
       const consume = chunk => {
+        lastActivity=Date.now();
         const text = chunk.toString();
         stdout += text;
         const match = text.match(/\[download\]\s+([0-9.]+)%/);
@@ -106,8 +119,8 @@ export function createExternalIngestion(deps) {
       };
       proc.stdout?.on('data', consume);
       proc.stderr?.on('data', d => { stderr += d.toString(); consume(d); });
-      proc.on('error', reject);
-      proc.on('close', code => code === 0 ? resolve({stdout,stderr}) : reject(new Error(stderr.trim() || stdout.trim() || `yt-dlp exited with code ${code}`)));
+      proc.on('error',error=>finish(error));
+      proc.on('close',code=>finish(code===0?null:new Error(stderr.trim() || stdout.trim() || `yt-dlp exited with code ${code}`),{stdout,stderr}));
     });
   }
   

@@ -1612,10 +1612,9 @@
       const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'Working').replace(/-/g,' ');
       const reported=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
       const previous=Math.max(0,Number(state.uiModal?.progress||0));
-      // Never fake large jumps and never let progress move backwards. Backend stages
-      // are authoritative; a tiny time-based creep only reassures during long AI calls.
-      const creep=Math.min(status==='analyzing'?94:89,previous+(status==='analyzing' ? 0.35 : 0.2));
-      const pct=Math.max(previous,reported,creep);
+      // Report only measured backend progress, not a fictional time-based percentage.
+      // Ingestion can remain at a constant value while yt-dlp resolves a source.
+      const pct=Math.max(previous,reported);
       const nextTitle=status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…';
       const nextLabel=stage||'Working';
       if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
