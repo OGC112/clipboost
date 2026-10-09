@@ -2021,13 +2021,15 @@
     const precisionEnd=document.getElementById('precisionEnd');
     const precisionScenes=(state.video?.analysis?.timeline?.scenes||[]).map(Number).filter(Number.isFinite);
     const precisionSilences=(state.video?.analysis?.timeline?.silences||[]);
+    const precisionCenters={Start:Number(manualTrimStart?.value||0),End:Number(manualTrimEnd?.value||0)};
     const syncPrecisionZoom=(start,end)=>{
       const total=Math.max(.25,Number(state.video?.details?.duration||end));
       const radius=Number(precisionWindow?.value||5);
       for(const [name,value] of [['Start',start],['End',end]]){
         const input=name==='Start'?precisionStart:precisionEnd;
         if(!input)continue;
-        const min=Math.max(0,value-radius),max=Math.min(total,value+radius);
+        if(value<precisionCenters[name]-radius||value>precisionCenters[name]+radius)precisionCenters[name]=value;
+        const min=Math.max(0,precisionCenters[name]-radius),max=Math.min(total,precisionCenters[name]+radius);
         input.min=min.toFixed(2);input.max=max.toFixed(2);input.value=value.toFixed(2);
         const label=document.getElementById('precision'+name+'Label');
         if(label)label.textContent=formatTime(value);
@@ -2043,7 +2045,7 @@
         }
       }
     };
-    if(precisionWindow)precisionWindow.onchange=()=>syncPrecisionZoom(Number(manualTrimStart?.value||0),Number(manualTrimEnd?.value||0));
+    if(precisionWindow)precisionWindow.onchange=()=>{precisionCenters.Start=Number(manualTrimStart?.value||0);precisionCenters.End=Number(manualTrimEnd?.value||0);syncPrecisionZoom(precisionCenters.Start,precisionCenters.End)};
     for(const [boundary,input] of [['start',precisionStart],['end',precisionEnd]]){
       if(!input)continue;
       input.oninput=()=>{const target=boundary==='start'?manualTrimStart:manualTrimEnd;if(target)target.value=input.value;updateManualTrimLabels();};
