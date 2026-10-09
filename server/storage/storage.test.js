@@ -17,3 +17,15 @@ test('campaign updates are serialized and retained', async (t) => {
   assert.equal(new Set(result.campaigns.map(x=>x.id)).size,20);
   JSON.parse(await fs.readFile(path.join(dir,'campaigns.json'),'utf8'));
 });
+
+test('repeated atomic replacements leave valid JSON and no temporary files', async (t) => {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'clipboost-atomic-'));
+  t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+  const storage=createAppStorage(dir);
+  for(let i=0;i<30;i++){
+    await storage.updateCampaigns(data=>{data.campaigns=[{id:'current',revision:i}];});
+    const saved=JSON.parse(await fs.readFile(path.join(dir,'campaigns.json'),'utf8'));
+    assert.equal(saved.campaigns[0].revision,i);
+  }
+  assert.deepEqual((await fs.readdir(dir)).filter(name=>name.endsWith('.tmp')),[]);
+});
