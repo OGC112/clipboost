@@ -18,7 +18,7 @@ test('extracts only videos with usable public Drive file IDs, with deduplication
   assert.equal(items[0].requiresAccessCheck,true);
 });
 test('missing exposed public file links returns actionable summary, not invented assets',async()=>{
-  const result=await inspectPublicDriveFolder(folder,{fetchImpl:async()=>({ok:true,headers:new Headers({'content-type':'text/html'}),text:async()=>'<html>Google Drive folder</html>'})});
+  const result=await inspectPublicDriveFolder(folder,{validateUrl:async()=>{},fetchImpl:async()=>({ok:true,headers:new Headers({'content-type':'text/html'}),text:async()=>'<html>Google Drive folder</html>'})});
   assert.deepEqual(result.items,[]);
   assert.match(result.summary,/Google Drive API/);
 });
