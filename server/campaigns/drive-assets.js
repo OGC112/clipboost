@@ -36,17 +36,17 @@ export function extractPublicDriveVideos(html){
   return [...candidates.values()].slice(0,MAX_ITEMS);
 }
 
-export async function inspectPublicDriveFolder(raw,{fetchImpl=fetch}={}){
+export async function inspectPublicDriveFolder(raw,{fetchImpl=fetch,validateUrl=validatePublicHttpUrl}={}){
   const parsed=parseDriveFolderUrl(raw);
   if(!parsed)throw Object.assign(new Error('Only public Google Drive folder URLs are supported.'),{status:400});
-  await validatePublicHttpUrl(parsed.url);
+  await validateUrl(parsed.url);
   const response=await fetchImpl(parsed.url,{redirect:'manual',headers:{'User-Agent':'Mozilla/5.0 ClipBoost/22 Campaign Asset Importer','Accept':'text/html'},signal:AbortSignal.timeout(15_000)});
   if(!response.ok)throw Object.assign(new Error(`Google Drive returned HTTP ${response.status}. Check that the folder is shared with viewers.`),{status:422});
   if(!String(response.headers.get('content-type')||'').includes('text/html'))throw Object.assign(new Error('Google Drive did not return a readable folder page.'),{status:422});
   const declared=Number(response.headers.get('content-length')||0);
   if(declared>MAX_HTML)throw Object.assign(new Error('Drive folder listing is too large to inspect safely.'),{status:422});
   const html=(await response.text()).slice(0,MAX_HTML);
-  if(/accounts\.google\.com|sign in to continue|request access/i.test(html)&&!/drive\.google\.com\/file\/d\//.test(html)){
+  if(/you need access|you don't have access|request access to this folder/i.test(html)){
     return {ok:true,items:[],summary:'Google Drive requires access to this folder. Ask the campaign organizer for viewer permission or an authorized video file.',access:'restricted'};
   }
   const items=extractPublicDriveVideos(html);
