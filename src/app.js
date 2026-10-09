@@ -1566,7 +1566,7 @@
       // campaign requirements, attribution and publishing rules.
       const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}/source-project`,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:b.packUrl,label:file.name||b.label||'Campaign video'})
+        body:JSON.stringify({url:b.packUrl,label:file.name||b.label||'Campaign video',manualUpload:true})
       });
       const linked=await readJsonResponse(r,'Could not create campaign project');
       state.video=linked;state.selectedCandidate=0;state.campaignAssetBrowser=null;
