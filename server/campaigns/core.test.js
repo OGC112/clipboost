@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeCampaign, campaignTotals, campaignCompliance, campaignFitForCandidate } from './core.js';
+import { normalizeCampaign, campaignTotals, campaignCompliance, campaignFitForCandidate, parseCampaignSourceUrl } from './core.js';
 
 test('normalizeCampaign sanitizes and preserves core campaign fields', () => {
   const campaign = normalizeCampaign({
@@ -55,4 +55,16 @@ test('campaign fit marks overlapping used moments', () => {
   const fit=campaignFitForCandidate(meta,{start:20,end:40,selectionText:'gaming highlight reaction'},{retention:80,completeness:80});
   assert.equal(fit.used,true);
   assert.ok(fit.score<=55);
+});
+
+test('Google Drive folder is classified as a resource container rather than a downloadable video',()=>{
+  const parsed=parseCampaignSourceUrl('https://drive.google.com/drive/folders/15Olz3M0WJadrjCdNUWOD7kmc-jjQFmJs?usp=sharing');
+  assert.equal(parsed.platform,'google-drive');
+  assert.equal(parsed.mediaType,'folder');
+  assert.equal(parsed.id,'15Olz3M0WJadrjCdNUWOD7kmc-jjQFmJs');
+});
+test('Google Docs are classified as documents rather than videos',()=>{
+  const parsed=parseCampaignSourceUrl('https://docs.google.com/document/d/abc123/edit');
+  assert.equal(parsed.mediaType,'document');
+  assert.equal(parsed.id,'abc123');
 });

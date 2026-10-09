@@ -4,6 +4,7 @@ import path from 'path';
 import { normalizeCampaign, campaignTotals, campaignPaymentModel, parseCampaignSourceUrl } from './core.js';
 import { detectCampaignAccessWall, extractCampaignPage, extractPlatformTermsProfile, extractAuthenticatedCampaignSnapshots } from './import.js';
 import { fetchPublicCampaignPage } from '../security/network.js';
+import { inspectPublicDriveFolder } from './drive-assets.js';
 
 export function registerCampaignRoutes(app, deps) {
   const {
@@ -14,6 +15,10 @@ export function registerCampaignRoutes(app, deps) {
     writeMeta,
     metaDir
   } = deps;
+
+  app.post('/api/campaigns/inspect-drive-folder', async (req,res,next)=>{
+    try{res.json(await inspectPublicDriveFolder(String(req.body?.url||'')))}catch(err){next(err)}
+  });
 
   app.get('/api/campaigns', async (req,res,next) => {
     try {
@@ -134,6 +139,7 @@ export function registerCampaignRoutes(app, deps) {
       const source=campaign.sourceUrls.find(s=>s.id===sourceId)||(requested?{url:requested,label:requestedLabel||'Campaign asset'}:null);
       if(!source?.url)return res.status(400).json({error:'Campaign source not found.'});
       const parsed=parseCampaignSourceUrl(source.url); if(!parsed)return res.status(400).json({error:'Unsupported source URL.'});
+      if(parsed.mediaType==='folder'||parsed.mediaType==='document')return res.status(422).json({error:'This link opens a Google Drive folder or Google Doc, not a video. Open the folder and select a direct video file link, or upload an authorized MP4 in Campaign Studio. Folder listing is not yet supported.'});
       const id=crypto.randomUUID();
       const meta={id,originalName:source.label||`${campaign.name} source`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'linked',details:{duration:0},candidates:[],campaignId:campaign.id,campaign:{...campaign,totals:campaignTotals(campaign)},externalSource:{...parsed,thumbnail:null,title:source.label||null,creatorName:campaign.provider||'Campaign source',creatorId:campaign.id,viewCount:0}};
       await writeMeta(meta); res.json(meta);
@@ -146,7 +152,7 @@ export function registerCampaignRoutes(app, deps) {
       for(const name of existingNames.filter(n=>n.endsWith('.json'))){try{const m=JSON.parse(await fs.readFile(path.join(metaDir,name),'utf8'));if(m.campaignId===campaign.id&&m.externalSource?.url)existing.push(m.externalSource.url)}catch{}}
       const created=[];
       for(const source of (campaign.sourceUrls||[])){
-        if(existing.includes(source.url))continue; const parsed=parseCampaignSourceUrl(source.url); if(!parsed)continue;
+        if(existing.includes(source.url))continue; const parsed=parseCampaignSourceUrl(source.url); if(!parsed||parsed.mediaType==='folder'||parsed.mediaType==='document')continue;
         const id=crypto.randomUUID(); const meta={id,originalName:source.label||`${campaign.name} source`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),status:'linked',details:{duration:0},candidates:[],campaignId:campaign.id,campaign:{...campaign,totals:campaignTotals(campaign)},externalSource:{...parsed,thumbnail:null,title:source.label||null,creatorName:campaign.provider||'Campaign source',creatorId:campaign.id,viewCount:0}};
         await writeMeta(meta);created.push({id:meta.id,name:meta.originalName,url:source.url});
       }

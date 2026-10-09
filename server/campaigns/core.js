@@ -204,6 +204,13 @@ export function parseCampaignSourceUrl(raw='') {
   if(!/^https?:\/\//i.test(url))return null;
   try{
     const u=new URL(url); const host=u.hostname.replace(/^www\./,'').toLowerCase();
+    if(host==='drive.google.com' && /^\/drive\/folders\/[^/]+/.test(u.pathname)){
+      const folderId=u.pathname.split('/').filter(Boolean)[2];
+      return {platform:'google-drive',mediaType:'folder',id:folderId,url};
+    }
+    if(host==='docs.google.com' && /^\/document\/d\/[^/]+/.test(u.pathname)){
+      return {platform:'google-docs',mediaType:'document',id:u.pathname.split('/').filter(Boolean)[2],url};
+    }
     if(host==='youtu.be')return {platform:'youtube',mediaType:'video',id:u.pathname.split('/').filter(Boolean)[0]||url,url};
     if(host.endsWith('youtube.com'))return {platform:'youtube',mediaType:'video',id:u.searchParams.get('v')||u.pathname.split('/').filter(Boolean).pop()||url,url};
     if(host==='clips.twitch.tv')return {platform:'twitch',mediaType:'clip',id:u.pathname.split('/').filter(Boolean)[0]||url,url};
