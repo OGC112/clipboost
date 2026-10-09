@@ -25,6 +25,7 @@ import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analy
 import { refineClipEdges, preserveNarrativePause } from './video/precision-cut.js';
 import { contextSignalsForCandidate } from './video/context-signals.js';
 import { renderDimensions } from './video/format.js';
+import { videoEncodingArgs } from './video/encoding.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
@@ -2187,15 +2188,15 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       // Safety / speaker-switch view: preserve the COMPLETE original frame. The foreground is never cropped.
       // A blurred copy fills the vertical canvas, while the original source is scaled down to fit inside it.
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},split=2[fbg${i}][ffg${i}]`);
-      filter.push(`[fbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
-      filter.push(`[ffg${i}]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg${i}]`);
+      filter.push(`[fbg${i}]scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
+      filter.push(`[ffg${i}]scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=decrease[fg${i}]`);
       filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
     }else if(options.autoReframe && part.frameMode==='wide'){
       // Wider source-space bridge retained for compatibility; safety fallbacks now use the full source above.
       const wide=sourceCropForWide(srcW,effectiveSrcH,width,height,part);
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},split=2[wbg${i}][wfg${i}]`);
-      filter.push(`[wbg${i}]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
-      filter.push(`[wfg${i}]crop=${wide.cropW}:${wide.cropH}:${wide.x}:${wide.y},scale=${width}:-2:force_original_aspect_ratio=decrease[fg${i}]`);
+      filter.push(`[wbg${i}]scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg${i}]`);
+      filter.push(`[wfg${i}]crop=${wide.cropW}:${wide.cropH}:${wide.x}:${wide.y},scale=${width}:-2:flags=lanczos:force_original_aspect_ratio=decrease[fg${i}]`);
       filter.push(`[bg${i}][fg${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
     }else if(options.autoReframe){
       // Speaker crop is calculated in source pixels, then scaled once to 9:16.
@@ -2203,8 +2204,8 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       const crop=sourceCropForSpeaker(srcW,effectiveSrcH,width,height,part,editZoom);
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},crop=${crop.cropW}:${crop.cropH}:${crop.x}:${crop.y},scale=${width}:${height}:flags=lanczos,setsar=1[v${i}]`);
     }else{
-      let vf=`${cropSourceSubtitles?`crop=${srcW}:${effectiveSrcH}:0:0,`:''}scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
-      if(editZoom>1.001){const zw=Math.max(width,Math.round(width*editZoom)),zh=Math.max(height,Math.round(height*editZoom));vf+=`,scale=${zw}:${zh},crop=${width}:${height}`;}
+      let vf=`${cropSourceSubtitles?`crop=${srcW}:${effectiveSrcH}:0:0,`:''}scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+      if(editZoom>1.001){const zw=Math.max(width,Math.round(width*editZoom)),zh=Math.max(height,Math.round(height*editZoom));vf+=`,scale=${zw}:${zh}:flags=lanczos,crop=${width}:${height}`;}
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS,${vf},setsar=1[v${i}]`);
     }
     if (hasAudio) filter.push(`[0:a]atrim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},asetpts=PTS-STARTPTS[a${i}]`);
@@ -2257,8 +2258,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   if (watermarkPath) args.push('-loop','1','-i',watermarkPath);
   args.push('-/filter_complex',filterScriptPath,'-map',`[${videoLabel}]`);
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
-  args.push('-c:v','libx264','-preset',preview?'ultrafast':'veryfast','-crf',preview?'28':'21','-pix_fmt','yuv420p');
-  if (hasAudio) args.push('-c:a','aac','-b:a',preview?'96k':'160k','-ac','2'); else args.push('-an');
+  args.push(...videoEncodingArgs({preview,hasAudio}));
   args.push('-movflags','+faststart',outputPath);
   try {
     await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
