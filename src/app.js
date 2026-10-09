@@ -2112,7 +2112,22 @@
       sourceSubtitleBottomRange.oninput=e=>{state.sourceSubtitleBottom=Math.max(.06,Math.min(.28,Number(e.target.value)/100));const label=document.getElementById('sourceSubtitleBottomValue');if(label)label.textContent=Math.round(state.sourceSubtitleBottom*100)+'%';persistEditorPrefs()};
       sourceSubtitleBottomRange.onchange=()=>{invalidateRenderedPreviews();render()};
     }
-    document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';saveLiveCaptionSettings()});
+    document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{
+      // Color is an independent property: never reapply a caption preset,
+      // reset the preview mode, font, style, effect or typography on a swatch click.
+      const color=btn.dataset.captionColor||'auto';
+      if(state.captionColor===color)return;
+      state.captionColor=color;
+      persistEditorPrefs();
+      if(state.previewFinalMode){
+        // FFmpeg preview has baked captions: refresh in the same final-render mode.
+        invalidateRenderedPreviews();
+        prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});
+      }else{
+        // Live overlay has its own font/style; simply repaint the color.
+        refreshLiveCaptionPreview();
+      }
+    });
     document.querySelectorAll('[data-caption-preset]').forEach(btn=>btn.onclick=()=>{const preset={social:['bold','social','clean-bold','white'],active:['bold','social','active-word','auto'],clean:['minimal','social','clean-bold','white'],dynamic:['pop','impact','word-pop','yellow']}[btn.dataset.captionPreset];if(!preset)return;[state.captionStyle,state.captionFont,state.captionEffect,state.captionColor]=preset;persistEditorPrefs();invalidateRenderedPreviews();render();});
     const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;saveLiveCaptionSettings()};
     const captionFontSelect=document.getElementById('captionFontSelect');if(captionFontSelect)captionFontSelect.onchange=e=>{state.captionFont=e.target.value;saveLiveCaptionSettings()};
