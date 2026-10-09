@@ -26,6 +26,7 @@ import { refineClipEdges, preserveNarrativePause } from './video/precision-cut.j
 import { contextSignalsForCandidate } from './video/context-signals.js';
 import { renderDimensions } from './video/format.js';
 import { videoEncodingArgs } from './video/encoding.js';
+import { summarizePcmWaveform } from './video/audio-waveform.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
@@ -2330,6 +2331,19 @@ async function analyzeProject(projectId, options = {}) {
     ]);
     const silences = parseSilences(silenceResult.stderr);
     const scenes = parseScenes(sceneResult.stderr);
+    // Extract low-rate mono PCM to a temporary file; unlike stdout streaming
+    // this avoids decoding binary PCM as UTF-8 or buffering a full source.
+    let waveform={available:false,peaks:[],energyMoments:[]};
+    if(meta.details?.audioCodec && duration>0){
+      const pcmPath=path.join(previewsDir,meta.id+'-audio-'+crypto.randomUUID()+'.pcm');
+      try{
+        await run('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-i',input,'-vn','-ac','1','-ar','400','-f','s16le','-y',pcmPath],{timeout:20*60_000});
+        const stat=await fs.stat(pcmPath);
+        // 400 Hz mono 16-bit ~= 2.9 MB/hour. Cap to avoid memory spikes.
+        if(stat.size>0 && stat.size<=32*1024*1024)waveform=summarizePcmWaveform(await fs.readFile(pcmPath),duration,160);
+      }catch(error){console.warn('[analysis] Waveform unavailable:',String(error?.message||error).slice(0,180));}
+      finally{await fs.rm(pcmPath,{force:true}).catch(()=>{});}
+    }
     const signalCandidates = buildCandidates(duration, scenes, silences);
 
     let candidates = signalCandidates;
@@ -2347,7 +2361,8 @@ async function analyzeProject(projectId, options = {}) {
           progress: 42,
           timeline: {
             scenes: scenes.slice(0, 1000),
-            silences: silences.filter(s => Number(s.end||0) > Number(s.start||0)).slice(0, 2000)
+            silences: silences.filter(s => Number(s.end||0) > Number(s.start||0)).slice(0, 2000),
+            waveform
           }
         };
         await writeMeta(meta);
@@ -2443,7 +2458,8 @@ async function analyzeProject(projectId, options = {}) {
       clipsGenerated: candidates.length,
       timeline: {
         scenes: scenes.slice(0, 1000),
-        silences: silences.filter(s => Number(s.end||0) > Number(s.start||0)).slice(0, 2000)
+        silences: silences.filter(s => Number(s.end||0) > Number(s.start||0)).slice(0, 2000),
+        waveform
       }
     };
     meta.candidates = candidates;

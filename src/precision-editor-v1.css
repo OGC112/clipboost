@@ -42,3 +42,8 @@
 .mint-cut-scene{width:2px;background:#eeaf55}
 .mint-cut-marker{width:3px;background:#ff4f7a;box-shadow:0 0 7px #ff4f7a}
 .mint-cut-legend{justify-content:flex-start;margin-top:10px}
+
+/* V3 waveform: measured audio only; never display decorative fake peaks. */
+.smart-wave.mint-no-audio-wave{align-items:center;justify-content:center}
+.mint-wave-unavailable{font-size:10px;color:#8d8d99;white-space:normal;padding:8px;text-align:center}
+.smart-wave.mint-measured-wave i{background:linear-gradient(0deg,#b63861,#fb6b85)}

@@ -267,7 +267,9 @@
     return '';
   }
   function studio(){
-    let wave=''; for(let i=0;i<160;i++) wave+=`<i style="height:${8+(i*23)%34}px"></i>`;
+    const waveformPeaks=state.video?.analysis?.timeline?.waveform?.peaks||[];
+    const realWaveform=Boolean(state.video?.analysis?.timeline?.waveform?.available&&waveformPeaks.length);
+    const wave=realWaveform?waveformPeaks.map(x=>`<i style="height:${Math.max(2,Math.round(Number(x||0)*36))}px"></i>`).join(''):'';
     const v=state.video;
     const candidates=(v&&v.candidates&&v.candidates.length?v.candidates:[]);
     const selected=candidates.length?Math.min(state.selectedCandidate||0,candidates.length-1):0;
@@ -281,7 +283,7 @@
     const sceneLayers=timelineScenes.slice(0,500).map(t=>`<span class="timeline-scene" style="left:${pct(t)}%" title="Scene change ${formatTime(t)}"></span>`).join('');
     const clipLayers=candidates.slice(0,40).map((m,i)=>{const left=pct(m.start),width=Math.max(.8,pct(m.end)-left);return `<button type="button" class="timeline-clip ${i===selected?'active':''}" style="left:${left}%;width:${width}%" data-candidate="${i}" data-timeline-start="${Number(m.start||0)}" title="#${i+1} ${escapeHtml(m.title||m.reason||'Clip')} · ${formatTime(m.start)}–${formatTime(m.end)}"><span>${i+1}</span></button>`}).join('');
     const selectedStart=pct(c.start),selectedWidth=Math.max(0,pct(c.end)-selectedStart);
-    const timelineMarkup=`<div class="smart-timeline" id="smartTimeline" data-duration="${timelineDuration}"><div class="smart-wave">${wave}</div><div class="timeline-silences-layer">${silenceLayers}</div><div class="timeline-scenes-layer">${sceneLayers}</div><div class="timeline-selected-range" style="left:${selectedStart}%;width:${selectedWidth}%"></div><div class="timeline-clips-layer">${clipLayers}</div><div class="timeline-playhead" id="timelinePlayhead" style="left:${pct(state.timelineSeek??c.start)}%"></div></div><div class="timeline-axis"><span>00:00</span><span>${formatTime(timelineDuration*.25)}</span><span>${formatTime(timelineDuration*.5)}</span><span>${formatTime(timelineDuration*.75)}</span><span>${formatTime(timelineDuration)}</span></div><div class="timeline-legend"><span><i class="legend-clip"></i>AI clips</span><span><i class="legend-scene"></i>Scene changes</span><span><i class="legend-silence"></i>Silence</span></div>`;
+    const timelineMarkup=`<div class="smart-timeline" id="smartTimeline" data-duration="${timelineDuration}"><div class="smart-wave ${realWaveform?'mint-measured-wave':'mint-no-audio-wave'}">${wave||'<span class="mint-wave-unavailable">Audio waveform unavailable — analyze a local video</span>'}</div><div class="timeline-silences-layer">${silenceLayers}</div><div class="timeline-scenes-layer">${sceneLayers}</div><div class="timeline-selected-range" style="left:${selectedStart}%;width:${selectedWidth}%"></div><div class="timeline-clips-layer">${clipLayers}</div><div class="timeline-playhead" id="timelinePlayhead" style="left:${pct(state.timelineSeek??c.start)}%"></div></div><div class="timeline-axis"><span>00:00</span><span>${formatTime(timelineDuration*.25)}</span><span>${formatTime(timelineDuration*.5)}</span><span>${formatTime(timelineDuration*.75)}</span><span>${formatTime(timelineDuration)}</span></div><div class="timeline-legend"><span><i class="legend-clip"></i>AI clips</span><span><i class="legend-scene"></i>Scene changes</span><span><i class="legend-silence"></i>Silence</span><span>${realWaveform?'Measured waveform':'No waveform data'}</span></div>`;
     const editPlan=c?.previewMeta?.editPlan||c?.editPlan||null;
     const planSummary=editPlan?.summary||{cuts:0,zooms:0,reframes:0};
     const autoDirector=c?.previewMeta?.autoDirector||null;
