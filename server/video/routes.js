@@ -79,7 +79,11 @@ export function registerVideoRoutes(app, deps) {
         end:nextEnd,
         duration:Math.max(.25,nextEnd-nextStart),
         selectionText:meta.transcript?clipTextAbsolute(meta.transcript,nextStart,nextEnd):String(current.selectionText||''),
-        manualTrim:reset?null:{start:nextStart,end:nextEnd,updatedAt:new Date().toISOString()}
+        manualTrim:reset?null:{start:nextStart,end:nextEnd,updatedAt:new Date().toISOString()},
+        // Explicit opt-in; campaign assets must still obey their clipping rules.
+        keepFullSource: !reset && !meta.campaign?.id && !meta.campaignId &&
+          req.body?.keepFullSource === true && nextStart === 0 &&
+          nextEnd >= sourceDuration - .01 && sourceDuration <= 60
       };
       meta.candidates[index]=next;
       meta.updatedAt=new Date().toISOString();

@@ -1438,6 +1438,8 @@ function normalizeRenderOptions(raw = {}) {
   const hookTitleDuration = hookTitleDurationRaw === 'full' ? 'full' : String([3,5,8].includes(Number(hookTitleDurationRaw)) ? Number(hookTitleDurationRaw) : 5);
   const hookTitleX = Math.max(.08,Math.min(.92,Number.isFinite(Number(raw.hookTitleX))?Number(raw.hookTitleX):.5));
   const hookTitleY = Math.max(.08,Math.min(.92,Number.isFinite(Number(raw.hookTitleY))?Number(raw.hookTitleY):.12));
+  const hookTitleScale = Math.max(.5,Math.min(2,Number.isFinite(Number(raw.hookTitleScale))?Number(raw.hookTitleScale):1));
+  const keepFullSource = raw.editorContext !== 'campaign' && raw.keepFullSource === true;
   const cleanupMode = ['off','captions','speech'].includes(String(raw.cleanupMode || '').toLowerCase()) ? String(raw.cleanupMode).toLowerCase() : 'captions';
   const zoomStyle = ['minimal','natural','energetic'].includes(String(raw.zoomStyle || '').toLowerCase()) ? String(raw.zoomStyle).toLowerCase() : 'natural';
   const trackingMode = ['auto','speaker','center','split'].includes(String(raw.trackingMode || '').toLowerCase()) ? String(raw.trackingMode).toLowerCase() : 'speaker';
@@ -1452,7 +1454,7 @@ function normalizeRenderOptions(raw = {}) {
   const watermarkScale = Math.max(.05,Math.min(.42,Number.isFinite(Number(raw.watermarkScale))?Number(raw.watermarkScale):.18));
   const watermarkOpacity = Math.max(.1,Math.min(1,Number.isFinite(Number(raw.watermarkOpacity))?Number(raw.watermarkOpacity):.9));
   return {
-    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,hookTitleEnabled,hookTitleText,hookTitleDuration,hookTitleX,hookTitleY,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
+    intensity,preset,captionStyle,captionFont,captionEffect,captionPosition,captionY,captionSize,captionScale,captionColor,hookTitleEnabled,hookTitleText,hookTitleDuration,hookTitleX,hookTitleY,hookTitleScale,keepFullSource,cleanupMode,zoomStyle,trackingMode,cameraMovement,outputFormat,editorContext,sourceSubtitleMode,sourceSubtitleBottom,
     watermarkUrl,watermarkX,watermarkY,watermarkScale,watermarkOpacity,
     autoReframe: raw.autoReframe !== false,
     speakerTracking: raw.speakerTracking !== false,
@@ -1836,7 +1838,7 @@ function zoomAtTime(event,t){
 function buildEditedTimeline(plan, clipDuration, options) {
   const planned=plan?.events||[];
   const removalEvents=[];
-  for(const e of planned.filter(e=>e.type==='remove-opening-fragment')){
+  for(const e of (options.keepFullSource ? [] : planned.filter(e=>e.type==='remove-opening-fragment'))){
     removalEvents.push({start:Math.max(0,Number(e.start||0)),end:Math.min(clipDuration,Number(e.end||0))});
   }
   if(options.silenceRemoval){
@@ -2007,7 +2009,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   if(options.captionEffect==='karaoke') st.secondary='&H00FFFFFF';
   if(options.captionColor==='black'&&options.captionStyle!=='minimal') st.outline='&H00FFFFFF';
   const safeMarginX=Math.max(42,Math.round(width*.09));
-  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},${safeMarginX},${safeMarginX},${marginV},1\nStyle: HookTitle,Arial Black,${Math.max(30,Math.round(width*.064))},&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,-1,0,0,0,96,100,-0.8,0,1,${Math.max(2,Math.round(width*.0028))},0,5,${safeMarginX},${safeMarginX},0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
+  const header = `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,${st.font},${fontSize},${st.primary},${st.secondary},${st.outline},${st.back},${st.bold},0,0,0,${st.scaleX||100},100,${st.spacing},0,${st.borderStyle||1},${outline},${st.shadow},${alignment},${safeMarginX},${safeMarginX},${marginV},1\nStyle: HookTitle,Arial Black,${Math.max(14,Math.round(width*.064*options.hookTitleScale))},&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,-1,0,0,0,96,100,-0.8,0,1,${Math.max(2,Math.round(width*.0028))},0,5,${safeMarginX},${safeMarginX},0,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n`;
   const transform = options.captionStyle === 'minimal' ? (t)=>t : (t)=>t.toUpperCase();
   const highlight=selectedCaptionColor;
   const effectOverride = () => {
@@ -2137,6 +2139,12 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
     ? autoDirectorRenderOptions(meta, safeStart, safeEnd, rawOptions)
     : { options: normalizeRenderOptions(rawOptions), profile:null };
   const options = resolved.options;
+  // Keep-full is an explicit per-clip opt-in. Disable ALL time removal,
+  // including opening fragments from the automated director plan.
+  if (options.keepFullSource) {
+    options.silenceRemoval=false;
+    options.cleanupMode='off';
+  }
   const silences = meta.analysis?.timeline?.silences || [];
   const absoluteScenes = meta.analysis?.timeline?.scenes || [];
   const sceneTimes = absoluteScenes.map(Number).filter(t=>Number.isFinite(t)&&t>safeStart+.05&&t<safeEnd-.05).map(t=>Number((t-safeStart).toFixed(3)));
