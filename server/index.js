@@ -25,6 +25,7 @@ import { parseSilences, parseScenes, transcriptPauseRanges } from './video/analy
 import { refineClipEdges, preserveNarrativePause } from './video/precision-cut.js';
 import { contextSignalsForCandidate } from './video/context-signals.js';
 import { renderDimensions } from './video/format.js';
+import { stabilizeFullSourceRender } from './video/full-short-render.js';
 import { videoEncodingArgs } from './video/encoding.js';
 import { summarizePcmWaveform } from './video/audio-waveform.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
@@ -2139,13 +2140,9 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   const resolved = autoDirectorEnabled
     ? autoDirectorRenderOptions(meta, safeStart, safeEnd, rawOptions)
     : { options: normalizeRenderOptions(rawOptions), profile:null };
-  const options = resolved.options;
-  // Keep-full is an explicit per-clip opt-in. Disable ALL time removal,
-  // including opening fragments from the automated director plan.
-  if (options.keepFullSource) {
-    options.silenceRemoval=false;
-    options.cleanupMode='off';
-  }
+  // Full-source shorts must not become many timeline fragments during
+  // preview generation. The same stable path is used for final export.
+  const options = stabilizeFullSourceRender(resolved.options);
   const silences = meta.analysis?.timeline?.silences || [];
   const absoluteScenes = meta.analysis?.timeline?.scenes || [];
   const sceneTimes = absoluteScenes.map(Number).filter(t=>Number.isFinite(t)&&t>safeStart+.05&&t<safeEnd-.05).map(t=>Number((t-safeStart).toFixed(3)));
