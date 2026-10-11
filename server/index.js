@@ -2506,7 +2506,7 @@ function previewCacheKey(meta, start, end, options = {}) {
     autoDirectorVersion: 'v4-layout-lock',
     // Bump independently from Auto Director so existing preview files are
     // regenerated whenever the ASS visual renderer changes.
-    captionRendererVersion: 'social-effects-v15-unified-campaign',
+    captionRendererVersion: 'social-effects-v16-windows-preview-diagnostics',
     captionPreference,
     captionColorPreference:String(options?.captionColor||'auto').toLowerCase()
   });
