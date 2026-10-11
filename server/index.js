@@ -2143,8 +2143,16 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   // Keep-full is an explicit per-clip opt-in. Disable ALL time removal,
   // including opening fragments from the automated director plan.
   if (options.keepFullSource) {
+    // Keep the source as one continuous segment. Splitting a short into
+    // many tracking/scene/zoom fragments may leave the rendered preview
+    // unusable even when the full-duration selection itself is valid.
     options.silenceRemoval=false;
     options.cleanupMode='off';
+    options.dynamicZoom=false;
+    options.sceneAwareCuts=false;
+    options.reactionDetection=false;
+    options.speakerTracking=false;
+    options.autoReframe=false;
   }
   const silences = meta.analysis?.timeline?.silences || [];
   const absoluteScenes = meta.analysis?.timeline?.scenes || [];
