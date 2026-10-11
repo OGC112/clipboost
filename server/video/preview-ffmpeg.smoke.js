@@ -21,6 +21,6 @@ test('Windows FFmpeg renders the same blurred short filter graph used in preview
   '[stablefg0]scale=270:480:flags=lanczos:force_original_aspect_ratio=decrease[stablefront0];'+
   '[blurredbg0][stablefront0]overlay=(W-w)/2:(H-h)/2,setsar=1[v0];[v0]null[vcat]';
  writeFileSync(graph,filter,'utf8');
- run(['-y','-i',source,'-filter_complex_script',graph,'-map','[vcat]','-an','-c:v','mpeg4','-q:v','6','-movflags','+faststart',output]);
+ run(['-y','-i',source,'-/filter_complex',graph,'-map','[vcat]','-an','-c:v','mpeg4','-q:v','6','-movflags','+faststart',output]);
  assert.ok(readFileSync(output).length>1024,'Rendered preview empty');
 },{timeout:120000});
