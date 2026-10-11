@@ -33,3 +33,9 @@ jobs:
 
       - name: Build web assets
         run: npm run build
+
+      - name: Install FFmpeg for real preview smoke
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Test real FFmpeg blurred-crop preview
+        run: node --test server/video/preview-ffmpeg.smoke.js
