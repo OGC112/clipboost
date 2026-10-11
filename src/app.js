@@ -1811,7 +1811,21 @@
     }catch(e){state.settingsMessage=e.message||'Could not save settings'}finally{state.settingsSaving=false;render()}
   }
 
-  async function saveManualCandidateTrim(index,start,end,{reset=false,keepFullSource=false}={}){
+  // Serialize precision-trim writes: dragging IN/OUT can otherwise finish older
+  // PATCH requests after newer ones and restore stale preview timestamps.
+  let trimSaveQueue=Promise.resolve();
+  let trimSaveRevision=0;
+  function saveManualCandidateTrim(index,start,end,options={}){
+    const revision=++trimSaveRevision;
+    const videoId=state.video?.id;
+    const task=trimSaveQueue.catch(()=>{}).then(()=>{
+      if(revision!==trimSaveRevision||state.video?.id!==videoId)return;
+      return applyManualCandidateTrim(index,start,end,options,revision);
+    });
+    trimSaveQueue=task.catch(()=>{});
+    return task;
+  }
+  async function applyManualCandidateTrim(index,start,end,{reset=false,keepFullSource=false}={},revision){
     const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand)return;
     const duration=Math.max(.25,Number(v?.details?.duration||cand.end||0));
     let safeStart=Math.max(0,Math.min(duration-.25,Number(start)));
@@ -1825,6 +1839,7 @@
       const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/candidates/${index}/trim`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:safeStart,end:safeEnd,reset,keepFullSource})});
       const data=await readJsonResponse(r,'Could not save manual cut');
       if(!data?.candidate)throw new Error('Manual cut was not saved.');
+      if(revision!==trimSaveRevision||state.video?.id!==v.id)return;
       if(!state.manualTrimUndoApplying)state.manualTrimUndo={videoId:v.id,index,start:Number(cand.start),end:Number(cand.end)};
       state.manualTrimUndoApplying=false;
       v.candidates[index]={...cand,...data.candidate,previewUrl:null,previewMeta:null,previewEdited:false};
@@ -1833,6 +1848,7 @@
       render();
       setTimeout(()=>prepareCandidatePreview(index,{autoplay:false,force:true}),0);
     }catch(e){
+      if(revision!==trimSaveRevision||state.video?.id!==v.id)return;
       showNotice({kind:'danger',eyebrow:'Manual cut',title:'Could not apply cut',message:e.message||'The manual start/end adjustment could not be saved.'});
       render();
     }
