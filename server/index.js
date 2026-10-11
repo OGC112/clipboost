@@ -2275,14 +2275,23 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
 
   const filterScriptPath = path.join(previewsDir, `${meta.id}-filter-${crypto.randomUUID()}.txt`);
   await fs.writeFile(filterScriptPath, filter.join(';'), 'utf8');
-  const args = ['-y','-i',meta.sourcePath];
+  const args = ['-hide_banner','-loglevel','error','-nostdin','-y','-i',meta.sourcePath];
   if (watermarkPath) args.push('-loop','1','-i',watermarkPath);
   args.push('-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`);
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
   args.push(...videoEncodingArgs({preview,hasAudio}));
   args.push('-movflags','+faststart',outputPath);
   try {
-    await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
+    try {
+      await run('ffmpeg', args, { timeout: preview ? 12*60_000 : 45*60_000 });
+    } catch (error) {
+      // The FFmpeg build banner hides the actual filter failure in the UI.
+      // Report the actionable diagnostic, not the renderer command or source path.
+      const detail=String(error?.message||'').split('\\n').filter(Boolean).slice(-12).join('\\n');
+      const failure=new Error('Video render failed. '+detail.slice(-1800));
+      failure.status=422;
+      throw failure;
+    }
   } finally {
     await fs.unlink(filterScriptPath).catch(() => {});
   }
