@@ -2210,6 +2210,13 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
       // This means panning/reframing is never constrained by a previously resized social frame.
       const crop=sourceCropForSpeaker(srcW,effectiveSrcH,width,height,part,editZoom);
       filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},crop=${crop.cropW}:${crop.cropH}:${crop.x}:${crop.y},scale=${width}:${height}:flags=lanczos,setsar=1[v${i}]`);
+    }else if(options.editorContext==='general' && (cropSourceSubtitles || options.keepFullSource)){
+      // Stable, single-pass 9:16 layout: blurred source fills the canvas,
+      // uncropped foreground preserves the complete visible frame.
+      filter.push(`[0:v]trim=start=${srcA.toFixed(3)}:end=${srcB.toFixed(3)},setpts=PTS-STARTPTS${cropSourceSubtitles?`,crop=${srcW}:${effectiveSrcH}:0:0`:''},split=2[stablebg${i}][stablefg${i}]`);
+      filter.push(`[stablebg${i}]scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[blurredbg${i}]`);
+      filter.push(`[stablefg${i}]scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=decrease[stablefront${i}]`);
+      filter.push(`[blurredbg${i}][stablefront${i}]overlay=(W-w)/2:(H-h)/2,setsar=1[v${i}]`);
     }else{
       let vf=`${cropSourceSubtitles?`crop=${srcW}:${effectiveSrcH}:0:0,`:''}scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
       if(editZoom>1.001){const zw=Math.max(width,Math.round(width*editZoom)),zh=Math.max(height,Math.round(height*editZoom));vf+=`,scale=${zw}:${zh}:flags=lanczos,crop=${width}:${height}`;}
