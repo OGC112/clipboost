@@ -28,6 +28,7 @@ import { renderDimensions } from './video/format.js';
 import { videoEncodingArgs } from './video/encoding.js';
 import { summarizePcmWaveform } from './video/audio-waveform.js';
 import { compactCaptionRows, compactCaptionWords } from './video/captions.js';
+import { shouldRenderTitleOverlay, shouldRenderAssOverlay } from './video/hook-render.js';
 import { SETTINGS_KEYS, createSettingsEnv, maskSecret } from './settings/env.js';
 import { createRuntimeTools } from './runtime/tools.js';
 import { createExternalIngestion } from './integrations/ytdlp.js';
@@ -2253,8 +2254,15 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   }
 
   let assFile = null;
-  if (options.captions && meta.transcript?.captions?.length) {
-    assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height, options).catch(() => null);
+  if (shouldRenderAssOverlay(options, meta.transcript)) {
+    // A requested hook is an export requirement: never silently download
+    // a clip without its title when subtitle rendering fails.
+    if (shouldRenderTitleOverlay(options)) {
+      assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height, options);
+      if (!assFile) throw new Error('Could not render requested Hook title.');
+    } else {
+      assFile = await writeEditedAss(meta, safeStart, timeline.keep, width, height, options).catch(() => null);
+    }
     if (assFile) {
       filter.push(`[${videoLabel}]subtitles='${ffmpegFilterPath(assFile)}'[vout]`);
       videoLabel = 'vout';
