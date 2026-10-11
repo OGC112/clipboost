@@ -2277,7 +2277,7 @@ async function renderEditedClip(meta, start, end, outputPath, rawOptions = {}, r
   await fs.writeFile(filterScriptPath, filter.join(';'), 'utf8');
   const args = ['-y','-i',meta.sourcePath];
   if (watermarkPath) args.push('-loop','1','-i',watermarkPath);
-  args.push('-/filter_complex',filterScriptPath,'-map',`[${videoLabel}]`);
+  args.push('-filter_complex_script',filterScriptPath,'-map',`[${videoLabel}]`);
   if (hasAudio) args.push('-map',`[${audioLabel}]`);
   args.push(...videoEncodingArgs({preview,hasAudio}));
   args.push('-movflags','+faststart',outputPath);
