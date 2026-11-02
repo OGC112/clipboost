@@ -11,6 +11,15 @@ The agent runs only on this Windows PC when the user is logged in. It uses Codex
 5. Run: powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\install.ps1
 6. Test once: powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\run.ps1
 
+## Prioritized task queue
+
+- Edit `tools/agent/backlog.json` on the agent setup branch to add or reprioritize tasks. Lower numeric priority runs first.
+- Each scheduled cycle selects the highest-priority pending task and passes its specific instructions to Codex. The agent works on only one task per cycle.
+- View the queue with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\status.ps1`.
+- Progress lives locally in `%LOCALAPPDATA%\ClipBoostAgent\progress.json`; it does not modify the main repository. A task is marked `published` only after its branch is successfully pushed, NOT after a PR is merged or Windows-tested.
+- If Codex makes no changes, the task is marked `blocked` to avoid repeated token consumption. Review the log/report and edit the local progress file to retry. If tests fail, the worktree remains dirty and future cycles stop until reviewed.
+- The queue is refreshed by fetching the `chore/local-clipboost-agent` branch in the separate setup worktree. The scheduled task does not automatically pull unreviewed changes to its own runner.
+
 ## Schedule
 
 The Codex invocation explicitly selects `windows.sandbox=mxc` and `workspace-write` to allow scoped edits in the dedicated worktree. If a run is blocked, disable the scheduled task and inspect the logs before retrying.
