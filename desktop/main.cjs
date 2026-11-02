@@ -7,9 +7,11 @@ const http = require('http');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 
-// Stabilize Chromium rendering for Mint's frameless window on Windows.
-if (process.platform === 'win32') {
-  try { app.disableHardwareAcceleration(); } catch {}
+// Prefer GPU compositing for smooth video previews and scrolling on Windows.
+// Older graphics drivers can opt back into the legacy software renderer by setting
+// CLIPBOOST_DISABLE_GPU=1 before launching the application.
+if (process.platform === 'win32' && process.env.CLIPBOOST_DISABLE_GPU === '1') {
+  app.disableHardwareAcceleration();
 }
 
 let mainWindow = null;

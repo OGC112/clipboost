@@ -1943,25 +1943,30 @@
       const captionWords=previewCaptionWordsForCandidate(cand);
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
       let captionRaf=0;
+      let captionFrameCallback=0;
+      let lastCaptionKey=null;
+      const hookTitle=document.getElementById('liveHookTitle');
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
       const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
-        const hookTitle=document.getElementById('liveHookTitle');
         if(hookTitle){
           const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
           hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
         }
 
-        const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const activeSpeechIndex=state.captionPreference==='off'?-1:captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const captionKey=activeSpeechIndex>=0?`${activeSpeechIndex}:${state.captionEffect}:${state.captionColor}`:'hidden';
+        if(captionKey===lastCaptionKey)return;
+        lastCaptionKey=captionKey;
         const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
         const line=activeSpeechWord
           ? captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02)
           : null;
-        const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
-        liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
-        if(!hasSpeechCaption){
-          liveCaption.innerHTML='';
+        const visible=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
+        liveCaption.style.visibility=visible?'visible':'hidden';
+        if(!visible){
+          if(liveCaption.textContent)liveCaption.textContent='';
           return;
         }
 
@@ -1989,13 +1994,27 @@
         }
         liveCaption.innerHTML=`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`;
       };
-      const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
+      const stopCaptionClock=()=>{
+        if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}
+        if(captionFrameCallback&&shortVideo.cancelVideoFrameCallback){shortVideo.cancelVideoFrameCallback(captionFrameCallback);captionFrameCallback=0}
+      };
       const tickCaptionClock=()=>{
+        captionRaf=0;
+        if(!shortVideo.isConnected)return;
         syncCaption();
         if(!shortVideo.paused&&!shortVideo.ended)captionRaf=requestAnimationFrame(tickCaptionClock);
-        else captionRaf=0;
       };
-      const startCaptionClock=()=>{stopCaptionClock();tickCaptionClock()};
+      const tickVideoFrame=()=>{
+        captionFrameCallback=0;
+        if(!shortVideo.isConnected)return;
+        syncCaption();
+        if(!shortVideo.paused&&!shortVideo.ended)captionFrameCallback=shortVideo.requestVideoFrameCallback(tickVideoFrame);
+      };
+      const startCaptionClock=()=>{
+        stopCaptionClock();
+        if(shortVideo.requestVideoFrameCallback)captionFrameCallback=shortVideo.requestVideoFrameCallback(tickVideoFrame);
+        else tickCaptionClock();
+      };
       shortVideo.addEventListener('play',startCaptionClock);
       shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()});
       shortVideo.addEventListener('timeupdate',syncCaption);
