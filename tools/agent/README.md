@@ -20,6 +20,12 @@ The agent runs only on this Windows PC when the user is logged in. It uses Codex
 - If Codex makes no changes, the task is marked `blocked` to avoid repeated token consumption. Review the log/report and edit the local progress file to retry. If tests fail, the worktree remains dirty and future cycles stop until reviewed.
 - The queue is refreshed by manually fetching and switching the separate setup worktree to `origin/chore/local-clipboost-agent`. The scheduled task does not automatically pull unreviewed changes to its own runner.
 
+## Autonomous code discovery
+
+The agent is not limited to the predefined queue. After three published tasks since its last discovery, or when the queue is exhausted, it may run a self-directed discovery cycle (no more than once every 24 hours). It reads `tools/agent/project-map.md` and `tools/agent/discovery.md`, traces relevant code, identifies concrete candidate issues, and implements at most one low-risk fix with validation. If it finds no defensible issue, it makes no changes. It logs its findings and does not automatically merge.
+
+This is static/code-level discovery, not a live performance profiler. `npm test` and `npm run build` are required before publishing, but Windows GUI responsiveness and FFmpeg export still require manual validation.
+
 ## Schedule
 
 The Codex invocation explicitly selects `windows.sandbox=mxc` and `workspace-write` to allow scoped edits in the dedicated worktree. If a run is blocked, disable the scheduled task and inspect the logs before retrying.
