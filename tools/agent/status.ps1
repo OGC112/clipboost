@@ -16,5 +16,10 @@ $rows = @($backlog.tasks | Sort-Object priority | ForEach-Object {
   [pscustomobject]@{ Priority = $_.priority; Id = $_.id; Status = $state; Task = $_.title }
 })
 $rows | Format-Table -AutoSize -Wrap
+$discoveryCount = @($progress.published | Where-Object { $_.id -like 'AUTO-*' }).Count
+Write-Host "Autonomous discovery fixes published: $discoveryCount"
+if ($progress.PSObject.Properties['last_discovery_at']) {
+  Write-Host "Last discovery attempt: $($progress.last_discovery_at)"
+}
 Write-Host "Local progress: $progressPath"
 Write-Host 'Published means a branch was pushed, NOT merged or Windows-validated.'
