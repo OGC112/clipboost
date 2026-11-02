@@ -1945,6 +1945,13 @@
       let captionRaf=0;
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
       const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      // Keep caption spans intact between word changes instead of rebuilding them every frame.
+      let lastCaptionMarkup=null;
+      const setCaptionMarkup=markup=>{
+        if(markup===lastCaptionMarkup)return;
+        liveCaption.innerHTML=markup;
+        lastCaptionMarkup=markup;
+      };
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const hookTitle=document.getElementById('liveHookTitle');
@@ -1961,7 +1968,7 @@
         const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
         liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
         if(!hasSpeechCaption){
-          liveCaption.innerHTML='';
+          setCaptionMarkup('');
           return;
         }
 
@@ -1972,22 +1979,22 @@
         const accent=accentMap[state.captionColor||'auto']||accentMap.auto;
         if(effect==='word-pop'){
           const w=words[active]||activeSpeechWord;
-          liveCaption.innerHTML=`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`;
+          setCaptionMarkup(`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`);
           return;
         }
         if(effect==='active-word'){
-          liveCaption.innerHTML=words.map((w,i)=>`<span style="color:${i===active?accent:'#fff'};display:inline-block;${i===active?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' ');
+          setCaptionMarkup(words.map((w,i)=>`<span style="color:${i===active?accent:'#fff'};display:inline-block;${i===active?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' '));
           return;
         }
         if(effect==='karaoke'){
-          liveCaption.innerHTML=words.map((w,i)=>`<span style="color:${i<=active?accent:'#fff'};display:inline-block">${esc(w.word)}</span>`).join(' ');
+          setCaptionMarkup(words.map((w,i)=>`<span style="color:${i<=active?accent:'#fff'};display:inline-block">${esc(w.word)}</span>`).join(' '));
           return;
         }
         if(effect==='keyword-color'){
-          liveCaption.innerHTML=words.map(w=>`<span style="color:${captionWordImportant(w.word)?accent:'#fff'};display:inline-block;${captionWordImportant(w.word)?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' ');
+          setCaptionMarkup(words.map(w=>`<span style="color:${captionWordImportant(w.word)?accent:'#fff'};display:inline-block;${captionWordImportant(w.word)?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' '));
           return;
         }
-        liveCaption.innerHTML=`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`;
+        setCaptionMarkup(`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`);
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
       const tickCaptionClock=()=>{
