@@ -14,6 +14,7 @@ RULES:
 - Do not delete user data, run destructive commands, or alter release pipelines.
 - Preserve editor workflows, subtitles, crop, full-video mode, preview and FFmpeg export behavior.
 - No new dependencies, sweeping rewrites, or edits to tools/agent.
+- Do not launch Edge/Chrome/Chromium with a profile or user-data directory inside the Git worktree. Do not create .edge-resize-check or browser caches there. If a browser test cannot run without creating a profile inside the worktree, skip that test and report it.
 - Prefer 1-5 files; add focused tests if appropriate.
 - Do not claim performance improvements without measurement.
 - Stay compatible with Windows and existing Node/Electron versions.
