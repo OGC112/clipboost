@@ -41,6 +41,10 @@ Runs at Windows logon and daily at 12:00, only while logged in. A named mutex pr
 - Failed tests or build prevent publication. The worktree is left intact for review.
 - No automatic merge to main.
 
+## Recover after a browser-profile staging failure
+
+If an agent run stages many files from `.edge-resize-check/`, first disable the scheduled task. In the isolated agent workspace only, use `git restore --staged -- .` to unstage without discarding changes. Move `.edge-resize-check` to a dated folder outside the workspace for review (do not delete it blindly), then inspect `git status --short`. Keep and review legitimate source edits before restarting; do not use `git reset --hard` or `git clean -fdx`. This agent now stages only allowlisted source paths and excludes hidden browser profile directories.
+
 ## Stop
 
 Run in PowerShell: Unregister-ScheduledTask -TaskName 'ClipBoost Local Agent' -Confirm:$false
