@@ -48,12 +48,41 @@ try {
   $task = $backlog.tasks | Sort-Object priority | Where-Object {
     $_.id -notin $publishedIds -and $_.id -notin $blockedIds
   } | Select-Object -First 1
-  if (-not $task) { Write-Host 'No pending tasks. Review backlog or progress.json before adding more.'; return }
+  # Periodically discover issues beyond the curated backlog. Limit discovery to once per 24h.
+  $publishedCount = @($progress.published).Count
+  $lastDiscoveryCount = 0
+  $lastDiscoveryAt = $null
+  if ($progress.PSObject.Properties['last_discovery_published_count']) {
+    $lastDiscoveryCount = [int]$progress.last_discovery_published_count
+  }
+  if ($progress.PSObject.Properties['last_discovery_at'] -and $progress.last_discovery_at) {
+    $lastDiscoveryAt = [datetime]$progress.last_discovery_at
+  }
+  $discoveryDue = (-not $lastDiscoveryAt) -or (((Get-Date) - $lastDiscoveryAt).TotalHours -ge 24)
+  $shouldDiscover = $discoveryDue -and ((-not $task) -or (($publishedCount - $lastDiscoveryCount) -ge 3))
+  if ($shouldDiscover) {
+    $task = [pscustomobject]@{
+      id = 'AUTO-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+      priority = 99
+      title = 'Discover and fix one concrete ClipBoost performance or reliability issue'
+      instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'discovery.md') -Raw)
+    }
+    $progress | Add-Member -NotePropertyName last_discovery_at -NotePropertyValue (Get-Date -Format 'o') -Force
+    $progress | Add-Member -NotePropertyName last_discovery_published_count -NotePropertyValue $publishedCount -Force
+    $progress | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $progressPath -Encoding UTF8
+    Write-Host 'Autonomous discovery cycle selected.'
+  }
+  if (-not $task) {
+    Write-Host 'Backlog complete. Discovery already attempted in the last 24 hours; skipping.'
+    return
+  }
   Write-Host ("Selected task: {0} (priority {1}) - {2}" -f $task.id, $task.priority, $task.title)
   $branch = 'agent/' + $task.id.ToLowerInvariant() + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, 'origin/main')
+  $recentPublished = @($progress.published | Select-Object -Last 8 | ForEach-Object { "$($_.id): $($_.branch)" }) -join "`n"
   $instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw) +
     "`nASSIGNED TASK: $($task.id) - $($task.title)`n$($task.instructions)`n" +
+    "`nRECENTLY PUBLISHED AGENT BRANCHES (avoid repeating these changes):`n$recentPublished`n" +
     "Work ONLY on this assigned task. If no safe change is possible, make no changes and explain why."
   Write-Host "Agent branch: $branch"
   Run 'codex' @('-c', 'windows.sandbox=mxc', 'exec', '--cd', $workspace, '--sandbox', 'workspace-write', '--output-last-message', $report, $instructions)
