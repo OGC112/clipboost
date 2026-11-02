@@ -3,7 +3,7 @@
 You are NOT given a predefined bug. Your job is to understand the current code and find ONE genuine, low-risk optimization or reliability defect that can be addressed in this cycle.
 
 ## Orient yourself first
-- Read `package.json` and `tools/agent/project-map.md` (context, not a substitute for code).
+- Read `package.json` and the PROJECT MAP supplied in the prompt (context, not a substitute for code).
 - Trace relevant flows in `desktop/main.cjs`, `src/app.js`, `server/index.js`, `server/video/` and related tests as appropriate. Do not attempt to read all files into context at once.
 - Identify a user-visible hot path: editor render, preview frame updates, timeline interactions, subtitles, background polling, FFmpeg progress or Electron lifecycle.
 
