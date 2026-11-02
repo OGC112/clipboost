@@ -80,7 +80,9 @@ try {
   $branch = 'agent/' + $task.id.ToLowerInvariant() + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, 'origin/main')
   $recentPublished = @($progress.published | Select-Object -Last 8 | ForEach-Object { "$($_.id): $($_.branch)" }) -join "`n"
+  $projectMap = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'project-map.md') -Raw
   $instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw) +
+    "`nPROJECT MAP (orientation only; verify in current source):`n$projectMap`n" +
     "`nASSIGNED TASK: $($task.id) - $($task.title)`n$($task.instructions)`n" +
     "`nRECENTLY PUBLISHED AGENT BRANCHES (avoid repeating these changes):`n$recentPublished`n" +
     "Work ONLY on this assigned task. If no safe change is possible, make no changes and explain why."
