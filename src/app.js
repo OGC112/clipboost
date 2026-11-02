@@ -1955,16 +1955,15 @@
           hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
         }
 
-        const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const activeSpeechIndex=state.captionPreference==='off'?-1:captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const captionKey=activeSpeechIndex>=0?`${activeSpeechIndex}:${state.captionEffect}:${state.captionColor}`:'hidden';
+        if(captionKey===lastCaptionKey)return;
+        lastCaptionKey=captionKey;
         const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
         const line=activeSpeechWord
           ? captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02)
           : null;
-        const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
-        const visible=hasSpeechCaption&&state.captionPreference!=='off';
-        const captionKey=visible?`${activeSpeechIndex}:${state.captionEffect}:${state.captionColor}`:'hidden';
-        if(captionKey===lastCaptionKey)return;
-        lastCaptionKey=captionKey;
+        const visible=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
         liveCaption.style.visibility=visible?'visible':'hidden';
         if(!visible){
           if(liveCaption.textContent)liveCaption.textContent='';
