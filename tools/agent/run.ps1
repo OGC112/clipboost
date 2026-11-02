@@ -118,7 +118,20 @@ try {
     $rootAllowed -and
       ($p -notmatch '(?i)(^|/)(\.[^/]+|node_modules|dist|release|storage|cache|tmp|temp)(/|$)') -and
       ($p -notmatch '(?i)(^|/)(\.env.*|auth\.json|.*\.(pem|key|p12|pfx|db|sqlite|log)|cookies|local storage|session storage)(/|$)') -and
-      ($p -match '(?i)\.(js|cjs|mjs|jsx|ts|tsx|css|scss|html|json|md)
+      ($p -match '(?i)[.](js|cjs|mjs|jsx|ts|tsx|css|scss|html|json|md)$')
+  })
+  $excluded = @($candidates | Where-Object { $_ -notin $safe })
+  if ($excluded.Count -gt 0) {
+    Write-Warning ('Not staging {0} non-source files. Examples: {1}' -f $excluded.Count, (($excluded | Select-Object -First 5) -join ', '))
+  }
+  if ($safe.Count -eq 0) { throw 'No safe source-code changes to publish; inspect workspace.' }
+  if ($safe.Count -gt 12) { throw "Too many source files ($($safe.Count)); review manually." }
+  foreach ($file in $safe) { Run 'git' @('-C', $workspace, 'add', '--', $file) }
+  $staged = @(& git -C $workspace diff --cached --name-only)
+  if ($staged.Count -eq 0) { throw 'No staged changes.' }
+  if ($staged.Count -gt 12 -or @($staged | Where-Object { $_ -notin $safe }).Count -gt 0) {
+    throw 'Unexpected staged files; review manually.'
+  }
   Run 'git' @('-C', $workspace, 'commit', '-m', ("perf({0}): autonomous ClipBoost improvement" -f $task.id))
   Run 'git' @('-C', $workspace, 'push', '-u', 'origin', $branch)
   $progress.published = @($progress.published) + @([pscustomobject]@{
