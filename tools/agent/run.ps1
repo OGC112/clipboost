@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $homeDir = Join-Path $env:LOCALAPPDATA 'ClipBoostAgent'
 $workspace = Join-Path $homeDir 'workspace'
 $logDir = Join-Path $homeDir 'logs'
+$progressPath = Join-Path $homeDir 'progress.json'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $report = Join-Path $logDir "report-$stamp.md"
@@ -34,13 +35,38 @@ try {
   $dirty = @(& git -C $workspace status --porcelain)
   if ($LASTEXITCODE -ne 0) { throw 'Agent workspace is not a valid Git worktree.' }
   if ($dirty.Count -gt 0) { throw "Uncommitted agent changes need review: $workspace" }
-  $branch = 'agent/performance-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+  $backlogPath = Join-Path $PSScriptRoot 'backlog.json'
+  $backlog = Get-Content -LiteralPath $backlogPath -Raw | ConvertFrom-Json
+  if (-not $backlog.tasks) { throw 'Backlog is empty or invalid.' }
+  if (Test-Path $progressPath) {
+    $progress = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json
+  } else {
+    $progress = [pscustomobject]@{ published = @(); blocked = @() }
+  }
+  $publishedIds = @($progress.published | ForEach-Object { $_.id })
+  $blockedIds = @($progress.blocked | ForEach-Object { $_.id })
+  $task = $backlog.tasks | Sort-Object priority | Where-Object {
+    $_.id -notin $publishedIds -and $_.id -notin $blockedIds
+  } | Select-Object -First 1
+  if (-not $task) { Write-Host 'No pending tasks. Review backlog or progress.json before adding more.'; return }
+  Write-Host ("Selected task: {0} (priority {1}) - {2}" -f $task.id, $task.priority, $task.title)
+  $branch = 'agent/' + $task.id.ToLowerInvariant() + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, 'origin/main')
-  $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw
+  $instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw) +
+    "`nASSIGNED TASK: $($task.id) - $($task.title)`n$($task.instructions)`n" +
+    "Work ONLY on this assigned task. If no safe change is possible, make no changes and explain why."
   Write-Host "Agent branch: $branch"
   Run 'codex' @('-c', 'windows.sandbox=mxc', 'exec', '--cd', $workspace, '--sandbox', 'workspace-write', '--output-last-message', $report, $instructions)
   $changes = @(& git -C $workspace status --porcelain)
-  if ($changes.Count -eq 0) { Write-Host 'No changes; nothing to publish.'; return }
+  if ($changes.Count -eq 0) {
+    $progress.blocked = @($progress.blocked) + @([pscustomobject]@{
+      id = $task.id; reason = 'No code changes; inspect agent report'; report = $report
+      recorded_at = (Get-Date -Format 'o')
+    })
+    $progress | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $progressPath -Encoding UTF8
+    Write-Host "No changes; task $($task.id) marked blocked for review. Report: $report"
+    return
+  }
   Push-Location $workspace
   try {
     if (-not (Test-Path 'node_modules')) { Run 'npm.cmd' @('ci', '--no-audit', '--no-fund') }
@@ -54,11 +80,15 @@ try {
   if (@($staged | Where-Object { $_ -match '(^|/)(\.env|auth\.json|.*\.pem|.*\.key)$' }).Count -gt 0) {
     throw 'Possible secret file staged; review manually.'
   }
-  Run 'git' @('-C', $workspace, 'commit', '-m', 'perf: autonomous ClipBoost improvement')
+  Run 'git' @('-C', $workspace, 'commit', '-m', ("perf({0}): autonomous ClipBoost improvement" -f $task.id))
   Run 'git' @('-C', $workspace, 'push', '-u', 'origin', $branch)
-  Write-Host "Branch pushed: $branch. main unchanged."
+  $progress.published = @($progress.published) + @([pscustomobject]@{
+    id = $task.id; branch = $branch; report = $report; recorded_at = (Get-Date -Format 'o')
+  })
+  $progress | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $progressPath -Encoding UTF8
+  Write-Host "Task $($task.id) published to branch $branch. main unchanged."
   if (Get-Command 'gh' -ErrorAction SilentlyContinue) {
-    & gh pr create --repo OGC112/clipboost --base main --head $branch --draft --title "Agent: performance improvement ($stamp)" --body 'Automated local Codex improvement. npm test and npm run build passed. Review and validate Windows video preview before merging.'
+    & gh pr create --repo OGC112/clipboost --base main --head $branch --draft --title "Agent $($task.id): $($task.title)" --body 'Automated local Codex improvement. npm test and npm run build passed. Review and validate Windows video preview before merging.'
     if ($LASTEXITCODE -ne 0) { Write-Warning 'Branch pushed but PR creation failed.' }
   } else { Write-Host "Create a GitHub PR manually for: $branch" }
   Write-Host "Report: $report"
