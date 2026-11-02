@@ -18,7 +18,7 @@ The agent runs only on this Windows PC when the user is logged in. It uses Codex
 - View the queue with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\status.ps1`.
 - Progress lives locally in `%LOCALAPPDATA%\ClipBoostAgent\progress.json`; it does not modify the main repository. A task is marked `published` only after its branch is successfully pushed, NOT after a PR is merged or Windows-tested.
 - If Codex makes no changes, the task is marked `blocked` to avoid repeated token consumption. Review the log/report and edit the local progress file to retry. If tests fail, the worktree remains dirty and future cycles stop until reviewed.
-- The queue is refreshed by fetching the `chore/local-clipboost-agent` branch in the separate setup worktree. The scheduled task does not automatically pull unreviewed changes to its own runner.
+- The queue is refreshed by manually fetching and switching the separate setup worktree to `origin/chore/local-clipboost-agent`. The scheduled task does not automatically pull unreviewed changes to its own runner.
 
 ## Schedule
 
@@ -30,7 +30,7 @@ Runs at Windows logon and daily at 12:00, only while logged in. A named mutex pr
 
 - Workspace: %LOCALAPPDATA%\ClipBoostAgent\workspace
 - Logs and reports: %LOCALAPPDATA%\ClipBoostAgent\logs
-- Passing runs push an agent/performance-* branch to GitHub.
+- Passing runs push an `agent/cb-*-YYYYMMDD-HHMMSS` branch to GitHub.
 - If GitHub CLI (gh) is installed and authenticated, the script opens a draft PR; otherwise create a PR manually.
 - Failed tests or build prevent publication. The worktree is left intact for review.
 - No automatic merge to main.
