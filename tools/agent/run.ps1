@@ -64,6 +64,7 @@ try {
   Write-Host "Report: $report"
 } catch {
   Write-Warning $_.Exception.Message
+  throw
 } finally {
   if ($transcribing) { Stop-Transcript | Out-Null }
   if ($locked) { $mutex.ReleaseMutex() }
