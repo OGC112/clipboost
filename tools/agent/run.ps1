@@ -38,7 +38,7 @@ try {
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, 'origin/main')
   $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw
   Write-Host "Agent branch: $branch"
-  Run 'codex' @('exec', '--cd', $workspace, '--sandbox', 'workspace-write', '--output-last-message', $report, $instructions)
+  Run 'codex' @('-c', 'windows.sandbox=mxc', 'exec', '--cd', $workspace, '--sandbox', 'workspace-write', '--output-last-message', $report, $instructions)
   $changes = @(& git -C $workspace status --porcelain)
   if ($changes.Count -eq 0) { Write-Host 'No changes; nothing to publish.'; return }
   Push-Location $workspace
