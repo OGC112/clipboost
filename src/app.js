@@ -1792,16 +1792,21 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   async function prepareCandidatePreview(index,{autoplay=false,force=false}={}){
     const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand||!v?.sourceUrl)return;
     // Clip indices are shared across projects; pending work belongs to one video.
-    if(state.candidatePreviewVideoId===v.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force)return;
+    if(state.candidatePreviewVideoId===v.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force){
+      // A click while rendering must retain its playback intent without another render.
+      state.candidatePreviewPendingAutoplay=autoplay;
+      return;
+    }
     if(cand.previewUrl&&!force){state.candidatePreviewAutoplay=autoplay;render();return;}
     const requestId=++state.candidatePreviewRequestId;
+    state.candidatePreviewPendingAutoplay=autoplay;
     state.candidatePreviewVideoId=v.id;state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
     try{
       // Editable overlays live in the DOM; bake them only into final validation previews.
       const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,hookTitleEnabled:false,watermarkUrl:''}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
       if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
-      cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=autoplay;render();
+      cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=state.candidatePreviewPendingAutoplay;render();
     }catch(e){
       if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
       state.candidatePreviewLoading=false;state.candidatePreviewError=e.message||'Could not prepare preview';render();

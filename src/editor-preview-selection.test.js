@@ -119,3 +119,24 @@ test('repeated requests for the same project and clip still share the loading gu
   c.requests[0].resolve({ url: '/preview.mp4' });
   await pending;
 });
+
+test('selecting a clip during automatic preview rendering plays it when ready', async () => {
+  const c = setup();
+  const pending = c.context.prepareCandidatePreview(0, { autoplay: false });
+  c.context.selectCandidatePreview(0, { autoplay: true });
+  assert.equal(c.requests.length, 1);
+  assert.equal(c.state.candidatePreviewAutoplay, false, 'do not play before the render is ready');
+  c.requests[0].resolve({ url: '/preview.mp4' });
+  await pending;
+  assert.equal(c.state.candidatePreviewAutoplay, true);
+});
+
+test('the latest playback choice wins while sharing a pending preview', async () => {
+  const c = setup();
+  const pending = c.context.prepareCandidatePreview(0, { autoplay: true });
+  c.context.selectCandidatePreview(0, { autoplay: false });
+  assert.equal(c.requests.length, 1);
+  c.requests[0].resolve({ url: '/preview.mp4' });
+  await pending;
+  assert.equal(c.state.candidatePreviewAutoplay, false);
+});
