@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { buildEditorPreferences } from './editor-preferences.js';
 import { buildRenderOptions } from './editor-render-options.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
@@ -19,7 +20,7 @@ for (const [position, expected] of [['top', .18], ['center', .5], ['bottom', .82
     const { state, context } = setup(position, null);
     const persist = source.slice(source.indexOf('  function persistEditorPrefs('), source.indexOf('\n', source.indexOf('  function persistEditorPrefs(')));
     let saved;
-    context.isCampaign = false;
+    context.buildEditorPreferences = buildEditorPreferences;
     context.localStorage = { setItem: (key, value) => { saved = JSON.parse(value); } };
     vm.runInContext(persist, context);
     context.persistEditorPrefs();
