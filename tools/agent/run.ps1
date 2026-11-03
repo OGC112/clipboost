@@ -104,11 +104,22 @@ try {
   Write-Host "Agent baseline: $baseRef"
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, $baseRef)
   $recentPublished = @($progress.published | Select-Object -Last 8 | ForEach-Object { "$($_.id): $($_.branch)" }) -join "`n"
+  # Carry forward bounded investigation notes, not just branch names.
+  $recentRecords = @(@($progress.published) + @($progress.blocked) | Where-Object { $_ -and $_.report } | Sort-Object recorded_at | Select-Object -Last 3)
+  $priorFindings = ''
+  foreach ($entry in $recentRecords) {
+    if (Test-Path -LiteralPath $entry.report) {
+      $note = Get-Content -LiteralPath $entry.report -Raw
+      if ($note.Length -gt 2500) { $note = $note.Substring(0, 2500) }
+      $priorFindings += "`n[$($entry.id)]`n$note`n"
+    }
+  }
   $projectMap = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'project-map.md') -Raw
   $instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw) +
     "`nPROJECT MAP (orientation only; verify in current source):`n$projectMap`n" +
     "`nASSIGNED TASK: $($task.id) - $($task.title)`n$($task.instructions)`n" +
     "`nRECENTLY PUBLISHED AGENT BRANCHES (avoid repeating these changes):`n$recentPublished`n" +
+    "`nRECENT INVESTIGATION NOTES (context only; verify against source):`n$priorFindings`n" +
     "Work ONLY on this assigned task. If no safe change is possible, make no changes and explain why."
   Write-Host "Agent branch: $branch"
   Run 'codex' @('-c', 'windows.sandbox=mxc', 'exec', '--cd', $workspace, '--sandbox', 'workspace-write', '--output-last-message', $report, $instructions)
