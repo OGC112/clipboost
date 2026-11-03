@@ -110,3 +110,28 @@ test('changing creator filter bypasses the old automatic cooldown', async () => 
   assert.equal(c.timers.size, 1);
   assert.equal([...c.timers.values()][0].at, 100100);
 });
+
+for (const outcome of ['success', 'failure']) {
+  for (const destination of ['studio', 'platform', 'section']) {
+    test(`pending refresh ${outcome} avoids rendering after leaving via ${destination}`, async () => {
+      const c = setup();
+      const pending = c.context.refreshTwitchClips({ silent: true });
+      if (destination === 'studio') c.state.page = 'studio';
+      else if (destination === 'platform') c.state.libraryPlatform = 'youtube';
+      else c.state.librarySection = 'vods';
+      const library = { creators: [{ id: 'updated' }] };
+      if (outcome === 'success') c.requests[0].resolve({ library });
+      else c.requests[0].reject(new Error('Offline'));
+      await pending;
+      assert.equal(c.renders(), 0, 'completion must not replace unrelated page DOM');
+      assert.equal(c.state.twitchClipsRefreshing, false);
+      assert.equal(c.timers.size, 0);
+      if (outcome === 'success') assert.equal(c.state.library, library, 'keep fresh data for the next Library visit');
+      c.state.page = 'library';
+      c.state.libraryPlatform = 'twitch';
+      c.state.librarySection = 'clips';
+      c.context.scheduleTwitchClipsRefresh();
+      assert.equal(c.timers.size, 1, 'refresh scheduling resumes on return');
+    });
+  }
+}

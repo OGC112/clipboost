@@ -93,3 +93,28 @@ test('pending refresh neither duplicates requests nor reschedules after navigati
   await pending;
   assert.equal(c.timers.size, 0);
 });
+
+for (const outcome of ['success', 'failure']) {
+  for (const destination of ['studio', 'platform', 'section']) {
+    test(`pending refresh ${outcome} avoids rendering after leaving via ${destination}`, async () => {
+      const c = setup();
+      const pending = c.context.refreshTwitchLive({ silent: true });
+      if (destination === 'studio') c.state.page = 'studio';
+      else if (destination === 'platform') c.state.libraryPlatform = 'youtube';
+      else c.state.librarySection = 'vods';
+      const library = { creators: [{ id: 'updated' }] };
+      if (outcome === 'success') c.requests[0].resolve({ library });
+      else c.requests[0].reject(new Error('Offline'));
+      await pending;
+      assert.equal(c.renders(), 0, 'completion must not replace unrelated page DOM');
+      assert.equal(c.state.twitchLiveRefreshing, false);
+      assert.equal(c.timers.size, 0);
+      if (outcome === 'success') assert.equal(c.state.library, library, 'keep fresh data for the next Library visit');
+      c.state.page = 'library';
+      c.state.libraryPlatform = 'twitch';
+      c.state.librarySection = 'live';
+      c.context.scheduleTwitchLiveRefresh();
+      assert.equal(c.timers.size, 1, 'refresh scheduling resumes on return');
+    });
+  }
+}

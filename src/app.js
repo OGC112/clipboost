@@ -1125,7 +1125,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     }finally{
       twitchLiveLastAttempt=Date.now();
       state.twitchLiveRefreshing=false;
-      render();
+      // Cache the result without rebuilding another page's active video preview.
+      if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')render();
     }
   }
   function scheduleTwitchLiveRefresh(){
@@ -1161,7 +1162,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     }finally{
       twitchClipsLastAttempt=Date.now();
       state.twitchClipsRefreshing=false;
-      render();
+      // Cache the result without rebuilding another page's active video preview.
+      if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')render();
     }
   }
   function scheduleTwitchClipsRefresh(){
