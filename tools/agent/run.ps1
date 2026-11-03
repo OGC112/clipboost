@@ -152,37 +152,3 @@ try {
   if ($locked) { $mutex.ReleaseMutex() }
   $mutex.Dispose()
 }
-)
-  })
-  $excluded = @($candidates | Where-Object { $_ -notin $safe })
-  if ($excluded.Count -gt 0) {
-    Write-Warning ("Not staging {0} non-source files. Examples: {1}" -f $excluded.Count, (($excluded | Select-Object -First 5) -join ', '))
-  }
-  if ($safe.Count -eq 0) { throw 'No safe source-code changes to publish; inspect workspace.' }
-  if ($safe.Count -gt 12) { throw "Too many source files ($($safe.Count)); review manually." }
-  foreach ($file in $safe) { Run 'git' @('-C', $workspace, 'add', '--', $file) }
-  $staged = @(& git -C $workspace diff --cached --name-only)
-  if ($staged.Count -eq 0) { throw 'No staged changes.' }
-  if ($staged.Count -gt 12 -or @($staged | Where-Object { $_ -notin $safe }).Count -gt 0) {
-    throw 'Unexpected staged files; review manually.'
-  }
-  Run 'git' @('-C', $workspace, 'commit', '-m', ("perf({0}): autonomous ClipBoost improvement" -f $task.id))
-  Run 'git' @('-C', $workspace, 'push', '-u', 'origin', $branch)
-  $progress.published = @($progress.published) + @([pscustomobject]@{
-    id = $task.id; branch = $branch; report = $report; recorded_at = (Get-Date -Format 'o')
-  })
-  $progress | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $progressPath -Encoding UTF8
-  Write-Host "Task $($task.id) published to branch $branch. main unchanged."
-  if (Get-Command 'gh' -ErrorAction SilentlyContinue) {
-    & gh pr create --repo OGC112/clipboost --base main --head $branch --draft --title "Agent $($task.id): $($task.title)" --body 'Automated local Codex improvement. npm test and npm run build passed. Review and validate Windows video preview before merging.'
-    if ($LASTEXITCODE -ne 0) { Write-Warning 'Branch pushed but PR creation failed.' }
-  } else { Write-Host "Create a GitHub PR manually for: $branch" }
-  Write-Host "Report: $report"
-} catch {
-  Write-Warning $_.Exception.Message
-  throw
-} finally {
-  if ($transcribing) { Stop-Transcript | Out-Null }
-  if ($locked) { $mutex.ReleaseMutex() }
-  $mutex.Dispose()
-}
