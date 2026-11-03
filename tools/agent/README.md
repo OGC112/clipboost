@@ -46,6 +46,27 @@ Stop scheduled worker: `Stop-ScheduledTask -TaskName 'ClipBoost Local Agent'`; t
 
 GitHub Actions runners are not required.
 
+## Automatic change summaries
+
+Running install.ps1 also registers two **separate Windows Scheduled Tasks** under the current signed-in user:
+
+- ClipBoost Agent Daily Report: every day at 20:00 local PC time.
+- ClipBoost Agent Weekly Report: every Sunday at 20:10 local PC time.
+
+They run without Codex or API calls, reading only the local progress history and Codex reports. Reports are stored in `%LOCALAPPDATA%\ClipBoostAgent\reports` as dated Markdown files, plus `latest-daily.md` and `latest-weekly.md` for quick access. They show published GitHub branches, blocked investigations, report excerpts, and follow-up actions. A published branch is not automatically merged or Windows-tested.
+
+After fetching a new agent setup revision, rerun install.ps1 to register/update these scheduled tasks. Generate a report immediately:
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\report.ps1 -Period Daily`
+
+Generate a weekly report:
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\report.ps1 -Period Weekly`
+
+Open the reports folder: `explorer "$env:LOCALAPPDATA\ClipBoostAgent\reports"`
+
+These tasks only run when Windows can run scheduled tasks in the logged-in session. If the PC is off or sleeping at the scheduled time, Task Scheduler's StartWhenAvailable setting requests a delayed run when possible. The report covers the calendar day/week of its actual execution. No email or ChatGPT notification is sent.
+
 ## Output
 
 - Workspace: %LOCALAPPDATA%\ClipBoostAgent\workspace
@@ -61,7 +82,7 @@ If an agent run stages many files from `.edge-resize-check/`, first disable the 
 
 ## Stop
 
-Run in PowerShell: Stop-ScheduledTask -TaskName 'ClipBoost Local Agent'; Unregister-ScheduledTask -TaskName 'ClipBoost Local Agent' -Confirm:$false
+Run in PowerShell: Stop-ScheduledTask -TaskName 'ClipBoost Local Agent'; Unregister-ScheduledTask -TaskName 'ClipBoost Local Agent' -Confirm:$false. To remove the reporting schedules too: `Unregister-ScheduledTask -TaskName 'ClipBoost Agent Daily Report' -Confirm:$false; Unregister-ScheduledTask -TaskName 'ClipBoost Agent Weekly Report' -Confirm:$false`.
 
 ## Important
 
