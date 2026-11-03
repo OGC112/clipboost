@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { readJsonResponse } from './api-response.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
-const uploadSource = source.slice(source.indexOf('  async function uploadVideo('), source.indexOf('  function captionPresetY('));
+const uploadSource = source.slice(source.indexOf('  async function uploadVideo('), source.indexOf('  function currentCaptionY('));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 function setup() {

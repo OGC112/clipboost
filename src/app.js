@@ -3,6 +3,7 @@ import { buildEditorPreferences } from './editor-preferences.js';
 import { projectDisplayState } from './project-display-state.js';
 import { readJsonResponse } from './api-response.js';
 import { buildRenderOptions } from './editor-render-options.js';
+import { hasCustomCaptionY, resolveCaptionY } from './editor-caption-position.js';
 import { previewCaptionFontSize, previewCaptionOutlineSize } from './preview-caption-appearance.js';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
@@ -515,15 +516,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     finally{state.uploadBusy=false;}
   }
 
-  function hasCustomCaptionY(value){
-    return value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value));
-  }
-  function captionPresetY(position=state.captionPosition){
-    return position==='top'?.18:position==='center'?.50:.82;
-  }
   function currentCaptionY(){
-    const y=Number(state.captionY);
-    return hasCustomCaptionY(state.captionY)?Math.max(.12,Math.min(.88,y)):captionPresetY();
+    return resolveCaptionY(state);
   }
   function liveCaptionClass(){
     return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`].join(' ');
