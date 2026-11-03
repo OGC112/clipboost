@@ -1988,7 +1988,7 @@ async function writeEditedAss(meta, clipStart, keepIntervals, width=1080, height
   const colorMap={
     white:'&H00FFFFFF',
     yellow:'&H004AD5FF',
-    lime:'&H0075FF5C',
+    lime:'&H005CFF75',
     cyan:'&H00FFE735',
     pink:'&H00D84FFF',
     red:'&H00554BFF',
