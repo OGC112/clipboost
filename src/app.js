@@ -1850,6 +1850,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
     const modalBackdrop=document.getElementById('cbModalBackdrop');if(modalBackdrop)modalBackdrop.onclick=e=>{if(e.target===modalBackdrop&&state.uiModal?.mode==='confirm')finishModal(false)};
     const closeCampaignAssetBrowserNow=()=>{if(!state.campaignAssetBrowser)return;state.campaignAssetBrowser=null;state.campaignAssetBusy=false;render()};
+    if(!state.uiModal)bindModalKeyboard(document.querySelector('.campaign-asset-browser'),{onDismiss:closeCampaignAssetBrowserNow,initialFocus:document.getElementById('closeCampaignAssetBrowser'),focusSelector:'button:not([disabled]), a[href], video[controls]'});
     const assetClose=document.getElementById('closeCampaignAssetBrowser');if(assetClose)assetClose.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeCampaignAssetBrowserNow()});
     const assetOverlay=document.getElementById('campaignAssetBrowserBackdrop');if(assetOverlay)assetOverlay.addEventListener('click',e=>{if(e.target===assetOverlay){e.preventDefault();e.stopPropagation()}});
 
