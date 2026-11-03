@@ -1167,13 +1167,14 @@
       if(!silent)state.libraryError=e.message||'Could not refresh Twitch live status';
     }finally{
       state.twitchLiveRefreshing=false;
+      state.twitchLiveLastAttempt=Date.now();
       render();
     }
   }
   function scheduleTwitchLiveRefresh(){
     clearTimeout(window.__clipboostTwitchLiveRefresh);
     if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='live')return;
-    const age=Date.now()-Number(state.twitchLiveLastRefresh||0);
+    const age=Date.now()-Math.max(Number(state.twitchLiveLastRefresh||0),Number(state.twitchLiveLastAttempt||0));
     if(age>20000)setTimeout(()=>refreshTwitchLive({silent:true}),80);
     window.__clipboostTwitchLiveRefresh=setTimeout(async()=>{
       await refreshTwitchLive({silent:true});
@@ -1199,13 +1200,14 @@
       if(!silent)state.libraryError=e.message||'Could not refresh Twitch clips';
     }finally{
       state.twitchClipsRefreshing=false;
+      state.twitchClipsLastAttempt=Date.now();
       render();
     }
   }
   function scheduleTwitchClipsRefresh(){
     clearTimeout(window.__clipboostTwitchClipsRefresh);
     if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
-    const age=Date.now()-Number(state.twitchClipsLastRefresh||0);
+    const age=Date.now()-Math.max(Number(state.twitchClipsLastRefresh||0),Number(state.twitchClipsLastAttempt||0));
     if(age>15000)setTimeout(()=>refreshTwitchClips({silent:true}),100);
     window.__clipboostTwitchClipsRefresh=setTimeout(async()=>{
       await refreshTwitchClips({silent:true});
@@ -2337,7 +2339,7 @@
     document.querySelectorAll('[data-library-platform]').forEach(el=>el.onclick=()=>{state.libraryPlatform=el.dataset.libraryPlatform;state.librarySection=state.libraryPlatform==='youtube'?'videos':'vods';state.libraryCreatorFilter='all';state.youtubeHistoryExpanded=false;state.libraryError='';state.libraryRefreshMessage='';clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render()});
     document.querySelectorAll('[data-library-section]').forEach(el=>el.onclick=()=>{state.librarySection=el.dataset.librarySection;clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render();if(state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()});
     const sort=document.getElementById('librarySort');if(sort)sort.onchange=e=>{state.librarySort=e.target.value;render()};
-    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
+    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;state.twitchClipsLastAttempt=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh();
     document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
