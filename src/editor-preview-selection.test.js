@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const previewSource = source.slice(source.indexOf('  async function prepareCandidatePreview('), source.indexOf('  let disposePreviewCaptionClock='));
 
-function setup() {
+function setup(renderOptions = {}) {
   const requests = [];
   let renders = 0;
   const state = {
@@ -16,12 +16,34 @@ function setup() {
     selectedCandidate: 0, candidatePreviewRequestId: 0,
   };
   const context = vm.createContext({
-    state, render: () => renders++, currentRenderOptions: () => ({}),
+    state, render: () => renders++, currentRenderOptions: () => renderOptions,
     readJsonResponse: async response => response,
-    fetch: () => new Promise((resolve, reject) => requests.push({ resolve, reject })),
+    fetch: (url, init) => new Promise((resolve, reject) => requests.push({ resolve, reject, body: JSON.parse(init.body) })),
   });
   vm.runInContext(previewSource, context);
   return { state, requests, context, renders: () => renders };
+}
+
+for (const finalMode of [false, true]) {
+  test(`${finalMode ? 'final' : 'editable'} preview renders hook, captions and watermark in the intended layer`, async () => {
+    const options = {
+      hookTitleEnabled: true, hookTitleText: 'Original hook', hookTitleX: .3,
+      captionPreference: 'on', captions: true, watermarkUrl: '/watermark.png',
+    };
+    const c = setup(options);
+    c.state.previewFinalMode = finalMode;
+    const pending = c.context.prepareCandidatePreview(0);
+    const sent = c.requests[0].body.options;
+    assert.equal(sent.hookTitleEnabled, finalMode, 'editable preview must not retain a baked hook after moving or disabling its live overlay');
+    assert.equal(sent.captionPreference, finalMode ? 'on' : 'off');
+    assert.equal(sent.captions, finalMode);
+    assert.equal(sent.watermarkUrl, finalMode ? '/watermark.png' : '');
+    assert.equal(sent.hookTitleText, options.hookTitleText);
+    assert.equal(sent.hookTitleX, options.hookTitleX);
+    assert.equal(options.hookTitleEnabled, true, 'preview override must not disable the hook for export');
+    c.requests[0].resolve({ url: '/preview.mp4', edited: true });
+    await pending;
+  });
 }
 
 for (const outcome of ['success', 'failure']) {

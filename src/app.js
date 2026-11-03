@@ -1797,7 +1797,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const requestId=++state.candidatePreviewRequestId;
     state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
     try{
-      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,watermarkUrl:''}})});
+      // Editable overlays live in the DOM; bake them only into final validation previews.
+      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,hookTitleEnabled:false,watermarkUrl:''}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
       if(requestId!==state.candidatePreviewRequestId)return;
       cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=autoplay;render();
