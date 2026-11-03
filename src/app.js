@@ -667,6 +667,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     // Keep the checked and rendered settings tied to this export action.
     const options=currentRenderOptions();
+    const exportPage=state.page;
     state.exportBusy=true;render();
     try{
       if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
@@ -675,9 +676,11 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         if(window.clipboostDesktop?.openExportsFolder)await window.clipboostDesktop.openExportsFolder();
         else if(data.url){const a=document.createElement('a');a.href=data.url;a.download=data.filename||'clip.mp4';document.body.appendChild(a);a.click();a.remove();}
         showNotice({kind:'success',eyebrow:'Export',title:'Files ready',message:`${data.filename||'Your clip'} is ready in the ClipBoost exports folder.`});
-      }else{
+      }else if(state.page===exportPage&&state.video?.id===v.id){
         state.publishActivePlatform=state.publishActivePlatform||'tiktok';
         navigate('publish');
+      }else{
+        showNotice({kind:'success',eyebrow:'Export',title:'Clip ready',message:`${data.filename||'Your clip'} is ready. Open Publish to continue.`});
       }}
     catch(e){showNotice({kind:'danger',title:mode==='download'?'Download preparation failed':'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }

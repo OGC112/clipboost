@@ -8,7 +8,7 @@ const exportSource = source.slice(source.indexOf('  async function exportCurrent
 
 function setup({ campaign = false } = {}) {
   const requests = [], notices = [], navigations = [];
-  const state = { video: { id: 'video-1', sourceUrl: '/source.mp4', candidates: [{ start: 2, end: 12 }] } };
+  const state = { page: 'studio', video: { id: 'video-1', sourceUrl: '/source.mp4', candidates: [{ start: 2, end: 12 }] } };
   if (campaign) state.video.campaign = { id: 'campaign-1' };
   let renderOptions = { captionPreference: 'off' };
   const context = vm.createContext({
@@ -56,6 +56,25 @@ test('failed exports release the busy guard so the user can retry', async () => 
   await retry;
   assert.equal(state.exportBusy, false);
 });
+
+for (const change of ['page', 'project', 'closed project']) {
+  test(`publish export preserves navigation after a ${change} change`, async () => {
+    const { state, requests, notices, navigations, run } = setup();
+    const active = run();
+    if (change === 'page') state.page = 'projects';
+    else if (change === 'project') state.video = { id: 'video-2' };
+    else state.video = null;
+    requests[0].resolve({ filename: 'original.mp4', url: '/original.mp4' });
+    await active;
+    assert.deepEqual(navigations, []);
+    assert.equal(state.page, change === 'page' ? 'projects' : 'studio');
+    assert.equal(state.lastExport.projectId, 'video-1');
+    assert.equal(state.lastExport.url, '/original.mp4');
+    assert.equal(state.exportBusy, false);
+    assert.equal(notices[0].kind, 'success');
+    assert.match(notices[0].message, /original\.mp4/);
+  });
+}
 
 
 test('campaign export preserves settings while the check is pending; next export uses later edits', async () => {
