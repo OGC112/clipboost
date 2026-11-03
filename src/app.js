@@ -1,3 +1,4 @@
+import { readJsonResponse } from './api-response.js';
 import { buildRenderOptions } from './editor-render-options.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
 import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate } from './preview-caption-timeline.js';
@@ -1087,17 +1088,6 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       if(['ingesting','analyzing'].includes(state.video?.status))pollProjectUntilSettled(id);
     }catch(e){try{localStorage.removeItem('clipboost:lastProjectId')}catch{}}
     finally{state.restoringProject=false}
-  }
-  async function readJsonResponse(response, fallbackMessage='Request failed'){
-    const text=await response.text();
-    let data={};
-    if(text){
-      try{data=JSON.parse(text)}catch(_){
-        throw new Error(`${fallbackMessage} (server returned an invalid response, HTTP ${response.status})`);
-      }
-    }
-    if(!response.ok)throw new Error(data?.error||`${fallbackMessage} (HTTP ${response.status})`);
-    return data;
   }
   async function refreshTwitchLive({silent=false}={}){
     if(state.libraryPlatform!=='twitch')return;
