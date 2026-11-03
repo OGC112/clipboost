@@ -6,13 +6,13 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const exportSource = source.slice(source.indexOf('  async function exportCurrent('), source.indexOf('  async function exportAll('));
 
-function setup({ campaign = false } = {}) {
+function setup({ campaign = false, openFolder } = {}) {
   const requests = [], notices = [], navigations = [];
   const state = { page: 'studio', video: { id: 'video-1', sourceUrl: '/source.mp4', candidates: [{ start: 2, end: 12 }] } };
   if (campaign) state.video.campaign = { id: 'campaign-1' };
   let renderOptions = { captionPreference: 'off' };
   const context = vm.createContext({
-    state, document: { getElementById: () => null }, window: {},
+    state, document: { getElementById: () => null }, window: { clipboostDesktop: { openExportsFolder: openFolder } },
     render() {}, currentRenderOptions: () => ({ ...renderOptions }),
     showNotice: notice => notices.push(notice), navigate: page => navigations.push(page),
     readJsonResponse: async response => response,
@@ -41,6 +41,44 @@ test('repeated publish and download actions share the active single-clip export'
   assert.equal(requests.length, 2);
   requests[1].resolve({ filename: 'clip-2.mp4' });
   await next;
+});
+
+for (const failure of ['rejection', 'error string', 'synchronous throw']) {
+  test(`single-clip download preserves the saved export after folder ${failure}`, async () => {
+    const c = setup({ openFolder: () => {
+      if (failure === 'rejection') return Promise.reject(new Error('Folder unavailable'));
+      if (failure === 'synchronous throw') throw new Error('Folder unavailable');
+      return Promise.resolve('Folder unavailable');
+    } });
+    const active = c.run('download');
+    c.requests[0].resolve({ filename: 'saved.mp4', url: '/saved.mp4' });
+    await active;
+    assert.equal(c.requests.length, 1);
+    assert.equal(c.state.lastExport.filename, 'saved.mp4');
+    assert.equal(c.state.lastExport.projectId, 'video-1');
+    assert.equal(c.state.exportBusy, false);
+    assert.deepEqual(c.navigations, []);
+    assert.equal(c.notices.length, 1);
+    assert.equal(c.notices[0].kind, 'warning');
+    assert.equal(c.notices[0].title, 'Clip exported; folder could not open');
+    assert.match(c.notices[0].message, /saved\.mp4 is saved.*Folder unavailable/);
+  });
+}
+
+test('single-clip download waits for the folder and guards repeated actions', async () => {
+  let finish;
+  const c = setup({ openFolder: () => new Promise(resolve => { finish = resolve; }) });
+  const active = c.run('download');
+  c.requests[0].resolve({ filename: 'saved.mp4' });
+  await new Promise(resolve => setImmediate(resolve));
+  await c.run('download');
+  assert.equal(c.requests.length, 1);
+  assert.equal(c.state.exportBusy, true);
+  finish('');
+  await active;
+  assert.equal(c.state.exportBusy, false);
+  assert.equal(c.notices.length, 1);
+  assert.equal(c.notices[0].title, 'Files ready');
 });
 
 test('failed exports release the busy guard so the user can retry', async () => {

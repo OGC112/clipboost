@@ -665,7 +665,15 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
       const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};
       if(mode==='download'){
-        if(window.clipboostDesktop?.openExportsFolder)await window.clipboostDesktop.openExportsFolder();
+        if(window.clipboostDesktop?.openExportsFolder){
+          try{
+            const folderError=await window.clipboostDesktop.openExportsFolder();
+            if(folderError)throw new Error(folderError);
+          }catch(e){
+            showNotice({kind:'warning',eyebrow:'Export',title:'Clip exported; folder could not open',message:`${data.filename||'Your clip'} is saved. ${e.message||'Open the exports folder manually.'}`});
+            return;
+          }
+        }
         else if(data.url){const a=document.createElement('a');a.href=data.url;a.download=data.filename||'clip.mp4';document.body.appendChild(a);a.click();a.remove();}
         showNotice({kind:'success',eyebrow:'Export',title:'Files ready',message:`${data.filename||'Your clip'} is ready in the ClipBoost exports folder.`});
       }else if(state.page===exportPage&&state.video?.id===v.id){
