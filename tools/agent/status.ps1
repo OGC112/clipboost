@@ -18,8 +18,15 @@ $rows = @($backlog.tasks | Sort-Object priority | ForEach-Object {
 $rows | Format-Table -AutoSize -Wrap
 $discoveryCount = @($progress.published | Where-Object { $_.id -like 'AUTO-*' }).Count
 Write-Host "Autonomous discovery fixes published: $discoveryCount"
-if ($progress.PSObject.Properties['last_discovery_at']) {
-  Write-Host "Last discovery attempt: $($progress.last_discovery_at)"
+$focusAreas = @('UI/UX', 'Tools', 'Performance', 'Architecture', 'Video')
+$history = @()
+if ($progress.PSObject.Properties['discovery_runs']) {
+  $history = @($progress.discovery_runs | Where-Object { $null -ne $_ })
+}
+Write-Host "Continuous discovery cycles attempted: $($history.Count)"
+Write-Host "Next discovery focus: $($focusAreas[$history.Count % $focusAreas.Count])"
+if ($history.Count -gt 0) {
+  Write-Host "Most recent discovery: $($history[-1].focus) at $($history[-1].started_at)"
 }
 Write-Host "Local progress: $progressPath"
 Write-Host 'Published means a branch was pushed, NOT merged or Windows-validated.'
