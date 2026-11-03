@@ -1925,6 +1925,12 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
           hookTitle.style.visibility=isPreviewHookVisible(state,rel,duration)?'visible':'hidden';
         }
 
+        // Keep hook timing live without searching or rendering disabled subtitles.
+        if(state.captionPreference==='off'){
+          liveCaption.style.visibility='hidden';
+          return;
+        }
+
         const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
         const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
         const line=activeSpeechWord

@@ -12,7 +12,9 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
   let writes = 0, markup = '';
   let wordScans = 0;
   let keywordChecks = 0;
+  let speechSearches = 0;
   const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
+  words.findIndex = predicate => { speechSearches++; return Array.prototype.findIndex.call(words, predicate); };
   words.filter = predicate => { wordScans++; return Array.prototype.filter.call(words, predicate); };
   const listeners = {};
   const shortVideo = { currentTime: .2, paused: true, addEventListener: (name, fn) => { listeners[name] = fn; } };
@@ -33,8 +35,34 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     captionWordImportant: word => { keywordChecks++; return word === 'Hello'; },
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches };
 }
+
+test('captions off skips speech searches while hook timing and re-enabled captions stay current', () => {
+  const c = setup();
+  const searches = c.speechSearches(), writes = c.writes();
+  c.state.captionPreference = 'off';
+  for (let i = 0; i < 120; i++) {
+    c.shortVideo.currentTime = i / 100;
+    c.sync();
+  }
+  assert.equal(c.speechSearches(), searches);
+  assert.equal(c.writes(), writes);
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  assert.equal(c.hook.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.hook.style.visibility, 'visible');
+  assert.equal(c.speechSearches(), searches);
+  c.shortVideo.currentTime = 1.2;
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionPreference = 'off';
+  c.shortVideo.currentTime = 3; c.sync();
+  c.state.captionPreference = 'on'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  assert.equal(c.markup(), '');
+});
 
 test('unchanged playback skips caption markup construction while hook and visibility stay current', () => {
   const c = setup('keyword-color');
