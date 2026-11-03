@@ -1155,13 +1155,23 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   }
   async function loadLibrary(){if(state.libraryLoading)return;state.libraryLoading=true;state.libraryError='';render();try{const [lib,status]=await Promise.all([fetch('/api/library/creators'),fetch('/api/integrations/status')]);const data=await readJsonResponse(lib,'Could not load library');const st=await readJsonResponse(status,'Could not read integration status');state.library=data;state.youtubeConfigured=Boolean(st?.youtube?.configured);state.twitchConfigured=Boolean(st?.twitch?.configured);state.libraryLoaded=true;}catch(e){state.libraryError=e.message||'Could not load library';state.libraryLoaded=true;}finally{state.libraryLoading=false;render()}}
   async function addCreatorByPlatform(input){const platform=state.creatorPlatform||state.libraryPlatform||'youtube';state.addCreatorBusy=true;state.libraryError='';render();try{const r=await fetch(`/api/library/${platform}/creator`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input})});const data=await readJsonResponse(r,'Could not add creator');state.library=data.library;state.libraryLoaded=true;state.addCreatorOpen=false;state.libraryPlatform=platform;state.librarySection=platform==='youtube'?'videos':'vods';}catch(e){state.libraryError=e.message||'Could not add creator'}finally{state.addCreatorBusy=false;render()}}
+  let creatorSearchRevision=0;
+  function resetCreatorSearch(){
+    creatorSearchRevision++;
+    clearTimeout(window.__clipboostCreatorSearchTimer);
+    state.creatorSearchResults=[];
+    state.creatorSearchLoading=false;
+  }
   async function searchCreators(query){
+    resetCreatorSearch();
+    const revision=creatorSearchRevision;
+    const isCurrent=()=>revision===creatorSearchRevision&&state.addCreatorOpen;
     const platform=state.creatorPlatform||'youtube';const q=String(query||'').trim();state.creatorQuery=q;state.libraryError='';
     if(q.length<2){state.creatorSearchResults=[];state.creatorSearchLoading=false;render();return}
     state.creatorSearchLoading=true;render();
-    try{const r=await fetch(`/api/library/${platform}/search?q=${encodeURIComponent(q)}`);const data=await readJsonResponse(r,'Search failed');state.creatorSearchResults=data.results||[]}
-    catch(e){state.libraryError=e.message||'Search failed';state.creatorSearchResults=[]}
-    finally{state.creatorSearchLoading=false;render();setTimeout(()=>{const el=document.getElementById('creatorInput');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},0)}
+    try{const r=await fetch(`/api/library/${platform}/search?q=${encodeURIComponent(q)}`);const data=await readJsonResponse(r,'Search failed');if(isCurrent())state.creatorSearchResults=data.results||[]}
+    catch(e){if(isCurrent()){state.libraryError=e.message||'Search failed';state.creatorSearchResults=[]}}
+    finally{if(isCurrent()){state.creatorSearchLoading=false;render();setTimeout(()=>{if(!isCurrent())return;const el=document.getElementById('creatorInput');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},0)}}
   }
   async function removeCreator(platform,id,name){
     const label=name||'this creator';
@@ -2327,12 +2337,12 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const campaignCheck=document.getElementById('campaignCheckBtn');if(campaignCheck)campaignCheck.onclick=()=>runCampaignCheck().catch(e=>showNotice({kind:'danger',title:'Campaign check failed',message:e.message}));
     const campaignVariants=document.getElementById('campaignVariantsBtn');if(campaignVariants)campaignVariants.onclick=()=>generateCampaignVariants().catch(e=>showNotice({kind:'danger',title:'Could not generate variants',message:e.message}));
     document.querySelectorAll('[data-campaign-variant]').forEach(el=>el.onclick=()=>{const idx=Number(el.dataset.campaignVariant||0),variant=state.campaignVariants?.[idx],ci=state.selectedCandidate||0;if(!variant||!state.video?.candidates?.[ci])return;state.video.candidates[ci]={...variant,previewUrl:null,previewMeta:null};state.campaignCompliance=null;state.campaignVariants=null;prepareCandidatePreview(ci,{autoplay:true,force:true})});
-    const open=()=>{state.addCreatorOpen=true;state.libraryError='';state.creatorPlatform=state.libraryPlatform||'youtube';state.creatorQuery='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)};
+    const open=()=>{resetCreatorSearch();state.addCreatorOpen=true;state.libraryError='';state.creatorPlatform=state.libraryPlatform||'youtube';state.creatorQuery='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)};
     const add=document.getElementById('addCreator'),emptyAdd=document.getElementById('emptyAddCreator');if(add)add.onclick=open;if(emptyAdd)emptyAdd.onclick=open;
-    const close=()=>{state.addCreatorOpen=false;state.libraryError='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render()};
+    const close=()=>{resetCreatorSearch();state.addCreatorOpen=false;state.libraryError='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render()};
     ['closeCreatorModal','cancelCreator'].forEach(id=>{const el=document.getElementById(id);if(el)el.onclick=close});
     const backdrop=document.getElementById('creatorModalBackdrop');if(backdrop)backdrop.onclick=e=>{if(e.target===backdrop)close()};
-    const input=document.getElementById('creatorInput');if(input){input.oninput=e=>{state.creatorQuery=e.target.value;clearTimeout(window.__clipboostCreatorSearchTimer);window.__clipboostCreatorSearchTimer=setTimeout(()=>searchCreators(state.creatorQuery),700)}}
+    const input=document.getElementById('creatorInput');if(input){input.oninput=e=>{resetCreatorSearch();state.creatorQuery=e.target.value;document.querySelector('.creator-search-results')?.replaceChildren();const searchButton=document.querySelector('#creatorForm button');if(searchButton)searchButton.disabled=false;window.__clipboostCreatorSearchTimer=setTimeout(()=>searchCreators(state.creatorQuery),700)}}
     const form=document.getElementById('creatorForm');if(form)form.onsubmit=e=>{e.preventDefault();const value=document.getElementById('creatorInput')?.value?.trim();if(value)searchCreators(value)};
     document.querySelectorAll('[data-add-channel]').forEach(el=>el.onclick=()=>addCreatorByPlatform(el.dataset.addInput||el.dataset.addChannel));
     const exact=document.getElementById('addExactCreator');if(exact)exact.onclick=()=>{const value=document.getElementById('creatorInput')?.value?.trim()||state.creatorQuery;if(value)addCreatorByPlatform(value)};
@@ -2361,7 +2371,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh();
-    document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
+    document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{resetCreatorSearch();state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
   async function handleDesktopUpdateEvent(evt={}){
     const rawStatus=evt.status||evt.updateState?.status||'info';
