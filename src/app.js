@@ -1097,8 +1097,10 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     }catch(e){try{localStorage.removeItem('clipboost:lastProjectId')}catch{}}
     finally{state.restoringProject=false}
   }
+  let twitchLiveLastAttempt=0;
   async function refreshTwitchLive({silent=false}={}){
     if(state.libraryPlatform!=='twitch')return;
+    if(silent&&(state.page!=='library'||state.librarySection!=='live'))return;
     if(state.twitchLiveRefreshing)return;
     state.twitchLiveRefreshing=true;
     if(!silent){state.libraryError='';render()}
@@ -1110,19 +1112,22 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     }catch(e){
       if(!silent)state.libraryError=e.message||'Could not refresh Twitch live status';
     }finally{
+      twitchLiveLastAttempt=Date.now();
       state.twitchLiveRefreshing=false;
       render();
     }
   }
   function scheduleTwitchLiveRefresh(){
     clearTimeout(window.__clipboostTwitchLiveRefresh);
-    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='live')return;
+    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='live'||state.twitchLiveRefreshing)return;
     const age=Date.now()-Number(state.twitchLiveLastRefresh||0);
-    if(age>20000)setTimeout(()=>refreshTwitchLive({silent:true}),80);
+    // Failed attempts need the same cooldown as successful refreshes. Keep the
+    // catch-up refresh in the tracked timer so renders and navigation cancel it.
+    const delay=twitchLiveLastAttempt?Math.max(80,60000-(Date.now()-twitchLiveLastAttempt)):(age>20000?80:60000);
     window.__clipboostTwitchLiveRefresh=setTimeout(async()=>{
       await refreshTwitchLive({silent:true});
       scheduleTwitchLiveRefresh();
-    },60000);
+    },delay);
   }
   async function refreshTwitchClips({silent=true}={}){
     if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
@@ -2378,7 +2383,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     document.querySelectorAll('[data-library-section]').forEach(el=>el.onclick=()=>{state.librarySection=el.dataset.librarySection;clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render();if(state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()});
     const sort=document.getElementById('librarySort');if(sort)sort.onchange=e=>{state.librarySort=e.target.value;render()};
     const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
-    if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();
+    scheduleTwitchLiveRefresh();
     if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh();
     document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{resetCreatorSearch();state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
