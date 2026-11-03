@@ -5,6 +5,41 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const previewSource = source.slice(source.indexOf('  async function prepareCandidatePreview('), source.indexOf('  let disposePreviewCaptionClock='));
+const schedulingStart = source.indexOf("    if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')");
+const schedulingSource = source.slice(schedulingStart, source.indexOf('    const publishBtn=', schedulingStart));
+
+function schedulePreview({ finalMode, url = '/preview.mp4', captions = true, loading = false, error = '' }) {
+  const timers = [], requests = [];
+  const state = {
+    page: 'studio', previewFinalMode: finalMode, selectedCandidate: 0,
+    candidatePreviewVideoId: 'video-1', candidatePreviewLoading: loading, candidatePreviewError: error,
+    video: { id: 'video-1', candidates: [{ previewUrl: url, previewMeta: { editApplied: { captions } } }] },
+  };
+  const context = vm.createContext({ state, setTimeout: callback => timers.push(callback),
+    prepareCandidatePreview: (index, options) => requests.push({ index, ...options }) });
+  vm.runInContext(schedulingSource, context);
+  timers.forEach(callback => callback());
+  return requests;
+}
+
+test('completed final previews remain playable without scheduling another render', () => {
+  for (const captions of [true, false, undefined]) {
+    assert.deepEqual(schedulePreview({ finalMode: true, captions }), []);
+  }
+});
+
+test('editable previews still replace baked captions, but retain clean previews', () => {
+  assert.deepEqual(schedulePreview({ finalMode: false }), [{ index: 0, autoplay: false, force: true }]);
+  assert.deepEqual(schedulePreview({ finalMode: false, captions: false }), []);
+});
+
+test('both modes prepare missing previews and preserve loading/error guards', () => {
+  for (const finalMode of [true, false]) {
+    assert.deepEqual(schedulePreview({ finalMode, url: null }), [{ index: 0, autoplay: false, force: false }]);
+    assert.deepEqual(schedulePreview({ finalMode, url: null, loading: true }), []);
+    assert.deepEqual(schedulePreview({ finalMode, url: null, error: 'Render failed' }), []);
+  }
+});
 
 function setup(renderOptions = {}) {
   const requests = [];

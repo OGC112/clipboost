@@ -2131,7 +2131,9 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
-      if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&(state.candidatePreviewVideoId!==state.video.id||(!state.candidatePreviewLoading&&!state.candidatePreviewError)))setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
+      // Baked captions are expected in final validation previews. Only editable
+      // previews need to replace them with the draggable DOM overlays.
+      if(cand&&(!cand.previewUrl||(!state.previewFinalMode&&cand.previewMeta?.editApplied?.captions!==false))&&(state.candidatePreviewVideoId!==state.video.id||(!state.candidatePreviewLoading&&!state.candidatePreviewError)))setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
     }
     const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=()=>exportCurrent('publish');
     const applyLiveCaptionStyle=()=>{
