@@ -983,7 +983,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       if(p.kind==='youtube'){src=`https://www.youtube.com/embed/${encodeURIComponent(p.id)}?autoplay=1&rel=0`;label='YouTube preview'}
       if(p.kind==='twitch-vod'){src=`https://player.twitch.tv/?video=v${encodeURIComponent(p.id)}&parent=${encodeURIComponent(host)}&autoplay=true`;label='Twitch VOD preview'}
       if(p.kind==='twitch-clip'){src=`https://clips.twitch.tv/embed?clip=${encodeURIComponent(p.id)}&parent=${encodeURIComponent(host)}&autoplay=true`;label='Twitch clip preview'}
-      preview=`<div class="modal-backdrop video-preview-backdrop" id="videoPreviewBackdrop"><div class="card video-preview-modal"><button class="modal-close" id="closeVideoPreview">×</button><div class="eyebrow">${label}</div><h2>${escapeHtml(p.title||'Video preview')}</h2><div class="video-embed-wrap"><iframe src="${src}" title="${escapeHtml(p.title||'Video preview')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div><div class="preview-modal-footer"><span>Playback availability depends on the creator and platform embed settings.</span><a class="btn secondary" href="${escapeHtml(p.url||'#')}" target="_blank" rel="noreferrer">Open on ${p.kind==='youtube'?'YouTube':'Twitch'} ↗</a></div></div></div>`;
+      preview=`<div class="modal-backdrop video-preview-backdrop" id="videoPreviewBackdrop"><div class="card video-preview-modal" role="dialog" aria-modal="true" aria-labelledby="videoPreviewTitle"><button class="modal-close" id="closeVideoPreview" type="button" aria-label="Close video preview">×</button><div class="eyebrow">${label}</div><h2 id="videoPreviewTitle">${escapeHtml(p.title||'Video preview')}</h2><div class="video-embed-wrap"><iframe src="${src}" title="${escapeHtml(p.title||'Video preview')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div><div class="preview-modal-footer"><span>Playback availability depends on the creator and platform embed settings.</span><a class="btn secondary" href="${escapeHtml(p.url||'#')}" target="_blank" rel="noreferrer">Open on ${p.kind==='youtube'?'YouTube':'Twitch'} ↗</a></div></div></div>`;
     }
     let livePlayer='';
     if(state.livePlayer){
@@ -2359,7 +2359,14 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const clearCreatorFilter=document.getElementById('clearCreatorFilter');if(clearCreatorFilter)clearCreatorFilter.onclick=()=>{state.libraryCreatorFilter='all';render()};
     document.querySelectorAll('[data-send-studio-id]').forEach(el=>el.onclick=()=>sendLibraryItemToStudio(el.dataset.sendStudioPlatform,el.dataset.sendStudioCreator,el.dataset.sendStudioType,el.dataset.sendStudioId,el.dataset.sendStudioMode||'shorts'));
     document.querySelectorAll('[data-preview-id]').forEach(el=>el.onclick=e=>{e.preventDefault();state.previewVideo={kind:el.dataset.previewKind||'youtube',id:el.dataset.previewId,title:el.dataset.previewTitle||'Video preview',url:el.dataset.previewUrl||''};render()});
-    const closePreview=()=>{state.previewVideo=null;render()};const cp=document.getElementById('closeVideoPreview');if(cp)cp.onclick=closePreview;const pb=document.getElementById('videoPreviewBackdrop');if(pb)pb.onclick=e=>{if(e.target===pb)closePreview()};
+    const closePreview=()=>{
+      const preview=state.previewVideo;
+      state.previewVideo=null;render();
+      if(preview)[...document.querySelectorAll('[data-preview-id]')].find(el=>el.dataset.previewId===preview.id&&(el.dataset.previewKind||'youtube')===preview.kind)?.focus();
+    };
+    const cp=document.getElementById('closeVideoPreview');if(cp)cp.onclick=closePreview;
+    if(!state.uiModal)bindModalKeyboard(document.querySelector('.video-preview-modal'),{onDismiss:closePreview,initialFocus:cp,focusSelector:'button:not([disabled]), a[href], iframe'});
+    const pb=document.getElementById('videoPreviewBackdrop');if(pb)pb.onclick=e=>{if(e.target===pb)closePreview()};
     const openLivePlayer=el=>{const channel=String(el?.dataset?.liveChannel||'').trim();if(!channel)return;state.livePlayer={channel,name:el.dataset.liveName||channel,title:el.dataset.liveTitle||'Live stream',url:el.dataset.liveUrl||`https://www.twitch.tv/${channel}`,viewers:Number(el.dataset.liveViewers||0),game:el.dataset.liveGame||'Twitch'};render()};
     document.querySelectorAll('[data-live-channel]').forEach(el=>{el.onclick=e=>{if(e.target.closest('[data-refresh-live]'))return;e.preventDefault();openLivePlayer(el)};if(el.classList.contains('live-copy'))el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openLivePlayer(el)}}});
     const closeLive=()=>{state.livePlayer=null;render()};const cl=document.getElementById('closeTwitchLive');if(cl)cl.onclick=closeLive;const tlb=document.getElementById('twitchLiveBackdrop');if(tlb)tlb.onclick=e=>{if(e.target===tlb)closeLive()};
