@@ -1885,8 +1885,13 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       catch(err){showNotice({kind:'danger',eyebrow:'Discover',title:'Could not delete campaign',message:err.message||'The campaign could not be deleted.'})}
       finally{state.campaignBusy=false;render()}
     });
-    const closeCampaignDetails=()=>{state.campaignDetailsOpen=false;render()};
+    const closeCampaignDetails=()=>{
+      const id=state.campaignSelected;
+      state.campaignDetailsOpen=false;render();
+      [...document.querySelectorAll('[data-campaign-discover-select]')].find(el=>el.dataset.campaignDiscoverSelect===String(id))?.focus();
+    };
     const closeCampaignDetailsBtn=document.getElementById('closeCampaignDetails');if(closeCampaignDetailsBtn)closeCampaignDetailsBtn.onclick=closeCampaignDetails;
+    if(!state.uiModal&&!state.campaignAssetBrowser&&!state.campaignFormOpen)bindModalKeyboard(document.querySelector('.campaign-details-modal-v223'),{onDismiss:closeCampaignDetails,initialFocus:closeCampaignDetailsBtn,focusSelector:'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'});
     const campaignDetailsBackdrop=document.getElementById('campaignDetailsBackdrop');if(campaignDetailsBackdrop)campaignDetailsBackdrop.onclick=e=>{if(e.target===campaignDetailsBackdrop)closeCampaignDetails()};
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
     const winMin=document.getElementById('mintWindowMin');if(winMin)winMin.onclick=()=>window.clipboostDesktop?.minimizeWindow?.();
