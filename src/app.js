@@ -2042,6 +2042,9 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const precisionScenes=(state.video?.analysis?.timeline?.scenes||[]).map(Number).filter(Number.isFinite);
     const precisionSilences=(state.video?.analysis?.timeline?.silences||[]);
     const precisionCenters={Start:Number(manualTrimStart?.value||0),End:Number(manualTrimEnd?.value||0)};
+    // Scene/silence data stays fixed until bind runs again. Leave an unchanged
+    // boundary's ruler alone while the other trim handle is moving.
+    const precisionRulerState={};
     const syncPrecisionZoom=(start,end)=>{
       const total=Math.max(.25,Number(state.video?.details?.duration||end));
       const radius=Number(precisionWindow?.value||5);
@@ -2059,10 +2062,13 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         if(maxLabel)maxLabel.textContent=formatTime(max);
         const ruler=document.getElementById('precision'+name+'Ruler');
         if(ruler){
+          const previous=precisionRulerState[name];
+          if(previous?.ruler===ruler&&previous.min===min&&previous.max===max&&previous.value===value)continue;
           const pct=t=>Math.max(0,Math.min(100,(t-min)/Math.max(.01,max-min)*100));
           ruler.innerHTML=precisionSilences.filter(x=>Number(x.end)>=min&&Number(x.start)<=max).slice(0,100).map(x=>'<i class="mint-cut-silence" style="left:'+pct(Number(x.start))+'%;width:'+Math.max(.3,pct(Number(x.end))-pct(Number(x.start)))+'%"></i>').join('')+
           precisionScenes.filter(t=>t>=min&&t<=max).slice(0,100).map(t=>'<i class="mint-cut-scene" style="left:'+pct(t)+'%"></i>').join('')+
           '<i class="mint-cut-marker" style="left:'+pct(value)+'%"></i>';
+          precisionRulerState[name]={ruler,min,max,value};
         }
       }
     };
