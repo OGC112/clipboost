@@ -1,0 +1,62 @@
+﻿import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+
+const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+const start = source.indexOf('    if(shortVideo&&liveCaption){');
+const captionSource = source.slice(start, source.indexOf('    const manualTrimStart=', start));
+
+function setup(effect = 'active-word') {
+  let writes = 0, markup = '';
+  const listeners = {};
+  const shortVideo = { currentTime: .2, paused: true, addEventListener: (name, fn) => { listeners[name] = fn; } };
+  const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
+  const hook = { style: {} };
+  const state = { video: { candidates: [{ start: 0, end: 4 }] }, captionEffect: effect, hookTitleEnabled: true, hookTitleText: 'Hook', hookTitleDuration: '1' };
+  vm.runInNewContext(captionSource, {
+    shortVideo, liveCaption, state,
+    document: { getElementById: () => hook },
+    previewCaptionRowsForCandidate: () => [{ start: 0, end: 2, text: 'Hello world' }],
+    previewCaptionWordsForCandidate: () => [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }],
+    captionWordImportant: word => word === 'Hello',
+  });
+  return { state, shortVideo, liveCaption, hook, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup };
+}
+
+for (const effect of ['active-word', 'word-pop', 'karaoke', 'keyword-color', 'clean-bold']) {
+  test(`${effect}: repeated playback updates preserve identical caption DOM`, () => {
+    const c = setup(effect);
+    const initial = c.markup();
+    for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+    assert.equal(c.writes(), 1);
+    assert.equal(c.markup(), initial);
+    c.state.captionColor = 'cyan'; c.sync();
+    assert.equal(c.writes(), 2);
+    assert.match(c.markup(), /#35e7ff/);
+  });
+}
+
+test('word transitions, silence, backwards seeking and caption toggles stay current', () => {
+  const c = setup();
+  const first = c.markup();
+  c.shortVideo.currentTime = 1.2; c.sync();
+  assert.equal(c.writes(), 2);
+  assert.notEqual(c.markup(), first);
+  assert.equal(c.hook.style.visibility, 'hidden');
+  c.shortVideo.currentTime = 3; c.sync(); c.sync();
+  assert.equal(c.writes(), 3);
+  assert.equal(c.markup(), '');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.equal(c.writes(), 4);
+  assert.equal(c.markup(), first);
+  assert.equal(c.hook.style.visibility, 'visible');
+  c.state.captionPreference = 'off'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.equal(c.writes(), 4);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.equal(c.writes(), 5);
+});
