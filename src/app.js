@@ -486,10 +486,11 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   }
 
   async function uploadVideo(file){
-    if(!file) return;
-    if(!(await ensureStudioPreflight({needsDownload:false})))return;
-    state.uploadStatus='uploading'; state.uploadProgress=8; render();
+    if(!file||state.uploadBusy) return;
+    state.uploadBusy=true;
     try{
+      if(!(await ensureStudioPreflight({needsDownload:false})))return;
+      state.uploadStatus='uploading'; state.uploadProgress=8; render();
       const fd=new FormData(); if(state.video?.status==='linked'&&state.video?.id)fd.append('projectId',state.video.id); fd.append('video',file);
       const xhr=new XMLHttpRequest();
       const uploaded=await new Promise((resolve,reject)=>{
@@ -503,6 +504,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       state.video=data; state.selectedCandidate=0; state.uploadStatus='idle'; state.uploadProgress=100; render();
       pollProjectUntilSettled(uploaded.id);
     }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; showNotice({kind:'danger',title:'Upload failed',message:e.message||'Upload failed'}); render();}
+    finally{state.uploadBusy=false;}
   }
 
   function captionPresetY(position=state.captionPosition){
