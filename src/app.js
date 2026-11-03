@@ -323,8 +323,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const previewCaptionRows=previewCaptionRowsForCandidate(c);
     const firstCaption=previewCaptionRows[0]?.text||c.hook||'';
     const clipStartValue=Number(c.start||0),clipEndValue=Math.max(clipStartValue+.25,Number(c.end||clipStartValue+30)),clipDuration=Math.max(.25,clipEndValue-clipStartValue);
-    const clipPreviewLoading=state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
-    const previewError=state.candidatePreviewError&&state.candidatePreviewLoadingIndex===selected?state.candidatePreviewError:'';
+    const clipPreviewLoading=state.candidatePreviewVideoId===v?.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
+    const previewError=state.candidatePreviewVideoId===v?.id&&state.candidatePreviewError&&state.candidatePreviewLoadingIndex===selected?state.candidatePreviewError:'';
     const trackingInfo=c.previewMeta?.tracking||null;
     const trackingWarning=c.previewMeta?.trackingWarning||'';
     const trackingBadge=trackingInfo?`<div class="tracking-badge ${trackingWarning?'warning':''}"><span>◉</span><b>${trackingWarning?'Tracking fallback':`${trackingInfo.faceCountMax||0} face${Number(trackingInfo.faceCountMax||0)===1?'':'s'}`}</b><small>${trackingWarning?'Full source preserved':`${trackingInfo.speakerSwitches||0} switches · ${trackingInfo.reactionPeaks||0} reactions`}</small></div>`:'';
@@ -1795,18 +1795,19 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
 
   async function prepareCandidatePreview(index,{autoplay=false,force=false}={}){
     const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand||!v?.sourceUrl)return;
-    if(state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force)return;
+    // Clip indices are shared across projects; pending work belongs to one video.
+    if(state.candidatePreviewVideoId===v.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force)return;
     if(cand.previewUrl&&!force){state.candidatePreviewAutoplay=autoplay;render();return;}
     const requestId=++state.candidatePreviewRequestId;
-    state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
+    state.candidatePreviewVideoId=v.id;state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
     try{
       // Editable overlays live in the DOM; bake them only into final validation previews.
       const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,hookTitleEnabled:false,watermarkUrl:''}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
-      if(requestId!==state.candidatePreviewRequestId)return;
+      if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
       cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=autoplay;render();
     }catch(e){
-      if(requestId!==state.candidatePreviewRequestId)return;
+      if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
       state.candidatePreviewLoading=false;state.candidatePreviewError=e.message||'Could not prepare preview';render();
     }
   }
@@ -2083,7 +2084,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
-      if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
+      if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&(state.candidatePreviewVideoId!==state.video.id||(!state.candidatePreviewLoading&&!state.candidatePreviewError)))setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
     }
     const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=()=>exportCurrent('publish');
     const applyLiveCaptionStyle=()=>{

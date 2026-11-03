@@ -83,3 +83,39 @@ test('cached selection keeps the requested autoplay behavior without another ren
   assert.equal(c.state.candidatePreviewAutoplay, true);
   assert.equal(c.state.video.candidates[1].previewUrl, '/cached.mp4');
 });
+
+for (const outcome of ['success', 'failure']) {
+  for (const startNewPreview of [false, true]) {
+    test(`project switch ignores old preview ${outcome}, new request: ${startNewPreview}`, async () => {
+      const c = setup();
+      const pending = c.context.prepareCandidatePreview(0, { autoplay: true });
+      c.state.video = { id: 'video-2', sourceUrl: '/second.mp4', candidates: [{ start: 0, end: 8 }] };
+      let next;
+      if (startNewPreview) {
+        next = c.context.prepareCandidatePreview(0);
+        assert.equal(c.requests.length, 2, 'another project must not share the loading guard');
+        assert.equal(c.state.candidatePreviewVideoId, 'video-2');
+        // Finish the new preview first, then deliver the old project's response.
+        c.requests[1].resolve({ url: '/second-preview.mp4', edited: true });
+        await next;
+      }
+      const renders = c.renders();
+      if (outcome === 'success') c.requests[0].resolve({ url: '/old-preview.mp4', edited: true });
+      else c.requests[0].reject(new Error('Old project failed'));
+      await pending;
+      assert.equal(c.renders(), renders);
+      assert.equal(c.state.candidatePreviewError, '');
+      assert.equal(c.state.candidatePreviewAutoplay, false);
+      assert.equal(c.state.video.candidates[0].previewUrl, startNewPreview ? '/second-preview.mp4' : undefined);
+    });
+  }
+}
+
+test('repeated requests for the same project and clip still share the loading guard', async () => {
+  const c = setup();
+  const pending = c.context.prepareCandidatePreview(0);
+  await c.context.prepareCandidatePreview(0);
+  assert.equal(c.requests.length, 1);
+  c.requests[0].resolve({ url: '/preview.mp4' });
+  await pending;
+});
