@@ -84,7 +84,26 @@ try {
   # based on current main. This avoids rediscovering/fixing the same issue on
   # an old main snapshot. The resulting branches are stacked and need review.
   $baseRef = 'origin/main'
-  $lastPublished = @($progress.published | Where-Object { $_ -and $_.branch -match '^agent/[a-z0-9-]+
+  $lastPublished = @($progress.published | Where-Object { $_ -and $_.branch -like 'agent/*' } | Select-Object -Last 1)
+  if ($lastPublished.Count -gt 0) {
+    $priorBranch = [string]$lastPublished[0].branch
+    if ($priorBranch -notmatch '[^a-zA-Z0-9/-]') {
+      & git -C $workspace fetch --quiet origin $priorBranch
+      if ($LASTEXITCODE -eq 0) {
+        & git -C $workspace merge-base --is-ancestor origin/main ('origin/' + $priorBranch)
+        if ($LASTEXITCODE -eq 0) {
+          $baseRef = 'origin/' + $priorBranch
+        } else {
+          Write-Warning 'Prior agent branch does not include current main; using main instead.'
+        }
+      } else {
+        Write-Warning 'Prior agent branch unavailable; using main instead.'
+      }
+    }
+  }
+  Write-Host "Agent baseline: $baseRef"
+  Run 'git' @('-C', $workspace, 'switch', '-c', $branch, $baseRef)
+  $recentPublished = @($progress.published | Select-Object -Last 8 | ForEach-Object { "$($_.id): $($_.branch)" }) -join "`n"
   $projectMap = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'project-map.md') -Raw
   $instructions = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'task.md') -Raw) +
     "`nPROJECT MAP (orientation only; verify in current source):`n$projectMap`n" +
