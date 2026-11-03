@@ -2265,12 +2265,14 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const savePublishDraftsBtn=document.getElementById('savePublishDraftsBtn');if(savePublishDraftsBtn)savePublishDraftsBtn.onclick=()=>{try{localStorage.setItem('clipboost:publishDrafts',JSON.stringify({drafts:state.publishDrafts,networks:state.publishNetworks}))}catch{}showNotice({kind:'success',title:'Post drafts saved',message:'Titles, descriptions and selected networks are saved locally.'})};
     const generateVariationsBtn=document.getElementById('generateVariationsBtn');if(generateVariationsBtn)generateVariationsBtn.onclick=async()=>{
       if(!state.video?.id||state.regenerating)return;
+      const previousVideo=state.video;
       state.regenerating=true;state.video={...state.video,status:'analyzing',analysis:{...(state.video.analysis||{}),stage:'semantic-clips',progress:72}};generateVariationsBtn.disabled=true;generateVariationsBtn.textContent='↻ Generating clips…';
+      const pendingVideo=state.video;
       try{
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
         state.video=data;state.selectedCandidate=0;pollProjectUntilSettled(state.video.id);
-      }catch(e){showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
+      }catch(e){if(state.video===pendingVideo)state.video=previousVideo;showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
       finally{state.regenerating=false;if(!['ingesting','analyzing'].includes(state.video?.status))render()}
     };
     const autoIngest=document.getElementById('autoIngestBtn');if(autoIngest)autoIngest.onclick=()=>state.video?.id&&startProjectIngestion(state.video.id);
