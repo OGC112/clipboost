@@ -1,7 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compactPreviewCaptions, previewCaptionRowsForCandidate, previewCaptionWordsForCandidate } from './preview-caption-timeline.js';
+import { compactPreviewCaptions, previewCaptionRowsForCandidate, previewCaptionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
 import { compactCaptionWords } from '../server/video/captions.js';
+
+test('row-only preview supplies playback words within each caption window, preserving pauses', () => {
+  const candidate = { start: 10, end: 16 };
+  const transcript = { captions: [
+    { start: 10, end: 12, text: 'Hello there.' },
+    { start: 14, end: 16, text: 'Welcome back' },
+  ] };
+  const rows = previewCaptionRowsForCandidate(candidate, transcript);
+  const before = structuredClone(rows);
+  const words = previewPlaybackWords(rows, previewCaptionWordsForCandidate(candidate, transcript));
+  assert.deepEqual(words, [
+    { word: 'Hello', start: 0, end: 1 },
+    { word: 'there.', start: 1, end: 2 },
+    { word: 'Welcome', start: 4, end: 5 },
+    { word: 'back', start: 5, end: 6 },
+  ]);
+  assert.equal(words.some(word => word.start <= 3 && word.end >= 3), false);
+  assert.deepEqual(rows, before);
+});
+
+test('playback retains exact word timestamps and supports legacy caption rows', () => {
+  const exact = [{ word: 'Hello', start: .2, end: .4 }];
+  assert.equal(previewPlaybackWords([{ text: 'Different', start: 0, end: 1 }], exact), exact);
+  const candidate = { start: 10, end: 12, captions: [{ text: 'Legacy captions', start: 0, end: 2 }] };
+  assert.deepEqual(previewPlaybackWords(previewCaptionRowsForCandidate(candidate), []), [
+    { word: 'Legacy', start: 0, end: 1 }, { word: 'captions', start: 1, end: 2 },
+  ]);
+  assert.deepEqual(previewPlaybackWords([], []), []);
+  assert.deepEqual(previewPlaybackWords([
+    { text: '', start: 0, end: 1 }, { text: 'Invalid', start: 2, end: 1 },
+    { text: 'Invalid', start: NaN, end: 1 },
+  ], []), []);
+});
 
 test('preview phrases match export word grouping across pauses and sentence boundaries', () => {
   const candidate = { start: 10, end: 16 };

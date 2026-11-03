@@ -7,7 +7,7 @@ import { hasCustomCaptionY, resolveCaptionY } from './editor-caption-position.js
 import { previewCaptionFontSize, previewCaptionOutlineSize } from './preview-caption-appearance.js';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
-import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate } from './preview-caption-timeline.js';
+import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
 
 /* MINT-RED-NOIR-21.14.6 */
 /* MINT-HEADER-21.14.5 */
@@ -1908,7 +1908,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     if(shortVideo&&liveCaption){
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
-      const captionWords=previewCaptionWordsForCandidate(cand);
+      const captionWords=previewPlaybackWords(captions,previewCaptionWordsForCandidate(cand));
       // Word-to-phrase timing is fixed until this preview is rebuilt. Cache
       // misses too, so unmatched words do not rescan every animation frame.
       const captionLineByWord=new Map();

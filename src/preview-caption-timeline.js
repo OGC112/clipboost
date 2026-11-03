@@ -1,5 +1,21 @@
 import { compactCaptionWords } from '../server/video/captions.js';
 
+// Row-only transcripts still need a playback clock for caption effects. Use
+// evenly distributed timing only when exact speech timestamps are unavailable.
+export function previewPlaybackWords(rows, words) {
+  if (words.length) return words;
+  return rows.flatMap(row => {
+    const tokens = String(row.text || '').trim().split(/\s+/).filter(Boolean);
+    const start = Number(row.start), end = Number(row.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    return tokens.map((word, index) => ({
+      word,
+      start: start + (end - start) * index / tokens.length,
+      end: start + (end - start) * (index + 1) / tokens.length,
+    }));
+  });
+}
+
 // Pure caption timeline preparation for the editor preview.
 export function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
     const phrases=[
