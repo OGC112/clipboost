@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
+import { previewPlaybackWords } from './preview-caption-timeline.js';
+import { createPreviewWordLookup } from './preview-word-lookup.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    if(shortVideo&&liveCaption){');
@@ -14,10 +16,15 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
   let keywordChecks = 0;
   let speechSearches = 0;
   let phraseSearches = 0;
+  let activeWordSearches = 0;
   rows.find = predicate => { phraseSearches++; return Array.prototype.find.call(rows, predicate); };
   const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
-  words.findIndex = predicate => { speechSearches++; return Array.prototype.findIndex.call(words, predicate); };
-  words.filter = predicate => { wordScans++; return Array.prototype.filter.call(words, predicate); };
+  words.filter = predicate => {
+    wordScans++;
+    const phraseWords = Array.prototype.filter.call(words, predicate);
+    phraseWords.findIndex = predicate => { activeWordSearches++; return Array.prototype.findIndex.call(phraseWords, predicate); };
+    return phraseWords;
+  };
   const listeners = {};
   const shortVideo = { currentTime: .2, paused: true, addEventListener: (name, fn) => { listeners[name] = fn; } };
   const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
@@ -31,14 +38,35 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     cancelAnimationFrame: id => frames.delete(id),
     shortVideo, liveCaption, state,
     isPreviewHookVisible,
+    previewPlaybackWords,
+    createPreviewWordLookup: words => {
+      const lookup = createPreviewWordLookup(words);
+      return time => { speechSearches++; return lookup(time); };
+    },
     document: { getElementById: () => hook },
     previewCaptionRowsForCandidate: () => rows,
     previewCaptionWordsForCandidate: () => words,
     captionWordImportant: word => { keywordChecks++; return word === 'Hello'; },
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
 }
+
+test('unchanged playback skips active phrase-word scans but transitions and style edits stay live', () => {
+  const c = setup();
+  assert.equal(c.activeWordSearches(), 1);
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.equal(c.activeWordSearches(), 1);
+  c.shortVideo.currentTime = 1.2; c.listeners.seeked();
+  assert.equal(c.activeWordSearches(), 2);
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.equal(c.activeWordSearches(), 3);
+  assert.match(c.markup(), />world<\/span>/);
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.activeWordSearches(), 4);
+  assert.match(c.markup(), />Hello<\/span>/);
+});
 
 test('phrase lookup runs once per encountered word, including misses and backwards seeks', () => {
   const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }]);
