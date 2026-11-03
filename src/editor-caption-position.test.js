@@ -78,7 +78,7 @@ function bindCaptionPosition(position = 'bottom', y = null) {
     handlers.keydown(event);
     return event;
   };
-  return { state, select, handlers, press, saves: () => saves, styles: () => styles };
+  return { state, select, handlers, press, liveCaption: context.liveCaption, saves: () => saves, styles: () => styles };
 }
 
 test('keyboard caption movement keeps Custom selection, saved state and preview in sync', () => {
@@ -109,9 +109,46 @@ test('keyboard caption movement preserves both position limits', () => {
 test('pointer caption movement still saves and selects the custom position', () => {
   const editor = bindCaptionPosition();
   editor.handlers.pointerdown({ preventDefault() {}, stopPropagation() {}, pointerId: 1 });
-  editor.handlers.pointerup({ clientY: 37 });
+  editor.handlers.pointerup({ type: 'pointerup', pointerId: 1, clientY: 37 });
   assert.equal(editor.state.captionY, .37);
   assert.equal(editor.state.captionPosition, 'custom');
   assert.equal(editor.select.value, 'custom');
+  assert.equal(editor.saves(), 1);
+});
+
+for (const type of ['pointercancel', 'lostpointercapture']) {
+  test(`${type} saves the last visible caption position and ends the drag once`, () => {
+    const editor = bindCaptionPosition();
+    const classes = new Set();
+    editor.liveCaption.classList = { add: name => classes.add(name), remove: name => classes.delete(name) };
+    editor.handlers.pointerdown({ pointerId: 1, preventDefault() {}, stopPropagation() {} });
+    editor.handlers.pointermove({ pointerId: 1, clientY: 37 });
+    editor.handlers[type]({ type, pointerId: 1, clientY: 0 });
+    assert.equal(editor.state.captionY, .37);
+    assert.equal(editor.select.value, 'custom');
+    assert.equal(classes.has('dragging'), false);
+    editor.handlers.pointermove({ pointerId: 1, clientY: 65 });
+    editor.handlers.lostpointercapture({ type: 'lostpointercapture', pointerId: 1 });
+    assert.equal(editor.liveCaption.style.top, '37%');
+    assert.equal(editor.saves(), 1);
+    assert.equal(buildRenderOptions(editor.state, editor.state.captionY).captionY, .37);
+    editor.handlers.pointerdown({ pointerId: 2, preventDefault() {}, stopPropagation() {} });
+    editor.handlers.pointerup({ type: 'pointerup', pointerId: 2, clientY: 65 });
+    assert.equal(editor.state.captionY, .65);
+    assert.equal(editor.saves(), 2);
+  });
+}
+
+test('another pointer cannot move, replace or finish an active caption drag', () => {
+  const editor = bindCaptionPosition();
+  editor.handlers.pointerdown({ pointerId: 1, preventDefault() {}, stopPropagation() {} });
+  editor.handlers.pointerdown({ pointerId: 2 });
+  editor.handlers.pointermove({ pointerId: 2, clientY: 12 });
+  editor.handlers.pointerup({ type: 'pointerup', pointerId: 2, clientY: 12 });
+  editor.handlers.pointercancel({ type: 'pointercancel', pointerId: 2 });
+  assert.equal(editor.saves(), 0);
+  assert.equal(editor.liveCaption.style.top, undefined);
+  editor.handlers.pointerup({ type: 'pointerup', pointerId: 1, clientY: 44 });
+  assert.equal(editor.state.captionY, .44);
   assert.equal(editor.saves(), 1);
 });

@@ -2162,7 +2162,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const captionPositionSelect=document.getElementById('captionPositionSelect');if(captionPositionSelect)captionPositionSelect.onchange=e=>{if(e.target.value==='custom')return;state.captionPosition=e.target.value;state.captionY=null;saveLiveCaptionSettings()};
     if(liveCaption){
       const frame=liveCaption.closest('.mint-short-video-frame-v222');
-      let dragging=false,lastY=currentCaptionY();
+      let activePointer=null,lastY=currentCaptionY();
       const saveCaptionPosition=y=>{
         state.captionY=Number(y.toFixed(4));
         state.captionPosition='custom';
@@ -2172,14 +2172,23 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         if(select)select.value='custom';
       };
       const updateCaptionDrag=e=>{
-        if(!dragging||!frame)return;
+        if(activePointer===null||activePointer!==e.pointerId||!frame)return;
         const rect=frame.getBoundingClientRect();if(!rect.height)return;
         lastY=Math.max(.12,Math.min(.88,(e.clientY-rect.top)/rect.height));
         liveCaption.style.top=(lastY*100)+'%';
       };
-      liveCaption.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();dragging=true;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
+      liveCaption.addEventListener('pointerdown',e=>{if(activePointer!==null||!frame)return;e.preventDefault();e.stopPropagation();activePointer=e.pointerId;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
       liveCaption.addEventListener('pointermove',updateCaptionDrag);
-      liveCaption.addEventListener('pointerup',e=>{if(!dragging)return;updateCaptionDrag(e);dragging=false;liveCaption.classList.remove('dragging');saveCaptionPosition(lastY)});
+      const stopCaptionDrag=e=>{
+        if(activePointer===null||activePointer!==e.pointerId)return;
+        if(e.type==='pointerup')updateCaptionDrag(e);
+        activePointer=null;
+        liveCaption.classList.remove('dragging');
+        saveCaptionPosition(lastY);
+      };
+      liveCaption.addEventListener('pointerup',stopCaptionDrag);
+      liveCaption.addEventListener('pointercancel',stopCaptionDrag);
+      liveCaption.addEventListener('lostpointercapture',stopCaptionDrag);
       liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;saveCaptionPosition(Math.max(.12,Math.min(.88,currentCaptionY()+delta)));applyLiveCaptionStyle()});
     }
     const watermarkFile=document.getElementById('watermarkFile');if(watermarkFile)watermarkFile.onchange=e=>uploadWatermark(e.target.files?.[0]);
