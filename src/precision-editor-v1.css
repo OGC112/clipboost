@@ -30,6 +30,8 @@
 /* Zoomed precision trimming: local ruler, measured scene and silence markers. */
 .mint-cut-zoom{border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:11px;margin:10px 0;background:rgba(11,12,18,.55)}
 .mint-cut-zoom-head,.mint-cut-boundary-head,.mint-cut-axis,.mint-cut-legend{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* The Shorts sidebar shrinks to 220px; keep the window selector on a visible row. */
+.mint-cut-zoom-head{flex-wrap:wrap}
 .mint-cut-zoom-head>b{font-size:12px}
 .mint-cut-zoom-head label,.mint-cut-boundary-head,.mint-cut-legend,.mint-cut-axis{font-size:10px;color:#aaa}
 .mint-cut-zoom-head select{background:#25232d;color:#fff;border:1px solid #605260;border-radius:5px;padding:5px;font-size:11px}
