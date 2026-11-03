@@ -1,6 +1,5 @@
 param(
   [string]$RepoPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-  [int]$MaxCyclesPerDay = 6,
   [int]$PauseMinutes = 10
 )
 $ErrorActionPreference = 'Stop'
@@ -41,25 +40,11 @@ try {
     Write-Host "Stop flag exists at $stopPath. Remove it before starting the worker."
     return
   }
-  if ($MaxCyclesPerDay -lt 1 -or $MaxCyclesPerDay -gt 24) { throw 'MaxCyclesPerDay must be 1..24.' }
   if ($PauseMinutes -lt 1) { throw 'PauseMinutes must be at least 1.' }
-  $day = (Get-Date).Date
-  $cyclesToday = 0
   $consecutiveFailures = 0
-  Write-Host "ClipBoost continuous worker started. Up to $MaxCyclesPerDay cycles/day, pause $PauseMinutes minutes."
+  $consecutiveQuotaFailures = 0
+  Write-Host "ClipBoost continuous worker started. No daily cycle cap; pause $PauseMinutes minutes between tasks."
   while (-not (Test-Path -LiteralPath $stopPath)) {
-    $now = Get-Date
-    if ($now.Date -ne $day) {
-      $day = $now.Date
-      $cyclesToday = 0
-      $consecutiveFailures = 0
-    }
-    if ($cyclesToday -ge $MaxCyclesPerDay) {
-      $seconds = [int][Math]::Ceiling((($day.AddDays(1)) - $now).TotalSeconds)
-      Write-Host "Daily cycle cap reached. Waiting until next day."
-      if (-not (Wait-Interruptibly ([Math]::Max(60, $seconds)))) { break }
-      continue
-    }
     if (Test-Path -LiteralPath $workspace) {
       $dirty = @(& git -C $workspace status --porcelain)
       if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
@@ -69,22 +54,49 @@ try {
     }
     $before = Get-ProgressCounts
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $cycleStarted = Get-Date
     Write-Host "Starting agent cycle at $stamp"
     & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $runner -RepoPath $RepoPath
     $code = $LASTEXITCODE
-    $cyclesToday++
     if ($code -ne 0) {
+      # Codex errors are recorded by run.ps1's transcript. Do not mistake
+      # model capacity or quota exhaustion for a permanent technical failure.
+      $logText = ''
+      $lastLog = Get-ChildItem -LiteralPath $logDir -Filter 'run-*.log' -File |
+        Where-Object { $_.LastWriteTime -ge $cycleStarted.AddMinutes(-1) } |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+      if ($lastLog) {
+        try { $logText = Get-Content -LiteralPath $lastLog.FullName -Raw -ErrorAction Stop }
+        catch { Write-Warning "Cannot read agent transcript: $($_.Exception.Message)" }
+      }
+      if ($logText -match '(?i)(usage limit|rate limit|quota (exceeded|reached|exhausted)|credits exhausted|insufficient credits|out of credits|too many requests|http 429|error 429)') {
+        $consecutiveQuotaFailures++
+        $consecutiveFailures = 0
+        $waitSeconds = if ($logText -match '(?i)(weekly|week limit|7.day)') { 86400 }
+          elseif ($consecutiveQuotaFailures -ge 2) { 86400 }
+          else { 18900 }
+        Write-Warning "Codex usage quota/rate limit detected. Pausing $([int]($waitSeconds / 60)) minutes; no credit purchases."
+        if (-not (Wait-Interruptibly $waitSeconds)) { break }
+        continue
+      }
+      if ($logText -match '(?i)(selected model is at capacity|model is at capacity|model overloaded|server overloaded)') {
+        $consecutiveFailures = 0
+        Write-Warning 'Codex model temporarily at capacity. Retrying after 30 minutes.'
+        if (-not (Wait-Interruptibly 1800)) { break }
+        continue
+      }
       $consecutiveFailures++
-      Write-Warning "Agent cycle failed (exit $code); failure $consecutiveFailures of 2."
+      Write-Warning "Agent cycle failed (exit $code); technical failure $consecutiveFailures of 2."
       if ($consecutiveFailures -ge 2) {
-        Write-Warning 'Two consecutive failures. Stopping to avoid repeated quota or environment errors.'
+        Write-Warning 'Two consecutive technical failures. Stopping for manual review.'
         break
       }
-      Write-Host 'Waiting 60 minutes before a single retry (no automatic purchases).'
+      Write-Host 'Waiting 60 minutes before a single retry.'
       if (-not (Wait-Interruptibly 3600)) { break }
       continue
     }
     $consecutiveFailures = 0
+    $consecutiveQuotaFailures = 0
     $after = Get-ProgressCounts
     if ($after.published -gt $before.published) {
       Write-Host 'Task published successfully; continuing after cooldown.'
