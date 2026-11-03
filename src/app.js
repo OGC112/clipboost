@@ -1877,7 +1877,8 @@
     else prepareCandidatePreview(index,{autoplay});
   }
 
-  function render(){const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
+  let disposeShortPreview=null;
+  function render(){disposeShortPreview?.();disposeShortPreview=null;const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
   function bind(){
     const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
     const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
@@ -1942,7 +1943,9 @@
       const captions=previewCaptionRowsForCandidate(cand);
       const captionWords=previewCaptionWordsForCandidate(cand);
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
-      let captionRaf=0;
+      let captionRaf=0,autoplayTimer=0;
+      const previewListeners=new AbortController();
+      disposeShortPreview=()=>{previewListeners.abort();stopCaptionClock();clearTimeout(autoplayTimer)};
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
       const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       const syncCaption=()=>{
@@ -1996,15 +1999,15 @@
         else captionRaf=0;
       };
       const startCaptionClock=()=>{stopCaptionClock();tickCaptionClock()};
-      shortVideo.addEventListener('play',startCaptionClock);
-      shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()});
-      shortVideo.addEventListener('timeupdate',syncCaption);
-      shortVideo.addEventListener('seeked',syncCaption);
-      shortVideo.addEventListener('loadedmetadata',syncCaption,{once:true});
-      shortVideo.addEventListener('ended',()=>{stopCaptionClock();shortVideo.currentTime=0;syncCaption()});
+      shortVideo.addEventListener('play',startCaptionClock,{signal:previewListeners.signal});
+      shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()},{signal:previewListeners.signal});
+      shortVideo.addEventListener('timeupdate',syncCaption,{signal:previewListeners.signal});
+      shortVideo.addEventListener('seeked',syncCaption,{signal:previewListeners.signal});
+      shortVideo.addEventListener('loadedmetadata',syncCaption,{once:true,signal:previewListeners.signal});
+      shortVideo.addEventListener('ended',()=>{stopCaptionClock();shortVideo.currentTime=0;syncCaption()},{signal:previewListeners.signal});
       if(state.candidatePreviewAutoplay){
         const autoplay=()=>{state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
-        if(shortVideo.readyState>=2)setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true});
+        if(shortVideo.readyState>=2)autoplayTimer=setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true,signal:previewListeners.signal});
       }
       syncCaption();
     }
