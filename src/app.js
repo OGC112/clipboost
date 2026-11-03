@@ -709,6 +709,7 @@
     finally{state.platformConnectBusy='';render()}
   }
   async function exportCurrent(mode='publish'){
+    if(state.exportBusy)return;
     const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
     state.exportBusy=true;render();
