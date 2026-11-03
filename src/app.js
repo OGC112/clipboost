@@ -1899,6 +1899,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
       const captionWords=previewCaptionWordsForCandidate(cand);
+      // Phrase membership is fixed for this preview; only the active word changes each tick.
+      let cachedCaptionLine=null,cachedLineWords=[];
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
       let captionRaf=0;
       // The playback clock runs between word changes; preserve identical caption DOM.
@@ -1930,7 +1932,11 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
           return;
         }
 
-        const lineWords=captionWords.filter(w=>Number(w.end||0)>Number(line.start||0)+.005&&Number(w.start||0)<Number(line.end||0)-.005);
+        if(line!==cachedCaptionLine){
+          cachedLineWords=captionWords.filter(w=>Number(w.end||0)>Number(line.start||0)+.005&&Number(w.start||0)<Number(line.end||0)-.005);
+          cachedCaptionLine=line;
+        }
+        const lineWords=cachedLineWords;
         const words=lineWords.length?lineWords:[activeSpeechWord];
         const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
         const effect=state.captionEffect||'active-word';

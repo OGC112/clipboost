@@ -7,8 +7,11 @@ const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    if(shortVideo&&liveCaption){');
 const captionSource = source.slice(start, source.indexOf('    const manualTrimStart=', start));
 
-function setup(effect = 'active-word') {
+function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello world' }]) {
   let writes = 0, markup = '';
+  let wordScans = 0;
+  const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
+  words.filter = predicate => { wordScans++; return Array.prototype.filter.call(words, predicate); };
   const listeners = {};
   const shortVideo = { currentTime: .2, paused: true, addEventListener: (name, fn) => { listeners[name] = fn; } };
   const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
@@ -22,13 +25,39 @@ function setup(effect = 'active-word') {
     cancelAnimationFrame: id => frames.delete(id),
     shortVideo, liveCaption, state,
     document: { getElementById: () => hook },
-    previewCaptionRowsForCandidate: () => [{ start: 0, end: 2, text: 'Hello world' }],
-    previewCaptionWordsForCandidate: () => [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }],
+    previewCaptionRowsForCandidate: () => rows,
+    previewCaptionWordsForCandidate: () => words,
     captionWordImportant: word => word === 'Hello',
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans };
 }
+
+test('playback reuses phrase membership across ticks, word transitions and style changes', () => {
+  const c = setup();
+  for (let i = 0; i < 120; i++) c.sync();
+  c.shortVideo.currentTime = 1.2; c.sync();
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.match(c.markup(), />world<\/span>/);
+  c.state.captionColor = 'cyan'; c.sync();
+  assert.match(c.markup(), /#35e7ff/);
+  assert.equal(c.wordScans(), 1);
+});
+
+test('phrase changes and backwards seeks recompute membership without retaining old words', () => {
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }, { start: 1, end: 2, text: 'world' }]);
+  assert.match(c.markup(), />Hello<\/span>/);
+  assert.doesNotMatch(c.markup(), /world/);
+  c.shortVideo.currentTime = 1.2; c.sync(); c.sync();
+  assert.match(c.markup(), />world<\/span>/);
+  assert.doesNotMatch(c.markup(), /Hello/);
+  assert.equal(c.wordScans(), 2);
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.match(c.markup(), />Hello<\/span>/);
+  assert.doesNotMatch(c.markup(), /world/);
+  assert.equal(c.wordScans(), 3);
+});
 
 for (const effect of ['active-word', 'word-pop', 'karaoke', 'keyword-color', 'clean-bold']) {
   test(`${effect}: repeated playback updates preserve identical caption DOM`, () => {
