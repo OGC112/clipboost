@@ -1,3 +1,4 @@
+import { bindModalKeyboard } from './modal-keyboard.js';
 import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate } from './preview-caption-timeline.js';
 
 /* MINT-RED-NOIR-21.14.6 */
@@ -27,6 +28,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
   function clearCampaignImportReview(){state.campaignImportDraft=null;state.campaignDraftUrl='';try{localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
   let uiModalResolve=null;
+  let uiModalTriggerId=null;
   let rememberedReadyVersions=[];
   try{rememberedReadyVersions=JSON.parse(sessionStorage.getItem('clipboost:updateReadyPrompted')||'[]');if(!Array.isArray(rememberedReadyVersions))rememberedReadyVersions=[]}catch{rememberedReadyVersions=[]}
   const updateReadyPromptedVersions=new Set(rememberedReadyVersions.map(String));
@@ -44,13 +46,14 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const kind=m.kind||'info';
     const mode=m.mode||'notice';
     const actions=mode==='progress'?`<div class="cb-modal-installing"><div class="cb-analysis-progress"><div class="cb-analysis-progress-head"><span>${escapeHtml(m.progressLabel||'Working…')}</span><strong>${Math.round(Math.max(0,Math.min(100,Number(m.progress||0))))}%</strong></div><div class="cb-analysis-progress-track"><i style="width:${Math.max(4,Math.min(100,Number(m.progress||4)))}%"></i></div></div></div>`:`<div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div>`;
-    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
+    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
   }
   function openModal(options={}){
+    if(!state.uiModal)uiModalTriggerId=document.activeElement?.id||null;
     if(uiModalResolve){try{uiModalResolve(false)}catch{}uiModalResolve=null}
     return new Promise(resolve=>{uiModalResolve=resolve;state.uiModal={mode:'notice',kind:'info',eyebrow:'ClipBoost',confirmLabel:'OK',...options};render();});
   }
-  function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(resolve)resolve(result)}
+  function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(uiModalTriggerId)document.getElementById(uiModalTriggerId)?.focus();uiModalTriggerId=null;if(resolve)resolve(result)}
   function showNotice(options={}){return openModal({mode:'notice',...options})}
   function confirmAction(options={}){return openModal({mode:'confirm',cancelLabel:'Cancel',confirmLabel:'Confirm',...options})}
   async function promptReadyUpdate(version,{force=false}={}){
@@ -1816,6 +1819,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
 
   function render(){const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
   function bind(){
+    bindModalKeyboard(document.querySelector('.cb-modal'),{mode:state.uiModal?.mode,onDismiss:()=>finishModal(false)});
     const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
     const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
     const modalBackdrop=document.getElementById('cbModalBackdrop');if(modalBackdrop)modalBackdrop.onclick=e=>{if(e.target===modalBackdrop&&state.uiModal?.mode==='confirm')finishModal(false)};
