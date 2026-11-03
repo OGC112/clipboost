@@ -1,6 +1,7 @@
 import { projectDisplayState } from './project-display-state.js';
 import { readJsonResponse } from './api-response.js';
 import { buildRenderOptions } from './editor-render-options.js';
+import { isPreviewHookVisible } from './preview-hook-visibility.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
 import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate } from './preview-caption-timeline.js';
 
@@ -1917,8 +1918,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const hookTitle=document.getElementById('liveHookTitle');
         if(hookTitle){
-          const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
-          hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
+          hookTitle.style.visibility=isPreviewHookVisible(state,rel,duration)?'visible':'hidden';
         }
 
         const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
@@ -2124,7 +2124,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;saveLiveCaptionSettings()};
     const captionFontSelect=document.getElementById('captionFontSelect');if(captionFontSelect)captionFontSelect.onchange=e=>{state.captionFont=e.target.value;saveLiveCaptionSettings()};
     const captionEffectSelect=document.getElementById('captionEffectSelect');if(captionEffectSelect)captionEffectSelect.onchange=e=>{state.captionEffect=e.target.value;saveLiveCaptionSettings()};
-    const updateHookTitlePreview=()=>{const hook=document.getElementById('liveHookTitle');if(!hook)return;hook.textContent=String(state.hookTitleText||'').toUpperCase();hook.style.left=(Number(state.hookTitleX||.5)*100)+'%';hook.style.top=(Number(state.hookTitleY||.12)*100)+'%';hook.style.transform='translate(-50%,-50%) scale('+Number(state.hookTitleScale||1)+')';const video=document.getElementById('shortVideo');const cand=state.video?.candidates?.[state.selectedCandidate||0];const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));const rel=Number(video?.currentTime||0);const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));hook.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden'};
+    const updateHookTitlePreview=()=>{const hook=document.getElementById('liveHookTitle');if(!hook)return;hook.textContent=String(state.hookTitleText||'').toUpperCase();hook.style.left=(Number(state.hookTitleX||.5)*100)+'%';hook.style.top=(Number(state.hookTitleY||.12)*100)+'%';hook.style.transform='translate(-50%,-50%) scale('+Number(state.hookTitleScale||1)+')';const video=document.getElementById('shortVideo');const cand=state.video?.candidates?.[state.selectedCandidate||0];const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));const rel=Number(video?.currentTime||0);hook.style.visibility=isPreviewHookVisible(state,rel,duration)?'visible':'hidden'};
     const hookTitleEnabledSelect=document.getElementById('hookTitleEnabledSelect');if(hookTitleEnabledSelect)hookTitleEnabledSelect.onchange=e=>{state.hookTitleEnabled=e.target.value==='on';persistEditorPrefs();updateHookTitlePreview()};
     const hookTitleTextInput=document.getElementById('hookTitleTextInput');if(hookTitleTextInput)hookTitleTextInput.oninput=e=>{state.hookTitleText=String(e.target.value||'').slice(0,120);persistEditorPrefs();updateHookTitlePreview()};
     const hookTitleDurationSelect=document.getElementById('hookTitleDurationSelect');if(hookTitleDurationSelect)hookTitleDurationSelect.onchange=e=>{state.hookTitleDuration=e.target.value;persistEditorPrefs();updateHookTitlePreview()};

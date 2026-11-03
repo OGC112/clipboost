@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { isPreviewHookVisible } from './preview-hook-visibility.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    if(shortVideo&&liveCaption){');
@@ -25,6 +26,7 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame: id => frames.delete(id),
     shortVideo, liveCaption, state,
+    isPreviewHookVisible,
     document: { getElementById: () => hook },
     previewCaptionRowsForCandidate: () => rows,
     previewCaptionWordsForCandidate: () => words,
