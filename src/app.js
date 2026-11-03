@@ -1776,10 +1776,15 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       if(!state.manualTrimUndoApplying)state.manualTrimUndo={videoId:v.id,index,start:Number(cand.start),end:Number(cand.end)};
       state.manualTrimUndoApplying=false;
       v.candidates[index]={...cand,...data.candidate,previewUrl:null,previewMeta:null,previewEdited:false};
+      // A trim can finish after the user has moved to another clip.
+      if((state.selectedCandidate||0)!==index)return;
       state.timelineSeek=Number(v.candidates[index].start||0);
       state.campaignCompliance=null;state.campaignVariants=null;
       render();
-      setTimeout(()=>prepareCandidatePreview(index,{autoplay:false,force:true}),0);
+      setTimeout(()=>{
+        if(revision!==trimSaveRevision||state.video?.id!==v.id||(state.selectedCandidate||0)!==index)return;
+        prepareCandidatePreview(index,{autoplay:false,force:true});
+      },0);
     }catch(e){
       if(revision!==trimSaveRevision||state.video?.id!==v.id)return;
       showNotice({kind:'danger',eyebrow:'Manual cut',title:'Could not apply cut',message:e.message||'The manual start/end adjustment could not be saved.'});
