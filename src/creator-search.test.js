@@ -76,3 +76,36 @@ test('creator dialog interactions invalidate requests before changing context', 
   assert.match(source, /input.oninput=e=>\{resetCreatorSearch\(\);/);
   assert.match(source, /resetCreatorSearch\(\);state.creatorPlatform=el.dataset.creatorPlatform/);
 });
+
+test('creator keyboard dismissal resets search, closes overlay and restores launcher focus', () => {
+  const lines = source.split('\n');
+  const closeBinding = lines.find(line => line.includes('const close=()=>{resetCreatorSearch()'));
+  const keyboardBinding = lines.find(line => line.includes("document.querySelector('.creator-modal')"));
+  for (const uiModal of [null, { mode: 'notice' }]) {
+    const state = { uiModal, addCreatorOpen: true, libraryError: 'old', creatorSearchResults: [{}], creatorSearchLoading: true };
+    const calls = [];
+    let options;
+    const input = {};
+    vm.runInNewContext(`${closeBinding}\n${keyboardBinding}`, {
+      state,
+      resetCreatorSearch: () => calls.push('reset'),
+      render: () => calls.push('render'),
+      document: {
+        querySelector: () => ({}),
+        getElementById: id => id === 'creatorInput' ? input : { focus: () => calls.push('focus launcher') },
+      },
+      bindModalKeyboard: (_, value) => { options = value; },
+    });
+    if (uiModal) {
+      assert.equal(options, undefined, 'nested notices retain keyboard ownership');
+      continue;
+    }
+    assert.equal(options.initialFocus, input);
+    options.onDismiss();
+    assert.equal(state.addCreatorOpen, false);
+    assert.equal(state.libraryError, '');
+    assert.equal(state.creatorSearchResults.length, 0);
+    assert.equal(state.creatorSearchLoading, false);
+    assert.deepEqual(calls, ['reset', 'render', 'focus launcher']);
+  }
+});

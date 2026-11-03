@@ -55,3 +55,29 @@ test('binding tolerates absent dialogs and recovers Tab focus from outside', () 
   assert.equal(ui.press('Tab').prevented, true);
   assert.equal(ui.doc.activeElement, ui.items[0]);
 });
+
+test('creator dialog focuses its input and traps Tab across fields and actions', () => {
+  const doc = { activeElement: null };
+  const control = () => ({ focus() { doc.activeElement = this; } });
+  const close = control(), input = control(), submit = control();
+  let selector;
+  const dialog = { ownerDocument: doc, querySelectorAll(value) { selector = value; return [close, input, submit]; } };
+  bindModalKeyboard(dialog, {
+    initialFocus: input,
+    focusSelector: 'button:not([disabled]), input:not([disabled])',
+    onDismiss() {},
+  });
+  assert.equal(doc.activeElement, input);
+  const pressTab = shiftKey => {
+    const event = { key: 'Tab', shiftKey, preventDefault() { this.prevented = true; } };
+    dialog.onkeydown(event);
+    return event;
+  };
+  assert.equal(pressTab(false).prevented, undefined);
+  doc.activeElement = submit;
+  assert.equal(pressTab(false).prevented, true);
+  assert.equal(doc.activeElement, close);
+  assert.equal(pressTab(true).prevented, true);
+  assert.equal(doc.activeElement, submit);
+  assert.equal(selector, 'button:not([disabled]), input:not([disabled])');
+});
