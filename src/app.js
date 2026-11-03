@@ -677,7 +677,12 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
     if(state.exportAllBusy)return;state.exportAllBusy=true;render();
-    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');showNotice({kind:data.blockedCount?'warning':'success',title:'Export complete',message:`${data.count||0} edited clips exported${data.blockedCount?` · ${data.blockedCount} blocked by campaign checks`:''}.`});if(data.count&&window.clipboostDesktop?.openExportsFolder)window.clipboostDesktop.openExportsFolder();}
+    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');showNotice({kind:data.blockedCount?'warning':'success',title:'Export complete',message:`${data.count||0} edited clips exported${data.blockedCount?` · ${data.blockedCount} blocked by campaign checks`:''}.`});if(data.count&&window.clipboostDesktop?.openExportsFolder){
+        try{
+          const folderError=await window.clipboostDesktop.openExportsFolder();
+          if(folderError)throw new Error(folderError);
+        }catch(e){showNotice({kind:'warning',title:'Clips exported; folder could not open',message:`Your ${data.count} exported clips are saved. ${e.message||'Open the exports folder manually.'}`,detail:data.exportDir||''})}
+      }}
     catch(e){showNotice({kind:'danger',title:'Export failed',message:e.message||'Export all failed'})}finally{state.exportAllBusy=false;render()}
   }
   function chart(){return `<svg viewBox="0 0 900 260" preserveAspectRatio="none">${[40,90,140,190,240].map(y=>`<line class="gridline" x1="0" x2="900" y1="${y}" y2="${y}"/>`).join('')}<polyline class="line1" points="0,215 70,198 140,202 210,168 280,175 350,141 420,150 490,112 560,130 630,92 700,104 780,55 900,31"/><polyline class="line2" points="0,224 70,215 140,204 210,190 280,193 350,166 420,172 490,152 560,160 630,137 700,145 780,105 900,88"/><polyline class="line3" points="0,230 70,225 140,218 210,209 280,214 350,198 420,202 490,183 560,188 630,172 700,178 780,150 900,134"/></svg>`}
