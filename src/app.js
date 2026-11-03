@@ -1,4 +1,5 @@
 import { campaignProgress } from './campaign-progress.js';
+import { waitForCampaignProject } from './campaign-project-polling.js';
 import { buildEditorPreferences } from './editor-preferences.js';
 import { projectDisplayState } from './project-display-state.js';
 import { readJsonResponse } from './api-response.js';
@@ -1557,32 +1558,26 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   }
 
   async function waitForCampaignProjectResult(id){
-    const started=Date.now(),timeoutMs=30*60*1000;
-    while(Date.now()-started<timeoutMs){
-      const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
-      const data=await readJsonResponse(r,'Could not refresh campaign project');
-      state.video=data;
-      const status=String(data?.status||'');
-      if(['ready','degraded'].includes(status)){if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}return data}
-      const ingestionStage=String(data?.ingestion?.stage||'').toLowerCase();
-      const analysisStage=String(data?.analysis?.stage||'').toLowerCase();
-      const ingestionError=String(data?.ingestion?.error||'').trim();
-      const analysisError=String(data?.analysis?.error||'').trim();
-      if(status==='failed'||ingestionStage==='error'||analysisStage==='error'||ingestionError){
-        throw new Error(analysisError||ingestionError||'Campaign video processing failed.');
-      }
-      const {title:nextTitle,progressLabel:nextLabel,progress:pct}=campaignProgress(data,state.uiModal?.progress);
-      if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
-        state.uiModal={...state.uiModal,title:nextTitle,progressLabel:nextLabel,progress:pct};
-        const modal=document.querySelector('.cb-modal');
-        if(modal){
-          const title=modal.querySelector('#cbModalTitle'),label=modal.querySelector('.cb-analysis-progress-head span'),value=modal.querySelector('.cb-analysis-progress-head strong'),bar=modal.querySelector('.cb-analysis-progress-track i');
-          if(title)title.textContent=nextTitle;if(label)label.textContent=nextLabel;if(value)value.textContent=`${Math.round(pct)}%`;if(bar)bar.style.width=`${Math.max(4,pct)}%`;
-        }else render();
-      }
-      await new Promise(resolve=>setTimeout(resolve,1500));
-    }
-    throw new Error('Campaign video processing timed out.');
+    const settled=await waitForCampaignProject({
+      readProject:async()=>{
+        const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
+        return readJsonResponse(r,'Could not refresh campaign project');
+      },
+      onProject:data=>{state.video=data},
+      onProgress:data=>{
+        const {title:nextTitle,progressLabel:nextLabel,progress:pct}=campaignProgress(data,state.uiModal?.progress);
+        if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
+          state.uiModal={...state.uiModal,title:nextTitle,progressLabel:nextLabel,progress:pct};
+          const modal=document.querySelector('.cb-modal');
+          if(modal){
+            const title=modal.querySelector('#cbModalTitle'),label=modal.querySelector('.cb-analysis-progress-head span'),value=modal.querySelector('.cb-analysis-progress-head strong'),bar=modal.querySelector('.cb-analysis-progress-track i');
+            if(title)title.textContent=nextTitle;if(label)label.textContent=nextLabel;if(value)value.textContent=`${Math.round(pct)}%`;if(bar)bar.style.width=`${Math.max(4,pct)}%`;
+          }else render();
+        }
+      },
+    });
+    if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}
+    return settled;
   }
 
   async function startCampaignCreating(){

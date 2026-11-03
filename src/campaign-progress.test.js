@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { campaignProgress } from './campaign-progress.js';
+import { waitForCampaignProject } from './campaign-project-polling.js';
 
 test('campaign progress uses analysis before ingestion, including a reported zero', () => {
   const data = { status: 'analyzing', analysis: { stage: 'speech-to-text', progress: 0 }, ingestion: { stage: 'download', progress: 80 } };
@@ -48,6 +49,9 @@ for (const terminal of ['ready', 'degraded', 'failed']) {
     ];
     const context = vm.createContext({
       campaignProgress, state: { uiModal: { progress: 5 } },
+      waitForCampaignProject: options => waitForCampaignProject({
+        ...options, sleep: async delay => { assert.equal(delay, 1500); },
+      }),
       document: { querySelector: () => null },
       fetch: async () => responses.shift(), readJsonResponse: async response => response,
       render() { snapshots.push({ ...context.state.uiModal }); },
