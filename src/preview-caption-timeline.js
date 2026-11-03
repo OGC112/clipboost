@@ -1,4 +1,4 @@
-import { compactCaptionWords } from '../server/video/captions.js';
+import { compactCaptionRows, compactCaptionWords } from '../server/video/captions.js';
 
 // Row-only transcripts still need a playback clock for caption effects. Use
 // evenly distributed timing only when exact speech timestamps are unavailable.
@@ -18,42 +18,8 @@ export function previewPlaybackWords(rows, words) {
 
 // Pure caption timeline preparation for the editor preview.
 export function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
-    const phrases=[
-      ['thank','you'],['thanks','so','much'],['so','much'],['do','you'],['did','you'],['are','you'],['can','you'],['could','you'],['would','you'],
-      ['you','want','to'],['want','to'],['going','to'],['have','to'],['need','to'],['got','to'],['let','me'],['i','want'],['i','need'],['i','think'],['i','know'],
-      ['what','do','you'],['how','do','you'],['why','do','you'],['merci','beaucoup'],['est-ce','que'],['tu','veux'],['vous','voulez'],['je','veux'],['je','pense'],
-      ['je','sais'],['on','va'],['il','faut'],['parce','que'],['pour','que']
-    ];
-    const clean=w=>String(w||'').toLowerCase().replace(/^[("'‘’“”\[]+|[)"'‘’“”\],.!?…:;]+$/g,'').replace(/[’]/g,"'");
-    const phraseLen=(tokens,index)=>{
-      const rem=tokens.slice(index,index+maxWords).map(t=>clean(t.word));
-      for(const p of phrases)if(p.length<=maxWords&&p.length<=rem.length&&p.every((w,i)=>rem[i]===w))return p.length;
-      return 0;
-    };
-    const timed=[];
-    for(const row of rows||[]){
-      const words=String(row?.text||'').trim().split(/\s+/).filter(Boolean);if(!words.length)continue;
-      const start=Number(row.start||0),end=Math.max(start+.05,Number(row.end||start+.05)),span=end-start;
-      words.forEach((word,i)=>timed.push({word,start:start+span*(i/words.length),end:start+span*((i+1)/words.length)}));
-    }
-    const out=[];let i=0;
-    while(i<timed.length){
-      let take=phraseLen(timed,i);
-      if(!take){
-        take=1;
-        for(let n=2;n<=maxWords&&i+n<=timed.length;n++){
-          const text=timed.slice(i,i+n).map(t=>t.word).join(' ');
-          if(text.length>maxChars)break;
-          take=n;
-          if(phraseLen(timed,i+n)&&n>=2)break;
-          if(/[.!?…]$/.test(timed[i+n-1].word))break;
-        }
-      }
-      const chunk=timed.slice(i,i+take);
-      out.push({start:Number(chunk[0].start.toFixed(3)),end:Number(Math.max(chunk[0].start+.05,chunk.at(-1).end).toFixed(3)),text:chunk.map(t=>t.word).join(' ')});
-      i+=take;
-    }
-    return out;
+    // Match export's phrase boundaries and silence threshold for row-only transcripts.
+    return compactCaptionRows(rows,{maxWords,maxChars,minWords:2,maxGap:.14});
   }
 export function previewCaptionRowsForCandidate(cand, transcript){
     if(!cand)return[];

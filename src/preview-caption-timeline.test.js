@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compactPreviewCaptions, previewCaptionRowsForCandidate, previewCaptionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
-import { compactCaptionWords } from '../server/video/captions.js';
+import { compactCaptionRows, compactCaptionWords } from '../server/video/captions.js';
 
 test('row-only preview supplies playback words within each caption window, preserving pauses', () => {
   const candidate = { start: 10, end: 16 };
@@ -111,4 +111,35 @@ test('word timeline sorts, clips, merges adjacent duplicates and preserves later
     { start: 1.5, end: 2, word: 'world' },
   ]);
   assert.deepEqual(transcript, before);
+});
+
+
+test('row-only preview matches export without interpolating speech across silence', () => {
+  const candidate = { start: 10, end: 16 };
+  const transcript = { captions: [
+    { start: 10, end: 11, text: 'Hello' },
+    { start: 14, end: 16, text: 'world again' },
+  ] };
+  const before = structuredClone(transcript);
+  const rows = previewCaptionRowsForCandidate(candidate, transcript);
+  assert.deepEqual(rows, [
+    { start: 0, end: 1, text: 'Hello' },
+    { start: 4, end: 6, text: 'world again' },
+  ]);
+  assert.deepEqual(rows, compactCaptionRows(transcript.captions.map(row => ({
+    ...row, start: row.start - 10, end: row.end - 10,
+  })), { maxWords: 4, maxChars: 22, minWords: 2, maxGap: .14 }));
+  const words = previewPlaybackWords(rows, []);
+  assert.equal(words.some(word => word.start < 4 && word.end > 1), false);
+  assert.equal(words.find(word => word.word === 'world').start, 4);
+  assert.deepEqual(transcript, before);
+  assert.deepEqual(previewCaptionRowsForCandidate({ ...candidate, captions: rows }), rows);
+});
+
+test('row-only grouping preserves sentence ends and the export silence threshold', () => {
+  assert.deepEqual(compactPreviewCaptions([
+    { start: 0, end: .5, text: 'Stop.' },
+    { start: .5, end: 1, text: 'Next' },
+    { start: 1.15, end: 2, text: 'Later' },
+  ]).map(row => row.text), ['Stop.', 'Next', 'Later']);
 });
