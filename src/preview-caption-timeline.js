@@ -1,3 +1,5 @@
+import { compactCaptionWords } from '../server/video/captions.js';
+
 // Pure caption timeline preparation for the editor preview.
 export function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
     const phrases=[
@@ -39,6 +41,11 @@ export function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
   }
 export function previewCaptionRowsForCandidate(cand, transcript){
     if(!cand)return[];
+    // Match export's speech windows and phrase boundaries whenever exact word
+    // timestamps exist. Estimated row timing can otherwise join words across
+    // audible pauses or assign a word to the wrong preview phrase.
+    const words=previewCaptionWordsForCandidate(cand,transcript);
+    if(words.length)return compactCaptionWords(words,{maxWords:4,maxChars:22,minWords:1,maxGap:.14});
     // AI Studio and Campaign Studio must consume the exact same transcript
     // timeline. Campaign candidates may carry legacy caption rows, but those
     // are now fallback-only when the project has no transcript captions.

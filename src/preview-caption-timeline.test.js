@@ -1,6 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compactPreviewCaptions, previewCaptionRowsForCandidate, previewCaptionWordsForCandidate } from './preview-caption-timeline.js';
+import { compactCaptionWords } from '../server/video/captions.js';
+
+test('preview phrases match export word grouping across pauses and sentence boundaries', () => {
+  const candidate = { start: 10, end: 16 };
+  const transcript = {
+    captions: [{ start: 10, end: 16, text: 'Hello there. Later we go' }],
+    words: [
+      { start: 10, end: 10.3, word: 'Hello' },
+      { start: 10.32, end: 10.7, word: 'there.' },
+      { start: 12, end: 12.3, word: 'Later' },
+      { start: 14, end: 14.2, word: 'we' },
+      { start: 14.25, end: 14.6, word: 'go' },
+    ],
+  };
+  const before = structuredClone(transcript);
+  const rows = previewCaptionRowsForCandidate(candidate, transcript);
+  assert.deepEqual(rows.map(row => row.text), ['Hello there.', 'Later', 'we go']);
+  assert.equal(rows[1].start, 2);
+  assert.equal(rows[1].end, 2.3);
+  assert.deepEqual(rows, compactCaptionWords(transcript.words.map(word => ({
+    ...word, start: word.start - 10, end: word.end - 10,
+  })), { maxWords: 4, maxChars: 22, minWords: 1, maxGap: .14 }));
+  assert.deepEqual(transcript, before);
+});
+
+test('word-only transcripts produce preview phrases clipped to the selected video range', () => {
+  const rows = previewCaptionRowsForCandidate({ start: 10, end: 12 }, { rawWords: [
+    { start: 9.8, end: 10.2, word: 'Hello' },
+    { start: 11.5, end: 12.5, word: 'world' },
+    { start: 13, end: 14, word: 'Outside' },
+  ] });
+  assert.deepEqual(rows.map(({ start, end, text }) => ({ start, end, text })), [
+    { start: 0, end: .2, text: 'Hello' },
+    { start: 1.5, end: 2, text: 'world' },
+  ]);
+});
 
 test('caption rows use the project transcript, clip to candidate time and leave inputs intact', () => {
   const candidate = { start: 10, end: 12, captions: [{ start: 0, end: 2, text: 'Legacy' }] };
