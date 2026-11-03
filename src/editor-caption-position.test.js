@@ -54,3 +54,64 @@ test('missing or invalid custom positions fall back to the selected preset', () 
     assert.equal(context.currentCaptionY(), .82);
   }
 });
+
+function bindCaptionPosition(position = 'bottom', y = null) {
+  const { state, context } = setup(position, y);
+  const handlers = {};
+  const select = { options: [{ value: position }], value: position, add(option) { this.options.push(option); } };
+  let saves = 0, styles = 0;
+  Object.assign(context, {
+    liveCaption: {
+      closest: () => ({ getBoundingClientRect: () => ({ top: 0, height: 100 }) }),
+      addEventListener: (name, handler) => { handlers[name] = handler; },
+      setPointerCapture() {}, classList: { add() {}, remove() {} }, style: {},
+    },
+    document: { getElementById: () => select },
+    Option: function(text, value) { this.text = text; this.value = value; },
+    persistEditorPrefs: () => { saves++; },
+    applyLiveCaptionStyle: () => { styles++; },
+  });
+  const start = source.indexOf('    if(liveCaption){');
+  vm.runInContext(source.slice(start, source.indexOf('    const watermarkFile=', start)), context);
+  const press = key => {
+    const event = { key, preventDefault() { this.defaultPrevented = true; } };
+    handlers.keydown(event);
+    return event;
+  };
+  return { state, select, handlers, press, saves: () => saves, styles: () => styles };
+}
+
+test('keyboard caption movement keeps Custom selection, saved state and preview in sync', () => {
+  const editor = bindCaptionPosition();
+  assert.equal(editor.press('ArrowUp').defaultPrevented, true);
+  assert.equal(editor.state.captionY, .795);
+  assert.equal(editor.state.captionPosition, 'custom');
+  assert.equal(editor.select.value, 'custom');
+  editor.press('ArrowDown');
+  assert.equal(editor.state.captionY, .82);
+  assert.equal(editor.select.options.filter(o => o.value === 'custom').length, 1);
+  assert.equal(editor.saves(), 2);
+  assert.equal(editor.styles(), 2);
+  assert.equal(editor.press('Tab').defaultPrevented, undefined);
+  assert.equal(editor.saves(), 2);
+});
+
+test('keyboard caption movement preserves both position limits', () => {
+  for (const [y, key] of [[.12, 'ArrowUp'], [.88, 'ArrowDown']]) {
+    const editor = bindCaptionPosition('custom', y);
+    editor.press(key);
+    assert.equal(editor.state.captionY, y);
+    assert.equal(editor.select.value, 'custom');
+    assert.equal(editor.select.options.length, 1);
+  }
+});
+
+test('pointer caption movement still saves and selects the custom position', () => {
+  const editor = bindCaptionPosition();
+  editor.handlers.pointerdown({ preventDefault() {}, stopPropagation() {}, pointerId: 1 });
+  editor.handlers.pointerup({ clientY: 37 });
+  assert.equal(editor.state.captionY, .37);
+  assert.equal(editor.state.captionPosition, 'custom');
+  assert.equal(editor.select.value, 'custom');
+  assert.equal(editor.saves(), 1);
+});

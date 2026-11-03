@@ -2149,6 +2149,14 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     if(liveCaption){
       const frame=liveCaption.closest('.mint-short-video-frame-v222');
       let dragging=false,lastY=currentCaptionY();
+      const saveCaptionPosition=y=>{
+        state.captionY=Number(y.toFixed(4));
+        state.captionPosition='custom';
+        persistEditorPrefs();
+        const select=document.getElementById('captionPositionSelect');
+        if(select&&!Array.from(select.options).some(o=>o.value==='custom'))select.add(new Option('Custom','custom'));
+        if(select)select.value='custom';
+      };
       const updateCaptionDrag=e=>{
         if(!dragging||!frame)return;
         const rect=frame.getBoundingClientRect();if(!rect.height)return;
@@ -2157,8 +2165,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       };
       liveCaption.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();dragging=true;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
       liveCaption.addEventListener('pointermove',updateCaptionDrag);
-      liveCaption.addEventListener('pointerup',e=>{if(!dragging)return;updateCaptionDrag(e);dragging=false;liveCaption.classList.remove('dragging');state.captionY=Number(lastY.toFixed(4));state.captionPosition='custom';persistEditorPrefs();const select=document.getElementById('captionPositionSelect');if(select&&!Array.from(select.options).some(o=>o.value==='custom'))select.add(new Option('Custom','custom'));if(select)select.value='custom'});
-      liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;state.captionY=Math.max(.12,Math.min(.88,currentCaptionY()+delta));state.captionPosition='custom';persistEditorPrefs();applyLiveCaptionStyle()});
+      liveCaption.addEventListener('pointerup',e=>{if(!dragging)return;updateCaptionDrag(e);dragging=false;liveCaption.classList.remove('dragging');saveCaptionPosition(lastY)});
+      liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;saveCaptionPosition(Math.max(.12,Math.min(.88,currentCaptionY()+delta)));applyLiveCaptionStyle()});
     }
     const watermarkFile=document.getElementById('watermarkFile');if(watermarkFile)watermarkFile.onchange=e=>uploadWatermark(e.target.files?.[0]);
     const removeWatermarkBtn=document.getElementById('removeWatermarkBtn');if(removeWatermarkBtn)removeWatermarkBtn.onclick=()=>{state.watermarkUrl='';state.watermarkName='';persistEditorPrefs();render()};
