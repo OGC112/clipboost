@@ -163,3 +163,31 @@ test('pause stops the preview frame and playback can start it again', () => {
   c.listeners.play();
   assert.equal(c.frames.size, 1);
 });
+
+test('buffering suspends caption frames until playback resumes without a new play event', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  c.listeners.waiting();
+  c.listeners.waiting();
+  assert.equal(c.shortVideo.paused, false);
+  assert.equal(c.frames.size, 0);
+
+  // Seeks and style edits still update captions while the frame loop is idle.
+  c.shortVideo.currentTime = 1.2;
+  c.listeners.seeked();
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionColor = 'cyan';
+  c.sync();
+  assert.match(c.markup(), /#35e7ff/);
+  assert.equal(c.frames.size, 0);
+
+  c.listeners.playing();
+  c.listeners.playing();
+  assert.equal(c.frames.size, 1, 'resuming must not create duplicate loops');
+  c.listeners.waiting();
+  c.context.disposePreviewCaptionClock();
+  c.listeners.playing();
+  assert.equal(c.frames.size, 0, 'a detached preview must stay stopped');
+});

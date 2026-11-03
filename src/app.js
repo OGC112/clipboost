@@ -1976,6 +1976,9 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       };
       const startCaptionClock=()=>{stopCaptionClock();tickCaptionClock()};
       shortVideo.addEventListener('play',startCaptionClock);
+      // Buffering leaves paused=false, but the media clock is no longer advancing.
+      shortVideo.addEventListener('waiting',stopCaptionClock);
+      shortVideo.addEventListener('playing',startCaptionClock);
       shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()});
       shortVideo.addEventListener('timeupdate',syncCaption);
       shortVideo.addEventListener('seeked',syncCaption);
