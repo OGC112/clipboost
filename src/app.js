@@ -1,3 +1,4 @@
+import { createEditorKeyboardHandler } from './editor-keyboard-shortcuts.js';
 import { campaignProgress } from './campaign-progress.js';
 import { waitForCampaignProject } from './campaign-project-polling.js';
 import { buildEditorPreferences } from './editor-preferences.js';
@@ -2443,7 +2444,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     if(rawStatus==='available'&&evt.manual) return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
   }
   if(window.clipboostDesktop?.onUpdateEvent&&!window.__clipboostUpdateEventsBound){window.__clipboostUpdateEventsBound=true;window.clipboostDesktop.onUpdateEvent(handleDesktopUpdateEvent)}
-  if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',e=>{if(e.defaultPrevented||state.uiModal)return;if(e.key==='Escape'&&state.campaignAssetBrowser){e.preventDefault();state.campaignAssetBrowser=null;state.campaignAssetBusy=false;render();return}if(e.key==='Escape'&&state.campaignDetailsOpen){e.preventDefault();state.campaignDetailsOpen=false;render();return}const tag=String(e.target?.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;if(state.page!=='studio'||state.campaignAssetBrowser||state.campaignDetailsOpen||state.addCreatorOpen||state.previewVideo||state.livePlayer)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'){e.preventDefault();if(e.shiftKey)exportAll();else exportCurrent();return}if(e.key==='ArrowRight'||e.key==='ArrowLeft'){if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.target?.closest?.('video,audio,[role="slider"]'))return;const list=state.video?.candidates||[];if(!list.length)return;e.preventDefault();const dir=e.key==='ArrowRight'?1:-1;const next=(Math.min(state.selectedCandidate||0,list.length-1)+dir+list.length)%list.length;selectCandidatePreview(next,{autoplay:false})}})}
+  if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',createEditorKeyboardHandler({state,render,selectCandidatePreview,exportCurrent,exportAll}))}
   if(window.clipboostDesktop?.reportActivity&&!window.__clipboostActivityBound){
     window.__clipboostActivityBound=true;
     let lastActivityReport=0;
