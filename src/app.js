@@ -1903,6 +1903,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       let captionRaf=0;
       // The playback clock runs between word changes; preserve identical caption DOM.
       let lastCaptionMarkup=null;
+      let lastCaptionRender=null;
       const updateCaptionMarkup=markup=>{
         if(markup===lastCaptionMarkup)return;
         liveCaption.innerHTML=markup;
@@ -1926,6 +1927,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
         liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
         if(!hasSpeechCaption){
+          lastCaptionRender=null;
           updateCaptionMarkup('');
           return;
         }
@@ -1939,6 +1941,9 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
         const effect=state.captionEffect||'active-word';
         const accent=accentMap[state.captionColor||'auto']||accentMap.auto;
+        // Reuse markup between word/style changes, including duplicate media events.
+        if(lastCaptionRender?.line===line&&lastCaptionRender.word===activeSpeechWord&&lastCaptionRender.effect===effect&&lastCaptionRender.accent===accent)return;
+        lastCaptionRender={line,word:activeSpeechWord,effect,accent};
         if(effect==='word-pop'){
           const w=words[active]||activeSpeechWord;
           updateCaptionMarkup(`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`);

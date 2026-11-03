@@ -10,6 +10,7 @@ const captionSource = source.slice(start, source.indexOf('    const manualTrimSt
 function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello world' }]) {
   let writes = 0, markup = '';
   let wordScans = 0;
+  let keywordChecks = 0;
   const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
   words.filter = predicate => { wordScans++; return Array.prototype.filter.call(words, predicate); };
   const listeners = {};
@@ -27,11 +28,34 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     document: { getElementById: () => hook },
     previewCaptionRowsForCandidate: () => rows,
     previewCaptionWordsForCandidate: () => words,
-    captionWordImportant: word => word === 'Hello',
+    captionWordImportant: word => { keywordChecks++; return word === 'Hello'; },
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks };
 }
+
+test('unchanged playback skips caption markup construction while hook and visibility stay current', () => {
+  const c = setup('keyword-color');
+  const initialChecks = c.keywordChecks();
+  assert.ok(initialChecks > 0);
+  for (let i = 0; i < 120; i++) c.sync();
+  assert.equal(c.keywordChecks(), initialChecks);
+  c.state.hookTitleEnabled = false;
+  c.state.captionPreference = 'off'; c.sync();
+  assert.equal(c.hook.style.visibility, 'hidden');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.equal(c.keywordChecks(), initialChecks);
+  c.state.captionColor = 'cyan'; c.sync();
+  assert.equal(c.keywordChecks(), initialChecks * 2);
+  assert.match(c.markup(), /#35e7ff/);
+  c.shortVideo.currentTime = 3; c.sync();
+  assert.equal(c.markup(), '');
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.equal(c.keywordChecks(), initialChecks * 3);
+  assert.match(c.markup(), /Hello/);
+});
 
 test('playback reuses phrase membership across ticks, word transitions and style changes', () => {
   const c = setup();
