@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "CB-001",
+      "priority": 1,
+      "title": "Reduce unnecessary editor redraws during playback",
+      "instructions": "Inspect playback-related render paths in src/app.js. Identify ONE redundant DOM rewrite or event-handler rebinding during playback and avoid it safely. Preserve all preview, caption and timeline behavior. Add a focused regression test if feasible. Do not attempt a broad render refactor."
+    },
+    {
+      "id": "CB-002",
+      "priority": 2,
+      "title": "Keep timeline controls stable when the Windows window resizes",
+      "instructions": "Inspect editor timeline layout and resize handling. Fix ONE reproducible cause of controls jumping, overflowing or becoming unusable on window shrink. Prefer a targeted CSS or resize-handler correction, with a regression check where feasible."
+    },
+    {
+      "id": "CB-003",
+      "priority": 3,
+      "title": "Ensure captions-off remains off in preview and exported video",
+      "instructions": "Trace the captions-off flag from editor UI to preview and FFmpeg export. Fix ONE concrete mismatch only if found; otherwise add a focused regression test proving captions-off stays off. Avoid changing FFmpeg encoding defaults."
+    },
+    {
+      "id": "CB-004",
+      "priority": 4,
+      "title": "Protect the keep-entire-video mode for short videos",
+      "instructions": "Inspect short-video trimming and full-video override. Fix ONE issue where a short input is unexpectedly shortened or the preview desynchronizes after keep-entire-video is chosen. Add a targeted test; preserve manual trim."
+    },
+    {
+      "id": "CB-005",
+      "priority": 5,
+      "title": "Preserve editable hook position through preview and export",
+      "instructions": "Inspect hook/title position state, drag interaction, preview and export. Address ONE concrete mismatch or add regression coverage. Do not redesign the hook editor."
+    },
+    {
+      "id": "CB-006",
+      "priority": 6,
+      "title": "Prevent grey background regressions with Twitch subtitle cropout",
+      "instructions": "Inspect Twitch subtitle cropout and blurred background composition. Fix ONE clear grey-background regression or add a focused regression test. Keep crop and FFmpeg behavior compatible."
+    },
+    {
+      "id": "CB-007",
+      "priority": 7,
+      "title": "Prevent duplicate editor listeners after repeated renders",
+      "instructions": "Inspect a frequently re-rendered editor control for duplicate event listeners or cleanup omissions. Fix ONE concrete case and add targeted coverage if feasible. Avoid global event architecture changes."
+    },
+    {
+      "id": "CB-008",
+      "priority": 8,
+      "title": "Stop unnecessary preview polling when playback is inactive",
+      "instructions": "Inspect requestAnimationFrame, video frame callbacks, timers or polling. Fix ONE unnecessary loop when preview is paused, detached or editor closed. Preserve responsiveness on resume."
+    },
+    {
+      "id": "CB-009",
+      "priority": 9,
+      "title": "Improve one preview/export consistency edge case",
+      "instructions": "Compare preview and FFmpeg export handling for crop, subtitles or scaling. Identify and fix ONE well-defined discrepancy, with regression coverage. Avoid broad export pipeline changes."
+    },
+    {
+      "id": "CB-010",
+      "priority": 10,
+      "title": "Keep export progress UI responsive",
+      "instructions": "Inspect progress reporting and UI updates during FFmpeg export. Fix ONE redundant synchronous UI operation or overly frequent update that harms responsiveness. Do not change encoding, cancellation or output format."
+    }
+  ]
+}
