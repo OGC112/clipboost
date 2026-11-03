@@ -123,7 +123,7 @@ export function compactCaptionRows(captions=[], {maxWords=4,maxChars=22,minWords
 }
 
 
-function dedupeAdjacentWords(words=[]){
+export function dedupeAdjacentWords(words=[]){
   const out=[];
   for(const token of words){
     const prev=out[out.length-1];

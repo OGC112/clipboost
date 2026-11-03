@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import { compactPreviewCaptions, previewCaptionRowsForCandidate, previewCaptionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
 import { compactCaptionRows, compactCaptionWords } from '../server/video/captions.js';
 
+test('preview and export preserve distinct accented words and merge accented duplicates alike', () => {
+  for (const tokens of [['a', 'à'], ['ou', 'où'], ['à', 'À,'], ['été', 'ÉTÉ!'], ['你好', '你好']]) {
+    const words = tokens.map((word, index) => ({ word, start: index * .25, end: index * .25 + .2 }));
+    const transcript = { words };
+    const before = structuredClone(transcript);
+    const preview = previewCaptionWordsForCandidate({ start: 0, end: 2 }, transcript);
+    const exported = compactCaptionWords(words, { minWords: 1 }).flatMap(row => row.words);
+    assert.deepEqual(preview, exported, tokens.join(' / '));
+    assert.deepEqual(preview.map(word => word.word), tokens[0] === 'a' || tokens[0] === 'ou' ? tokens : [tokens[0]]);
+    assert.deepEqual(transcript, before);
+  }
+});
+
 test('row-only preview supplies playback words within each caption window, preserving pauses', () => {
   const candidate = { start: 10, end: 16 };
   const transcript = { captions: [

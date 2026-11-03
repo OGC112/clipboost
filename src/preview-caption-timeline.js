@@ -1,4 +1,4 @@
-import { compactCaptionRows, compactCaptionWords } from '../server/video/captions.js';
+import { compactCaptionRows, compactCaptionWords, dedupeAdjacentWords } from '../server/video/captions.js';
 
 // Row-only transcripts still need a playback clock for caption effects. Use
 // evenly distributed timing only when exact speech timestamps are unavailable.
@@ -51,14 +51,6 @@ export function previewCaptionWordsForCandidate(cand, transcript){
       }))
       .filter(w=>w.word&&w.end>w.start)
       .sort((a,b)=>a.start-b.start);
-    const cleanWord=w=>String(w||'').toLowerCase().replace(/^\W+|\W+$/g,'');
-    const words=[];
-    for(const w of raw){
-      const prev=words[words.length-1];
-      const same=prev&&cleanWord(prev.word)&&cleanWord(prev.word)===cleanWord(w.word);
-      const gap=same?Math.max(0,Number(w.start||0)-Number(prev.end||0)):Infinity;
-      if(same&&gap<=.18){prev.end=Math.max(prev.end,w.end);continue}
-      words.push({...w});
-    }
-    return words;
+    // Share export's lexical comparison, including accented words and punctuation.
+    return dedupeAdjacentWords(raw);
   }
