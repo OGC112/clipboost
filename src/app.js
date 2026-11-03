@@ -549,16 +549,23 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   }
 
   function currentRenderOptions(){return buildRenderOptions(state,currentCaptionY())}
+  let watermarkUploadRevision=0;
+  function removeWatermark(){
+    watermarkUploadRevision++;
+    state.watermarkUrl='';state.watermarkName='';persistEditorPrefs();render();
+  }
   async function uploadWatermark(file){
     if(!file)return;
+    const revision=++watermarkUploadRevision;
     try{
       const fd=new FormData();fd.append('watermark',file);
       const r=await fetch('/api/watermarks',{method:'POST',body:fd});
       const data=await readJsonResponse(r,'Could not upload watermark');
+      if(revision!==watermarkUploadRevision)return;
       state.watermarkUrl=data.url;state.watermarkName=data.originalName||file.name||'Watermark';
       state.watermarkX=.86;state.watermarkY=.12;state.watermarkScale=.18;state.watermarkOpacity=.9;
       persistEditorPrefs();render();
-    }catch(e){showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
+    }catch(e){if(revision===watermarkUploadRevision)showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
   }
     function invalidateRenderedPreviews(){state.candidatePreviewRequestId++;for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;state.candidatePreviewLoadingIndex=-1;}
   async function loadPlatformConnections({quiet=false}={}){
@@ -2169,7 +2176,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;saveCaptionPosition(Math.max(.12,Math.min(.88,currentCaptionY()+delta)));applyLiveCaptionStyle()});
     }
     const watermarkFile=document.getElementById('watermarkFile');if(watermarkFile)watermarkFile.onchange=e=>uploadWatermark(e.target.files?.[0]);
-    const removeWatermarkBtn=document.getElementById('removeWatermarkBtn');if(removeWatermarkBtn)removeWatermarkBtn.onclick=()=>{state.watermarkUrl='';state.watermarkName='';persistEditorPrefs();render()};
+    const removeWatermarkBtn=document.getElementById('removeWatermarkBtn');if(removeWatermarkBtn)removeWatermarkBtn.onclick=removeWatermark;
     const liveWatermark=document.getElementById('liveWatermark');
     const applyWatermarkLive=()=>{
       const wm=document.getElementById('liveWatermark');if(!wm)return;
