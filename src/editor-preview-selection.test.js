@@ -24,6 +24,40 @@ function setup(renderOptions = {}) {
   return { state, requests, context, renders: () => renders };
 }
 
+for (const data of [{}, null, { url: '' }, { url: '   ' }, { url: 42 }]) {
+  test(`invalid preview response ${JSON.stringify(data)} shows a recoverable error`, async () => {
+    const c = setup();
+    const pending = c.context.prepareCandidatePreview(0, { autoplay: true });
+    c.requests[0].resolve(data);
+    await pending;
+    assert.equal(c.state.candidatePreviewLoading, false);
+    assert.equal(c.state.candidatePreviewAutoplay, false);
+    assert.equal(c.state.video.candidates[0].previewUrl, undefined);
+    assert.match(c.state.candidatePreviewError, /no playable preview.*Retry preview/);
+
+    const retry = c.context.prepareCandidatePreview(0, { force: true });
+    assert.equal(c.requests.length, 2);
+    assert.equal(c.state.candidatePreviewError, '');
+    c.requests[1].resolve({ url: '/recovered.mp4', edited: true });
+    await retry;
+    assert.equal(c.state.video.candidates[0].previewUrl, '/recovered.mp4');
+    assert.equal(c.state.candidatePreviewLoading, false);
+    assert.equal(c.state.candidatePreviewError, '');
+  });
+}
+
+test('invalid response from a superseded preview cannot show an error on a cached clip', async () => {
+  const c = setup();
+  const pending = c.context.prepareCandidatePreview(0);
+  c.context.selectCandidatePreview(1);
+  const renders = c.renders();
+  c.requests[0].resolve(null);
+  await pending;
+  assert.equal(c.renders(), renders);
+  assert.equal(c.state.candidatePreviewError, '');
+  assert.equal(c.state.video.candidates[1].previewUrl, '/cached.mp4');
+});
+
 for (const finalMode of [false, true]) {
   test(`${finalMode ? 'final' : 'editable'} preview renders hook, captions and watermark in the intended layer`, async () => {
     const options = {

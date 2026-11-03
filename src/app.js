@@ -1811,6 +1811,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,hookTitleEnabled:false,watermarkUrl:''}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
       if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
+      if(typeof data?.url!=='string'||!data.url.trim())throw new Error('Could not prepare clip preview: the server returned no playable preview. Retry preview.');
       cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=state.candidatePreviewPendingAutoplay;render();
     }catch(e){
       if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
