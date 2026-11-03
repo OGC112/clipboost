@@ -502,9 +502,10 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const uploaded=await new Promise((resolve,reject)=>{
         xhr.open('POST','/api/videos');
         xhr.upload.onprogress=e=>{if(e.lengthComputable){state.uploadProgress=Math.max(8,Math.round((e.loaded/e.total)*70)); const bar=document.querySelector('.upload-progress i'); if(bar)bar.style.width=state.uploadProgress+'%';}};
-        xhr.onload=()=>{try{const data=JSON.parse(xhr.responseText||'{}'); if(xhr.status>=200&&xhr.status<300)resolve(data); else reject(new Error(data.error||'Upload failed'));}catch(e){reject(e)}};
+        xhr.onload=()=>readJsonResponse({status:xhr.status,ok:xhr.status>=200&&xhr.status<300,text:async()=>xhr.responseText||''},'Upload failed').then(resolve,reject);
         xhr.onerror=()=>reject(new Error('Upload failed')); xhr.send(fd);
       });
+      if(typeof uploaded?.id!=='string'||!uploaded.id.trim())throw new Error('Upload failed: the server did not return a project ID. Please try again.');
       state.video=uploaded; try{localStorage.setItem('clipboost:lastProjectId',uploaded.id)}catch{} state.uploadStatus='analyzing'; state.uploadProgress=78; render();
       const r=await fetch(`/api/videos/${uploaded.id}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})}); const data=await readJsonResponse(r,'Analysis failed');
       state.video=data; state.selectedCandidate=0; state.uploadStatus='idle'; state.uploadProgress=100; render();
