@@ -1,5 +1,6 @@
 import { createEditorKeyboardHandler } from './editor-keyboard-shortcuts.js';
 import { campaignProgress } from './campaign-progress.js';
+import { sortLibraryItems } from './library-sort.js';
 import { waitForCampaignProject } from './campaign-project-polling.js';
 import { buildEditorPreferences } from './editor-preferences.js';
 import { projectDisplayState } from './project-display-state.js';
@@ -933,15 +934,6 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   function formatCount(n){const x=Number(n||0);if(x>=1e9)return (x/1e9).toFixed(x>=1e10?0:1)+'B';if(x>=1e6)return (x/1e6).toFixed(x>=1e7?0:1)+'M';if(x>=1e3)return (x/1e3).toFixed(x>=1e4?0:1)+'K';return String(x)}
   function formatDuration(sec){const n=Math.max(0,Math.floor(Number(sec)||0));const h=Math.floor(n/3600),m=Math.floor((n%3600)/60),ss=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`}
   function relativeDate(value){if(!value)return '';const d=new Date(value),diff=Math.max(0,Date.now()-d.getTime());const min=Math.floor(diff/60000);if(min<60)return `${Math.max(1,min)}m ago`;const h=Math.floor(min/60);if(h<24)return `${h}h ago`;const days=Math.floor(h/24);if(days<30)return `${days}d ago`;return d.toLocaleDateString()}
-  function sortLibraryItems(items){
-    const list=[...items];
-    const dateOf=x=>new Date(x.publishedAt||x.createdAt||0).getTime()||0;
-    const viewsOf=x=>Number(x.viewCount||0);
-    if(state.librarySort==='oldest') return list.sort((a,b)=>dateOf(a)-dateOf(b));
-    if(state.librarySort==='views-desc') return list.sort((a,b)=>viewsOf(b)-viewsOf(a));
-    if(state.librarySort==='views-asc') return list.sort((a,b)=>viewsOf(a)-viewsOf(b));
-    return list.sort((a,b)=>dateOf(b)-dateOf(a));
-  }
   function mediaRow(item,creator,platform,type){
     const isYT=platform==='youtube';
     const previewKind=isYT?'youtube':(type==='clip'?'twitch-clip':'twitch-vod');
@@ -975,7 +967,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     }
     else if(section==='clips') items=filteredCreators.flatMap(c=>(c.clips||[]).map(v=>({...v,creator:c,mediaType:'clip'})));
     else if(section==='vods') items=filteredCreators.flatMap(c=>(c.vods||[]).map(v=>({...v,creator:c,mediaType:'vod'})));
-    items=sortLibraryItems(items);
+    items=sortLibraryItems(items,state.librarySort);
     const creatorsHtml=creators.length?creators.map(c=>`<div class="creator creator-live ${c.isLive?'is-live':''} ${state.libraryCreatorFilter===c.id?'selected':''}" role="button" tabindex="0" data-filter-creator="${escapeHtml(c.id)}" title="Show only ${escapeHtml(c.name)}"><div class="creator-avatar-wrap">${creatorAvatarMarkup(c)}${c.isLive?'<span class="live-dot">LIVE</span>':''}<button class="creator-remove" data-remove-platform="${escapeHtml(c.platform)}" data-remove-id="${escapeHtml(c.id)}" data-remove-name="${escapeHtml(c.name)}" title="Remove ${escapeHtml(c.name)}">×</button></div><span>${escapeHtml(c.name)}</span><small>${platform==='youtube'?`${formatCount(c.subscribers)} subs`:(c.isLive?`${formatCount(c.live?.viewerCount||0)} watching`:'Offline')}</small></div>`).join(''):`<div class="library-empty-inline"><span>${platform==='youtube'?'▶':'▣'}</span><div><b>No ${platform==='youtube'?'YouTube creators':'Twitch streamers'} followed yet</b><small>Add one to start building this section of your library.</small></div></div>`;
     let mediaHtml='';
     if(platform==='twitch'&&section==='live'){
