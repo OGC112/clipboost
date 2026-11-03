@@ -14,14 +14,20 @@ function setup(effect = 'active-word') {
   const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
   const hook = { style: {} };
   const state = { video: { candidates: [{ start: 0, end: 4 }] }, captionEffect: effect, hookTitleEnabled: true, hookTitleText: 'Hook', hookTitleDuration: '1' };
-  vm.runInNewContext(captionSource, {
+  const frames = new Map();
+  let frameId = 0;
+  const context = vm.createContext({
+    disposePreviewCaptionClock: null,
+    requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
+    cancelAnimationFrame: id => frames.delete(id),
     shortVideo, liveCaption, state,
     document: { getElementById: () => hook },
     previewCaptionRowsForCandidate: () => [{ start: 0, end: 2, text: 'Hello world' }],
     previewCaptionWordsForCandidate: () => [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }],
     captionWordImportant: word => word === 'Hello',
   });
-  return { state, shortVideo, liveCaption, hook, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup };
+  vm.runInContext(captionSource, context);
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup };
 }
 
 for (const effect of ['active-word', 'word-pop', 'karaoke', 'keyword-color', 'clean-bold']) {
@@ -59,4 +65,48 @@ test('word transitions, silence, backwards seeking and caption toggles stay curr
   assert.equal(c.writes(), 4);
   c.state.captionEffect = 'word-pop'; c.sync();
   assert.equal(c.writes(), 5);
+});
+
+test('render cancels the old preview frame before replacing DOM, even without a pause event', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  const pendingTick = [...c.frames.values()][0];
+  c.state.page = 'home';
+  const blank = () => '';
+  for (const name of ['home', 'campaignDiscover', 'studio', 'campaigns', 'campaignEditor', 'analytics', 'library', 'projects', 'publish', 'settings', 'side', 'top', 'campaignAssetBrowserMarkup', 'modalMarkup', 'bind']) c.context[name] = blank;
+  let replacements = 0;
+  c.context.document = { getElementById: () => ({ set innerHTML(value) {
+    assert.equal(c.frames.size, 0, 'clock must stop before DOM replacement');
+    replacements++;
+  } }) };
+  const renderStart = source.indexOf('  function render(){');
+  vm.runInContext(source.slice(renderStart, source.indexOf('  function bind(){', renderStart)), c.context);
+  c.context.render();
+  assert.equal(replacements, 1);
+  assert.equal(c.context.disposePreviewCaptionClock, null);
+  // Late media events and a callback already dispatched must not revive the loop.
+  const writes = c.writes();
+  c.shortVideo.currentTime = 1.2;
+  c.listeners.play();
+  pendingTick();
+  assert.equal(c.frames.size, 0);
+  assert.equal(c.writes(), writes);
+  c.context.render();
+  assert.equal(replacements, 2);
+});
+
+test('pause stops the preview frame and playback can start it again', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  c.shortVideo.paused = true;
+  c.listeners.pause();
+  assert.equal(c.frames.size, 0);
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
 });

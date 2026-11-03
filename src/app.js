@@ -1819,7 +1819,13 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     else prepareCandidatePreview(index,{autoplay});
   }
 
-  function render(){const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
+  let disposePreviewCaptionClock=null;
+  function render(){
+    // Release the old preview clock before replacing its video and caption nodes.
+    disposePreviewCaptionClock?.();
+    disposePreviewCaptionClock=null;
+    const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()
+  }
   function bind(){
     bindModalKeyboard(document.querySelector('.cb-modal'),{mode:state.uiModal?.mode,onDismiss:()=>finishModal(false)});
     const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
@@ -1940,7 +1946,10 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         updateCaptionMarkup(`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`);
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
+      let captionClockDisposed=false;
+      disposePreviewCaptionClock=()=>{captionClockDisposed=true;stopCaptionClock()};
       const tickCaptionClock=()=>{
+        if(captionClockDisposed)return;
         syncCaption();
         if(!shortVideo.paused&&!shortVideo.ended)captionRaf=requestAnimationFrame(tickCaptionClock);
         else captionRaf=0;
