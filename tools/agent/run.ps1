@@ -105,7 +105,8 @@ try {
   Run 'git' @('-C', $workspace, 'switch', '-c', $branch, $baseRef)
   $recentPublished = @($progress.published | Select-Object -Last 8 | ForEach-Object { "$($_.id): $($_.branch)" }) -join "`n"
   # Carry forward bounded investigation notes, not just branch names.
-  $recentRecords = @(@($progress.published) + @($progress.blocked) | Where-Object { $_ -and $_.report } | Sort-Object recorded_at | Select-Object -Last 3)
+  $recentRecords = @($progress.published) + @($progress.blocked)
+  $recentRecords = @($recentRecords | Where-Object { $_ -and $_.report } | Sort-Object recorded_at | Select-Object -Last 3)
   $priorFindings = ''
   foreach ($entry in $recentRecords) {
     if (Test-Path -LiteralPath $entry.report) {
@@ -175,7 +176,8 @@ try {
   $progress | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $progressPath -Encoding UTF8
   Write-Host "Task $($task.id) published to branch $branch. main unchanged."
   if (Get-Command 'gh' -ErrorAction SilentlyContinue) {
-    & gh pr create --repo OGC112/clipboost --base main --head $branch --draft --title "Agent $($task.id): $($task.title)" --body 'Automated local Codex improvement. npm test and npm run build passed. Review and validate Windows video preview before merging.'
+    $prBase = if ($baseRef -eq 'origin/main') { 'main' } else { $baseRef.Substring(7) }
+    & gh pr create --repo OGC112/clipboost --base $prBase --head $branch --draft --title "Agent $($task.id): $($task.title)" --body 'Automated local Codex improvement. npm test and npm run build passed. Review and validate Windows video preview before merging.'
     if ($LASTEXITCODE -ne 0) { Write-Warning 'Branch pushed but PR creation failed.' }
   } else { Write-Host "Create a GitHub PR manually for: $branch" }
   Write-Host "Report: $report"
