@@ -9,7 +9,7 @@ The agent runs only on this Windows PC when the user is logged in. It uses Codex
 3. Verify the Windows sandbox: `codex -c windows.sandbox=mxc sandbox --include-managed-config --permission-profile :workspace -- cmd.exe /d /c echo MXC_OK` (expected output: `MXC_OK`).
 4. Open PowerShell in your local ClipBoost Git repository.
 5. Run: powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\install.ps1
-6. Test a single cycle with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\run.ps1` or test the continuous worker with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\worker.ps1 -MaxCyclesPerDay 2`.
+6. Test a single cycle with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\run.ps1` or test the continuous worker with `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\worker.ps1 -PauseMinutes 10`.
 
 ## Prioritized task queue
 
@@ -32,7 +32,9 @@ The Codex invocation explicitly selects `windows.sandbox=mxc` and `workspace-wri
 
 The scheduled task launches `tools/agent/worker.ps1` at Windows logon and daily at 12:00 (fallback). It keeps running while the user session is active; a named mutex prevents multiple workers, and the Task Scheduler execution-time limit is disabled.
 
-The worker runs up to **6 cycles per day** with a **10-minute cooldown** after each published or blocked task. When no task is available it checks again in an hour; after reaching the daily cap it waits until the next day. It does not purchase credits. On a failure it waits 60 minutes before one retry, then stops after two consecutive failures to avoid repeatedly consuming quota. Dirty Git workspaces stop the worker for manual review. These are conservative safety limits, not a guarantee of uninterrupted work during model capacity or quota outages.
+The worker has **no daily cycle cap**. It runs tasks sequentially with a **10-minute cooldown** after a published or blocked task. If no task is eligible, it checks again after one hour. It cannot read the exact remaining ChatGPT/Codex quota, but when the Codex transcript reports a usage or rate limit, it pauses for about 5 hours 15 minutes, or 24 hours after repeated/weekly limit errors, and retries without buying credits. Temporary model-capacity errors wait 30 minutes. Two consecutive other technical failures stop the worker for review. Dirty Git workspaces also stop it so partially completed changes are preserved.
+
+The worker can continue while Windows is awake, the user is logged in, network is available, and Codex allows requests. The scheduled task is not a Windows service and does not prevent the PC from sleeping. There is **no automatic purchase of credits in this script**; keep ChatGPT account auto-recharge disabled separately if you do not want charges.
 
 Manual continuous start: `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\agent\worker.ps1`.
 Run the scheduled worker now: `Start-ScheduledTask -TaskName 'ClipBoost Local Agent'`.
