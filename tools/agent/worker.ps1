@@ -30,8 +30,8 @@ function Get-ProgressCounts {
   }
   $p = Get-Content -LiteralPath $progressPath -Raw | ConvertFrom-Json
   return [pscustomobject]@{
-    published = @($p.published).Count
-    blocked = @($p.blocked).Count
+    published = @($p.published | Where-Object { $null -ne $_ }).Count
+    blocked = @($p.blocked | Where-Object { $null -ne $_ }).Count
   }
 }
 try {
