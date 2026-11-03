@@ -13,6 +13,8 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
   let wordScans = 0;
   let keywordChecks = 0;
   let speechSearches = 0;
+  let phraseSearches = 0;
+  rows.find = predicate => { phraseSearches++; return Array.prototype.find.call(rows, predicate); };
   const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
   words.findIndex = predicate => { speechSearches++; return Array.prototype.findIndex.call(words, predicate); };
   words.filter = predicate => { wordScans++; return Array.prototype.filter.call(words, predicate); };
@@ -35,8 +37,35 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     captionWordImportant: word => { keywordChecks++; return word === 'Hello'; },
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches };
 }
+
+test('phrase lookup runs once per encountered word, including misses and backwards seeks', () => {
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }]);
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.equal(c.phraseSearches(), 1);
+  assert.match(c.markup(), /Hello/);
+  c.shortVideo.currentTime = 1.2;
+  for (let i = 0; i < 120; i++) c.sync();
+  assert.equal(c.phraseSearches(), 2, 'missing phrases must also be cached');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.phraseSearches(), 2);
+  assert.match(c.markup(), /Hello/);
+  const rebuilt = setup();
+  assert.equal(rebuilt.phraseSearches(), 1, 'a rebuilt preview owns a fresh cache');
+});
+
+test('cached phrase lookup preserves the first match for overlapping phrases', () => {
+  const c = setup('clean-bold', [
+    { start: 0, end: 2, text: 'First phrase' },
+    { start: 0, end: 2, text: 'Overlapping phrase' },
+  ]);
+  c.sync();
+  assert.match(c.markup(), /First phrase/);
+  assert.doesNotMatch(c.markup(), /Overlapping/);
+  assert.equal(c.phraseSearches(), 1);
+});
 
 test('captions off skips speech searches while hook timing and re-enabled captions stay current', () => {
   const c = setup();

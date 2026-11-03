@@ -1914,6 +1914,9 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
       const captionWords=previewCaptionWordsForCandidate(cand);
+      // Word-to-phrase timing is fixed until this preview is rebuilt. Cache
+      // misses too, so unmatched words do not rescan every animation frame.
+      const captionLineByWord=new Map();
       // Phrase membership is fixed for this preview; only the active word changes each tick.
       let cachedCaptionLine=null,cachedLineWords=[];
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
@@ -1943,9 +1946,10 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
 
         const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
         const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
-        const line=activeSpeechWord
-          ? captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02)
-          : null;
+        if(activeSpeechWord&&!captionLineByWord.has(activeSpeechWord)){
+          captionLineByWord.set(activeSpeechWord,captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02));
+        }
+        const line=activeSpeechWord?captionLineByWord.get(activeSpeechWord):null;
         const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
         liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
         if(!hasSpeechCaption){
