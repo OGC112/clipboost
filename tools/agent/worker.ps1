@@ -43,6 +43,7 @@ try {
   if ($PauseMinutes -lt 1) { throw 'PauseMinutes must be at least 1.' }
   $consecutiveFailures = 0
   $consecutiveQuotaFailures = 0
+  $consecutiveNoChange = 0
   Write-Host "ClipBoost continuous worker started. No daily cycle cap; pause $PauseMinutes minutes between tasks."
   while (-not (Test-Path -LiteralPath $stopPath)) {
     if (Test-Path -LiteralPath $workspace) {
@@ -99,13 +100,21 @@ try {
     $consecutiveQuotaFailures = 0
     $after = Get-ProgressCounts
     if ($after.published -gt $before.published) {
+      $consecutiveNoChange = 0
       Write-Host 'Task published successfully; continuing after cooldown.'
       $wait = $PauseMinutes * 60
     } elseif ($after.blocked -gt $before.blocked) {
-      Write-Host 'Task blocked with no changes; moving to the next task after cooldown.'
-      $wait = $PauseMinutes * 60
+      $consecutiveNoChange++
+      if ($consecutiveNoChange -ge 5) {
+        Write-Host 'Five consecutive investigations yielded no changes. Cooling down for 4 hours before trying new focus areas.'
+        $wait = 14400
+        $consecutiveNoChange = 0
+      } else {
+        Write-Host 'No changes; rotating to the next improvement focus after cooldown.'
+        $wait = $PauseMinutes * 60
+      }
     } else {
-      Write-Host 'No eligible task right now. Rechecking in 60 minutes.'
+      Write-Host 'No work published this cycle. Rechecking in 60 minutes.'
       $wait = 3600
     }
     if (-not (Wait-Interruptibly $wait)) { break }
