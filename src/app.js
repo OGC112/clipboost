@@ -1816,7 +1816,12 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   function selectCandidatePreview(index,{autoplay=true}={}){
     const candidates=state.video?.candidates||[];if(!candidates[index])return;
     state.selectedCandidate=index;state.timelineSeek=Number(candidates[index].start||0);state.candidatePreviewError='';state.campaignCompliance=null;state.campaignVariants=null;
-    if(candidates[index].previewUrl){state.candidatePreviewAutoplay=autoplay;render();}
+    if(candidates[index].previewUrl){
+      // A cached selection must supersede any render still pending for another clip.
+      state.candidatePreviewRequestId++;
+      state.candidatePreviewLoading=false;state.candidatePreviewLoadingIndex=-1;
+      state.candidatePreviewAutoplay=autoplay;render();
+    }
     else prepareCandidatePreview(index,{autoplay});
   }
 
