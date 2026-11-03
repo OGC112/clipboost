@@ -1991,6 +1991,7 @@
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
       const tickCaptionClock=()=>{
+        if(!shortVideo.isConnected){captionRaf=0;return;}
         syncCaption();
         if(!shortVideo.paused&&!shortVideo.ended)captionRaf=requestAnimationFrame(tickCaptionClock);
         else captionRaf=0;
