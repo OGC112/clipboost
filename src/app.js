@@ -1,6 +1,7 @@
 import { projectDisplayState } from './project-display-state.js';
 import { readJsonResponse } from './api-response.js';
 import { buildRenderOptions } from './editor-render-options.js';
+import { previewCaptionFontSize, previewCaptionOutlineSize } from './preview-caption-appearance.js';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
 import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate } from './preview-caption-timeline.js';
@@ -524,19 +525,11 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   function liveCaptionClass(){
     return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`].join(' ');
   }
-  function captionRenderScale(){
-    return state.captionSize==='large'?.086:state.captionSize==='small'?.044:.072;
-  }
   function liveCaptionFontSize(frameWidth=0){
-    const scale=Math.max(.4,Math.min(2,Number(state.captionScale||1)));
-    const width=Math.max(120,Number(frameWidth)||300);
-    return `${Math.max(10,width*captionRenderScale()*scale).toFixed(2)}px`;
+    return previewCaptionFontSize(state,frameWidth);
   }
   function liveCaptionOutlineSize(frameWidth=0){
-    const width=Math.max(120,Number(frameWidth)||300);
-    const style=state.captionStyle||'bold';
-    const ratio=style==='minimal'?.0032:style==='clean'?.0052:style==='neon'?.0060:style==='box'?.0025:style==='impact'?.0074:style==='pop'?.0068:style==='karaoke'?.0064:.0065;
-    return Math.max(1,width*ratio);
+    return previewCaptionOutlineSize(state,frameWidth);
   }
   function previewCaptionRowsForCandidate(cand){
     return captionRowsForCandidate(cand,state.video?.transcript);
