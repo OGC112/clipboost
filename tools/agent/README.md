@@ -22,7 +22,11 @@ The agent runs only on this Windows PC when the user is logged in. It uses Codex
 
 ## Autonomous code discovery
 
-The agent is not limited to the predefined queue. After three published tasks since its last discovery, or when the queue is exhausted, it may run a self-directed discovery cycle (no more than once every 24 hours). It reads `tools/agent/project-map.md` and `tools/agent/discovery.md`, traces relevant code, identifies concrete candidate issues, and implements at most one low-risk fix with validation. If it finds no defensible issue, it makes no changes. It logs its findings and does not automatically merge.
+The agent now runs **continuous discovery without a 24-hour gate**. Once the predefined backlog is exhausted, every new cycle rotates among **UI/UX**, **tool functionality**, **performance**, **architecture/maintainability**, and **video preview/export**. Each cycle inspects real code, selects one bounded improvement, runs checks, and publishes a reviewable branch if successful. A no-change result advances to the next focus area; five consecutive no-change cycles trigger a four-hour cooldown to avoid wasting Codex quota.
+
+Recent agent reports are fed into later investigations as bounded context, helping the agent retain candidate improvements. Progress and focus rotation are recorded in `%LOCALAPPDATA%\ClipBoostAgent\progress.json`. No fixed list is required after the original backlog.
+
+**Branch continuity:** When possible, the next improvement starts from the most recently published agent branch rather than old `main`. This preserves recent agent work but produces **stacked branches** that require review and integration in dependency order. Older independent branches are not automatically combined, and none of these changes are installed in the local ClipBoost app or merged into `main` by the agent.
 
 This is static/code-level discovery, not a live performance profiler. `npm test` and `npm run build` are required before publishing, but Windows GUI responsiveness and FFmpeg export still require manual validation.
 
@@ -32,7 +36,7 @@ The Codex invocation explicitly selects `windows.sandbox=mxc` and `workspace-wri
 
 The scheduled task launches `tools/agent/worker.ps1` at Windows logon and daily at 12:00 (fallback). It keeps running while the user session is active; a named mutex prevents multiple workers, and the Task Scheduler execution-time limit is disabled.
 
-The worker has **no daily cycle cap**. It runs tasks sequentially with a **10-minute cooldown** after a published or blocked task. If no task is eligible, it checks again after one hour. It cannot read the exact remaining ChatGPT/Codex quota, but when the Codex transcript reports a usage or rate limit, it pauses for about 5 hours 15 minutes, or 24 hours after repeated/weekly limit errors, and retries without buying credits. Temporary model-capacity errors wait 30 minutes. Two consecutive other technical failures stop the worker for review. Dirty Git workspaces also stop it so partially completed changes are preserved.
+The worker has **no daily cycle cap**. It runs tasks sequentially with a **10-minute cooldown** after a published or blocked task. If repeated investigations yield no changes, it cools down for four hours after five such cycles. It cannot read the exact remaining ChatGPT/Codex quota, but when the Codex transcript reports a usage or rate limit, it pauses for about 5 hours 15 minutes, or 24 hours after repeated/weekly limit errors, and retries without buying credits. Temporary model-capacity errors wait 30 minutes. Two consecutive other technical failures stop the worker for review. Dirty Git workspaces also stop it so partially completed changes are preserved.
 
 The worker can continue while Windows is awake, the user is logged in, network is available, and Codex allows requests. The scheduled task is not a Windows service and does not prevent the PC from sleeping. There is **no automatic purchase of credits in this script**; keep ChatGPT account auto-recharge disabled separately if you do not want charges.
 
@@ -46,7 +50,7 @@ GitHub Actions runners are not required.
 
 - Workspace: %LOCALAPPDATA%\ClipBoostAgent\workspace
 - Logs and reports: %LOCALAPPDATA%\ClipBoostAgent\logs
-- Passing runs push an `agent/cb-*-YYYYMMDD-HHMMSS` branch to GitHub.
+- Passing runs push an `agent/cb-*-YYYYMMDD-HHMMSS` or `agent/auto-*-YYYYMMDD-HHMMSS` branch to GitHub.
 - If GitHub CLI (gh) is installed and authenticated, the script opens a draft PR; otherwise create a PR manually.
 - Failed tests or build prevent publication. The worktree is left intact for review.
 - No automatic merge to main.
