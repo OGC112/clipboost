@@ -6,6 +6,7 @@ import { buildRenderOptions } from './editor-render-options.js';
 import { hasCustomCaptionY, resolveCaptionY } from './editor-caption-position.js';
 import { previewCaptionFontSize, previewCaptionOutlineSize } from './preview-caption-appearance.js';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
+import { createPreviewWordLookup } from './preview-word-lookup.js';
 import { bindModalKeyboard } from './modal-keyboard.js';
 import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
 
@@ -1935,6 +1936,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
       const captionWords=previewPlaybackWords(captions,previewCaptionWordsForCandidate(cand));
+      const findCaptionWord=createPreviewWordLookup(captionWords);
       // Word-to-phrase timing is fixed until this preview is rebuilt. Cache
       // misses too, so unmatched words do not rescan every animation frame.
       const captionLineByWord=new Map();
@@ -1965,7 +1967,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
           return;
         }
 
-        const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
+        const activeSpeechIndex=findCaptionWord(rel);
         const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
         if(activeSpeechWord&&!captionLineByWord.has(activeSpeechWord)){
           captionLineByWord.set(activeSpeechWord,captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02));
