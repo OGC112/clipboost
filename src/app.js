@@ -2285,6 +2285,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       try{
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
+        if(state.video!==pendingVideo)return;
         state.video=data;state.selectedCandidate=0;pollProjectUntilSettled(state.video.id);
       }catch(e){if(state.video===pendingVideo)state.video=previousVideo;showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
       finally{state.regenerating=false;if(!['ingesting','analyzing'].includes(state.video?.status))render()}

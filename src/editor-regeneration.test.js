@@ -67,3 +67,37 @@ test('generation failure preserves newer project status received while pending',
   await active;
   assert.equal(c.state.video, refreshed);
 });
+
+for (const change of ['another project', 'closed project', 'same project refresh']) {
+  test(`generation success preserves ${change} received while pending`, async () => {
+    const c = setup();
+    const active = c.run();
+    const replacement = change === 'closed project' ? null : {
+      id: change === 'another project' ? 'project-2' : 'project-1',
+      status: 'ready', candidates: [{ start: 10, end: 20 }],
+    };
+    c.state.video = replacement;
+    c.state.selectedCandidate = 1;
+    c.requests[0].resolve({ id: 'project-1', status: 'analyzing' });
+    await active;
+    assert.equal(c.state.video, replacement);
+    assert.equal(c.state.selectedCandidate, 1);
+    assert.equal(c.state.regenerating, false);
+    assert.deepEqual(c.polls, [], 'stale completion must not replace the active polling loop');
+    assert.deepEqual(c.notices, []);
+    assert.equal(c.renders(), 1);
+  });
+}
+
+test('active generation applies its response and continues polling', async () => {
+  const c = setup();
+  const active = c.run();
+  const response = { id: 'project-1', status: 'analyzing' };
+  c.requests[0].resolve(response);
+  await active;
+  assert.equal(c.state.video, response);
+  assert.equal(c.state.selectedCandidate, 0);
+  assert.equal(c.state.regenerating, false);
+  assert.deepEqual(c.polls, ['project-1']);
+  assert.equal(c.renders(), 0, 'polling owns the next settled render');
+});
