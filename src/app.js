@@ -559,6 +559,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       const r=await fetch('/api/watermarks',{method:'POST',body:fd});
       const data=await readJsonResponse(r,'Could not upload watermark');
       if(revision!==watermarkUploadRevision)return;
+      if(typeof data?.url!=='string'||!data.url.trim())throw new Error('Could not upload watermark: the server did not return an image URL. Please try again.');
       state.watermarkUrl=data.url;state.watermarkName=data.originalName||file.name||'Watermark';
       state.watermarkX=.86;state.watermarkY=.12;state.watermarkScale=.18;state.watermarkOpacity=.9;
       persistEditorPrefs();render();

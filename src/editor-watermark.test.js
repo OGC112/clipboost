@@ -63,3 +63,39 @@ test('latest upload failure keeps the existing watermark and allows retry', asyn
   assert.equal(c.state.watermarkScale, .18);
   assert.equal(c.saves(), 1);
 });
+
+for (const response of [null, {}, { url: '' }, { url: '   ' }, { url: 42 }]) {
+  test(`invalid watermark response ${JSON.stringify(response)} preserves settings and allows retry`, async () => {
+    const c = setup();
+    Object.assign(c.state, { watermarkX: .3, watermarkY: .7, watermarkScale: .25, watermarkOpacity: .5 });
+    const original = { ...c.state };
+    const pending = c.context.uploadWatermark({ name: 'replacement.png' });
+    c.requests[0].resolve(response);
+    await pending;
+    assert.deepEqual(c.state, original);
+    assert.equal(c.saves(), 0);
+    assert.equal(c.notices.length, 1);
+    assert.equal(c.notices[0].title, 'Watermark upload failed');
+    assert.match(c.notices[0].message, /server did not return an image URL/);
+
+    const retry = c.context.uploadWatermark({ name: 'retry.png' });
+    c.requests[1].resolve({ url: '/retry.png' });
+    await retry;
+    assert.equal(c.state.watermarkUrl, '/retry.png');
+    assert.equal(c.state.watermarkName, 'retry.png');
+    assert.equal(c.saves(), 1);
+  });
+}
+
+test('a superseded malformed upload does not report an error after a valid replacement', async () => {
+  const c = setup();
+  const first = c.context.uploadWatermark({ name: 'first.png' });
+  const second = c.context.uploadWatermark({ name: 'second.png' });
+  c.requests[1].resolve({ url: '/second.png' });
+  await second;
+  c.requests[0].resolve(null);
+  await first;
+  assert.equal(c.state.watermarkUrl, '/second.png');
+  assert.equal(c.saves(), 1);
+  assert.equal(c.notices.length, 0);
+});
