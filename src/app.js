@@ -1928,16 +1928,20 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         lastCaptionMarkup=markup;
       };
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
+      // Overlay nodes live until render() disposes this preview clock.
+      const hookTitle=document.getElementById('liveHookTitle');
+      const setOverlayVisibility=(element,visible)=>{
+        const visibility=visible?'visible':'hidden';
+        // Read the inline value so changes from live controls stay authoritative.
+        if(element&&element.style.visibility!==visibility)element.style.visibility=visibility;
+      };
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
-        const hookTitle=document.getElementById('liveHookTitle');
-        if(hookTitle){
-          hookTitle.style.visibility=isPreviewHookVisible(state,rel,duration)?'visible':'hidden';
-        }
+        setOverlayVisibility(hookTitle,isPreviewHookVisible(state,rel,duration));
 
         // Keep hook timing live without searching or rendering disabled subtitles.
         if(state.captionPreference==='off'){
-          liveCaption.style.visibility='hidden';
+          setOverlayVisibility(liveCaption,false);
           return;
         }
 
@@ -1948,7 +1952,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         }
         const line=activeSpeechWord?captionLineByWord.get(activeSpeechWord):null;
         const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
-        liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
+        setOverlayVisibility(liveCaption,hasSpeechCaption);
         if(!hasSpeechCaption){
           lastCaptionRender=null;
           updateCaptionMarkup('');

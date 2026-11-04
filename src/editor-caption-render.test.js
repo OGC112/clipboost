@@ -30,8 +30,14 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret
   let playCalls = 0;
   const timers = [];
   const shortVideo = { currentTime: .2, paused: true, readyState, play: () => { playCalls++; return Promise.resolve(); }, addEventListener: (name, fn) => { listeners[name] = fn; } };
-  const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
-  const hook = { style: {} };
+  const visibilityWrites = { caption: 0, hook: 0 };
+  const visibilityStyle = name => {
+    let visibility;
+    return { get visibility() { return visibility; }, set visibility(value) { visibilityWrites[name]++; visibility = value; } };
+  };
+  let hookLookups = 0;
+  const liveCaption = { style: visibilityStyle('caption'), set innerHTML(value) { writes++; markup = value; } };
+  const hook = { style: visibilityStyle('hook') };
   const state = { video: { candidates: [{ start: 0, end: 4 }] }, captionEffect: effect, hookTitleEnabled: true, hookTitleText: 'Hook', hookTitleDuration: '1' };
   const frames = new Map();
   let frameId = 0;
@@ -47,15 +53,37 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret
       const lookup = createPreviewWordLookup(words);
       return time => { speechSearches++; return lookup(time); };
     },
-    document: { getElementById: () => hook },
+    document: { getElementById: () => { hookLookups++; return hook; } },
     previewCaptionRowsForCandidate: () => rows,
     previewCaptionWordsForCandidate: () => words,
     buildPreviewCaptionMarkup: options => { markupBuilds++; return buildPreviewCaptionMarkup(options); },
   });
   state.candidatePreviewAutoplay = autoplay;
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, timers, playCalls: () => playCalls, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
+  return { visibilityWrites, hookLookups: () => hookLookups, state, shortVideo, liveCaption, hook, context, frames, listeners, timers, playCalls: () => playCalls, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
 }
+
+test('overlay ticks only write visibility on transitions and reuse the hook node', () => {
+  const c = setup();
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.deepEqual(c.visibilityWrites, { caption: 1, hook: 1 });
+  assert.equal(c.hookLookups(), 1);
+  c.shortVideo.currentTime = 1.2; c.listeners.seeked();
+  assert.deepEqual(c.visibilityWrites, { caption: 1, hook: 2 });
+  c.shortVideo.currentTime = 3; c.sync(); c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 2, hook: 2 });
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.deepEqual(c.visibilityWrites, { caption: 3, hook: 3 });
+  c.state.captionPreference = 'off'; c.sync(); c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 4, hook: 3 });
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 5, hook: 3 });
+  // Live controls can edit inline visibility between playback ticks.
+  c.hook.style.visibility = 'hidden'; c.sync();
+  assert.equal(c.hook.style.visibility, 'visible');
+  assert.equal(c.visibilityWrites.hook, 5);
+  assert.equal(c.hookLookups(), 1);
+});
 
 for (const readyState of [0, 2]) {
   test(`deferred autoplay ignores disposed previews (readyState=${readyState})`, () => {
