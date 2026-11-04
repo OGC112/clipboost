@@ -48,3 +48,40 @@ test('live control updates use current title settings and playback time', () => 
   context.update();
   assert.equal(hook.style.visibility, 'hidden');
 });
+
+test('hook edits discard baked final previews and invalidate pending render responses', async () => {
+  const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+  const start = source.indexOf('    const updateHookTitlePreview=');
+  const invalidateStart = source.indexOf('    function invalidateRenderedPreviews()');
+  const candidate = { start: 0, end: 10, previewUrl: '/old-hook.mp4', previewMeta: {} };
+  const state = { ...enabled, previewFinalMode: true, candidatePreviewRequestId: 7,
+    video: { id: 'video-1', sourceUrl: '/source.mp4', candidates: [candidate] } };
+  const displayed = [], requests = [];
+  const hook = { style: {} };
+  const context = vm.createContext({ state, isPreviewHookVisible,
+    document: { getElementById: () => hook },
+    render: () => displayed.push(candidate.previewUrl),
+    currentRenderOptions: () => ({}), readJsonResponse: async response => response,
+    fetch: () => new Promise(resolve => requests.push(resolve)),
+  });
+  vm.runInContext(source.slice(invalidateStart, source.indexOf('\n', invalidateStart)) + '\n' +
+    source.slice(source.indexOf('  async function prepareCandidatePreview('), source.indexOf('  function selectCandidatePreview(')) + '\n' +
+    source.slice(start, source.indexOf('    const hookTitleEnabledSelect=', start)) +
+    '\nglobalThis.update = updateHookTitlePreview;', context);
+  const pending = context.prepareCandidatePreview(0, { force: true });
+  state.hookTitleText = 'Changed title';
+  context.update();
+  assert.equal(state.previewFinalMode, false);
+  assert.equal(candidate.previewUrl, null);
+  assert.equal(candidate.previewMeta, null);
+  assert.equal(state.candidatePreviewLoading, false);
+  assert.equal(displayed.at(-1), null, 'remove the video with the old title');
+  const renders = displayed.length;
+  requests[0]({ url: '/stale-final.mp4' });
+  await pending;
+  assert.equal(candidate.previewUrl, null, 'late final render must not restore the old title');
+  assert.equal(displayed.length, renders);
+  context.update();
+  assert.equal(hook.textContent, 'CHANGED TITLE');
+  assert.equal(displayed.length, renders, 'editable hook updates stay live');
+});
