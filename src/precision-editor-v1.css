@@ -47,3 +47,7 @@
 .smart-wave.mint-no-audio-wave{align-items:center;justify-content:center}
 .mint-wave-unavailable{font-size:10px;color:#8d8d99;white-space:normal;padding:8px;text-align:center}
 .smart-wave.mint-measured-wave i{background:linear-gradient(0deg,#b63861,#fb6b85)}
+
+/* Keep keyboard positioning visible without changing the exported title. */
+#liveHookTitle:focus-visible,
+#liveWatermark:focus-visible{outline:2px solid #fff;outline-offset:3px}

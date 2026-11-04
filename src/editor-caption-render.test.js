@@ -1,0 +1,357 @@
+﻿import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { buildPreviewCaptionMarkup } from './preview-caption-markup.js';
+import { isPreviewHookVisible } from './preview-hook-visibility.js';
+import { previewPlaybackWords } from './preview-caption-timeline.js';
+import { createPreviewWordLookup } from './preview-word-lookup.js';
+
+const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
+const start = source.indexOf('    if(shortVideo&&liveCaption){');
+const captionSource = source.slice(start, source.indexOf('    const manualTrimStart=', start));
+
+function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret world' }], { autoplay = false, readyState = 0 } = {}) {
+  let writes = 0, markup = '';
+  let wordScans = 0;
+  let markupBuilds = 0;
+  let speechSearches = 0;
+  let phraseSearches = 0;
+  let activeWordSearches = 0;
+  rows.find = predicate => { phraseSearches++; return Array.prototype.find.call(rows, predicate); };
+  const words = [{ start: 0, end: .8, word: 'Secret' }, { start: 1, end: 2, word: 'world' }];
+  words.filter = predicate => {
+    wordScans++;
+    const phraseWords = Array.prototype.filter.call(words, predicate);
+    phraseWords.findIndex = predicate => { activeWordSearches++; return Array.prototype.findIndex.call(phraseWords, predicate); };
+    return phraseWords;
+  };
+  const listeners = {};
+  let playCalls = 0;
+  const timers = [];
+  const shortVideo = { currentTime: .2, paused: true, readyState, play: () => { playCalls++; return Promise.resolve(); }, addEventListener: (name, fn) => { listeners[name] = fn; } };
+  const visibilityWrites = { caption: 0, hook: 0 };
+  const visibilityStyle = name => {
+    let visibility;
+    return { get visibility() { return visibility; }, set visibility(value) { visibilityWrites[name]++; visibility = value; } };
+  };
+  let hookLookups = 0;
+  const liveCaption = { style: visibilityStyle('caption'), set innerHTML(value) { writes++; markup = value; } };
+  const hook = { style: visibilityStyle('hook') };
+  const state = { video: { candidates: [{ start: 0, end: 4 }] }, captionEffect: effect, hookTitleEnabled: true, hookTitleText: 'Hook', hookTitleDuration: '1' };
+  const frames = new Map();
+  let frameId = 0;
+  const context = vm.createContext({
+    setTimeout: callback => timers.push(callback),
+    disposePreviewCaptionClock: null,
+    requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
+    cancelAnimationFrame: id => frames.delete(id),
+    shortVideo, liveCaption, state,
+    isPreviewHookVisible,
+    previewPlaybackWords,
+    createPreviewWordLookup: words => {
+      const lookup = createPreviewWordLookup(words);
+      return time => { speechSearches++; return lookup(time); };
+    },
+    document: { getElementById: () => { hookLookups++; return hook; } },
+    previewCaptionRowsForCandidate: () => rows,
+    previewCaptionWordsForCandidate: () => words,
+    buildPreviewCaptionMarkup: options => { markupBuilds++; return buildPreviewCaptionMarkup(options); },
+  });
+  state.candidatePreviewAutoplay = autoplay;
+  vm.runInContext(captionSource, context);
+  return { visibilityWrites, hookLookups: () => hookLookups, state, shortVideo, liveCaption, hook, context, frames, listeners, timers, playCalls: () => playCalls, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
+}
+
+test('overlay ticks only write visibility on transitions and reuse the hook node', () => {
+  const c = setup();
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.deepEqual(c.visibilityWrites, { caption: 1, hook: 1 });
+  assert.equal(c.hookLookups(), 1);
+  c.shortVideo.currentTime = 1.2; c.listeners.seeked();
+  assert.deepEqual(c.visibilityWrites, { caption: 1, hook: 2 });
+  c.shortVideo.currentTime = 3; c.sync(); c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 2, hook: 2 });
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.deepEqual(c.visibilityWrites, { caption: 3, hook: 3 });
+  c.state.captionPreference = 'off'; c.sync(); c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 4, hook: 3 });
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.deepEqual(c.visibilityWrites, { caption: 5, hook: 3 });
+  // Live controls can edit inline visibility between playback ticks.
+  c.hook.style.visibility = 'hidden'; c.sync();
+  assert.equal(c.hook.style.visibility, 'visible');
+  assert.equal(c.visibilityWrites.hook, 5);
+  assert.equal(c.hookLookups(), 1);
+});
+
+for (const readyState of [0, 2]) {
+  test(`deferred autoplay ignores disposed previews (readyState=${readyState})`, () => {
+    const c = setup('active-word', undefined, { autoplay: true, readyState });
+    const autoplay = readyState >= 2 ? c.timers[0] : c.listeners.canplay;
+    assert.equal(c.playCalls(), 0);
+    c.context.disposePreviewCaptionClock();
+    autoplay();
+    assert.equal(c.playCalls(), 0, 'detached media must not begin background playback');
+    assert.equal(c.state.candidatePreviewAutoplay, true, 'stale callbacks must preserve the next preview playback intent');
+
+    const current = setup('active-word', undefined, { autoplay: true, readyState });
+    (readyState >= 2 ? current.timers[0] : current.listeners.canplay)();
+    assert.equal(current.playCalls(), 1);
+    assert.equal(current.state.candidatePreviewAutoplay, false);
+  });
+}
+
+test('unchanged playback skips active phrase-word scans but transitions and style edits stay live', () => {
+  const c = setup();
+  assert.equal(c.activeWordSearches(), 1);
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.equal(c.activeWordSearches(), 1);
+  c.shortVideo.currentTime = 1.2; c.listeners.seeked();
+  assert.equal(c.activeWordSearches(), 2);
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.equal(c.activeWordSearches(), 3);
+  assert.match(c.markup(), />world<\/span>/);
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.activeWordSearches(), 4);
+  assert.match(c.markup(), />Secret<\/span>/);
+});
+
+test('phrase lookup runs once per encountered word, including misses and backwards seeks', () => {
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Secret' }]);
+  for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+  assert.equal(c.phraseSearches(), 1);
+  assert.match(c.markup(), /Secret/);
+  c.shortVideo.currentTime = 1.2;
+  for (let i = 0; i < 120; i++) c.sync();
+  assert.equal(c.phraseSearches(), 2, 'missing phrases must also be cached');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.phraseSearches(), 2);
+  assert.match(c.markup(), /Secret/);
+  const rebuilt = setup();
+  assert.equal(rebuilt.phraseSearches(), 1, 'a rebuilt preview owns a fresh cache');
+});
+
+test('cached phrase lookup preserves the first match for overlapping phrases', () => {
+  const c = setup('clean-bold', [
+    { start: 0, end: 2, text: 'First phrase' },
+    { start: 0, end: 2, text: 'Overlapping phrase' },
+  ]);
+  c.sync();
+  assert.match(c.markup(), /First phrase/);
+  assert.doesNotMatch(c.markup(), /Overlapping/);
+  assert.equal(c.phraseSearches(), 1);
+});
+
+test('captions off skips speech searches while hook timing and re-enabled captions stay current', () => {
+  const c = setup();
+  const searches = c.speechSearches(), writes = c.writes();
+  c.state.captionPreference = 'off';
+  for (let i = 0; i < 120; i++) {
+    c.shortVideo.currentTime = i / 100;
+    c.sync();
+  }
+  assert.equal(c.speechSearches(), searches);
+  assert.equal(c.writes(), writes);
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  assert.equal(c.hook.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.listeners.seeked();
+  assert.equal(c.hook.style.visibility, 'visible');
+  assert.equal(c.speechSearches(), searches);
+  c.shortVideo.currentTime = 1.2;
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionPreference = 'off';
+  c.shortVideo.currentTime = 3; c.sync();
+  c.state.captionPreference = 'on'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  assert.equal(c.markup(), '');
+});
+
+test('unchanged playback skips caption markup construction while hook and visibility stay current', () => {
+  const c = setup('keyword-color');
+  const initialBuilds = c.markupBuilds();
+  assert.ok(initialBuilds > 0);
+  for (let i = 0; i < 120; i++) c.sync();
+  assert.equal(c.markupBuilds(), initialBuilds);
+  c.state.hookTitleEnabled = false;
+  c.state.captionPreference = 'off'; c.sync();
+  assert.equal(c.hook.style.visibility, 'hidden');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.equal(c.markupBuilds(), initialBuilds);
+  c.state.captionColor = 'cyan'; c.sync();
+  assert.equal(c.markupBuilds(), initialBuilds * 2);
+  assert.match(c.markup(), /#35e7ff/);
+  c.shortVideo.currentTime = 3; c.sync();
+  assert.equal(c.markup(), '');
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.equal(c.markupBuilds(), initialBuilds * 3);
+  assert.match(c.markup(), /Secret/);
+});
+
+test('playback reuses phrase membership across ticks, word transitions and style changes', () => {
+  const c = setup();
+  for (let i = 0; i < 120; i++) c.sync();
+  c.shortVideo.currentTime = 1.2; c.sync();
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.match(c.markup(), />world<\/span>/);
+  c.state.captionColor = 'cyan'; c.sync();
+  assert.match(c.markup(), /#35e7ff/);
+  assert.equal(c.wordScans(), 1);
+});
+
+for (const effect of ['keyword-color', 'clean-bold']) {
+  test(`${effect}: word boundaries and backwards seeks reuse static phrase markup`, () => {
+    const c = setup(effect);
+    const initial = c.markup(), checks = c.markupBuilds();
+    for (const time of [1.2, .2, 1.2]) {
+      c.shortVideo.currentTime = time; c.listeners.seeked();
+    }
+    assert.equal(c.activeWordSearches(), 1, 'static markup must not be reconstructed at word boundaries');
+    assert.equal(c.markupBuilds(), checks);
+    assert.equal(c.markup(), initial);
+    assert.equal(c.writes(), 1);
+    assert.equal(c.hook.style.visibility, 'hidden', 'hook timing must still advance');
+    c.state.captionColor = 'cyan'; c.sync();
+    assert.equal(c.activeWordSearches(), 2);
+    assert.match(c.markup(), /#35e7ff/);
+    c.state.captionEffect = 'word-pop'; c.sync();
+    assert.match(c.markup(), />world<\/span>/);
+    c.shortVideo.currentTime = .2; c.listeners.seeked();
+    assert.match(c.markup(), />Secret<\/span>/);
+    c.state.captionEffect = effect; c.sync();
+    c.shortVideo.currentTime = 3; c.sync();
+    assert.equal(c.markup(), '');
+    c.shortVideo.currentTime = 1.2; c.sync();
+    assert.equal(c.markup(), initial.replaceAll('#ffd84a', '#35e7ff'));
+  });
+}
+
+test('phrase changes and backwards seeks recompute membership without retaining old words', () => {
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Secret' }, { start: 1, end: 2, text: 'world' }]);
+  assert.match(c.markup(), />Secret<\/span>/);
+  assert.doesNotMatch(c.markup(), /world/);
+  c.shortVideo.currentTime = 1.2; c.sync(); c.sync();
+  assert.match(c.markup(), />world<\/span>/);
+  assert.doesNotMatch(c.markup(), /Secret/);
+  assert.equal(c.wordScans(), 2);
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.match(c.markup(), />Secret<\/span>/);
+  assert.doesNotMatch(c.markup(), /world/);
+  assert.equal(c.wordScans(), 3);
+});
+
+for (const effect of ['active-word', 'word-pop', 'karaoke', 'keyword-color', 'clean-bold']) {
+  test(`${effect}: repeated playback updates preserve identical caption DOM`, () => {
+    const c = setup(effect);
+    const initial = c.markup();
+    for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
+    assert.equal(c.writes(), 1);
+    assert.equal(c.markup(), initial);
+    c.state.captionColor = 'cyan'; c.sync();
+    assert.equal(c.writes(), 2);
+    assert.match(c.markup(), /#35e7ff/);
+  });
+}
+
+test('word transitions, silence, backwards seeking and caption toggles stay current', () => {
+  const c = setup();
+  const first = c.markup();
+  c.shortVideo.currentTime = 1.2; c.sync();
+  assert.equal(c.writes(), 2);
+  assert.notEqual(c.markup(), first);
+  assert.equal(c.hook.style.visibility, 'hidden');
+  c.shortVideo.currentTime = 3; c.sync(); c.sync();
+  assert.equal(c.writes(), 3);
+  assert.equal(c.markup(), '');
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.shortVideo.currentTime = .2; c.sync();
+  assert.equal(c.writes(), 4);
+  assert.equal(c.markup(), first);
+  assert.equal(c.hook.style.visibility, 'visible');
+  c.state.captionPreference = 'off'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'hidden');
+  c.state.captionPreference = 'auto'; c.sync();
+  assert.equal(c.liveCaption.style.visibility, 'visible');
+  assert.equal(c.writes(), 4);
+  c.state.captionEffect = 'word-pop'; c.sync();
+  assert.equal(c.writes(), 5);
+});
+
+test('render cancels the old preview frame before replacing DOM, even without a pause event', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  const pendingTick = [...c.frames.values()][0];
+  c.state.page = 'home';
+  const blank = () => '';
+  for (const name of ['home', 'campaignDiscover', 'studio', 'campaigns', 'campaignEditor', 'analytics', 'library', 'projects', 'publish', 'settings', 'side', 'top', 'campaignAssetBrowserMarkup', 'modalMarkup', 'bind']) c.context[name] = blank;
+  let replacements = 0;
+  c.context.document = { getElementById: () => ({ set innerHTML(value) {
+    assert.equal(c.frames.size, 0, 'clock must stop before DOM replacement');
+    replacements++;
+  } }) };
+  const renderStart = source.indexOf('  function render(){');
+  vm.runInContext(source.slice(renderStart, source.indexOf('  function bind(){', renderStart)), c.context);
+  c.context.render();
+  assert.equal(replacements, 1);
+  assert.equal(c.context.disposePreviewCaptionClock, null);
+  // Late media events and a callback already dispatched must not revive the loop.
+  const writes = c.writes();
+  c.shortVideo.currentTime = 1.2;
+  c.listeners.play();
+  pendingTick();
+  assert.equal(c.frames.size, 0);
+  assert.equal(c.writes(), writes);
+  c.context.render();
+  assert.equal(replacements, 2);
+});
+
+test('pause stops the preview frame and playback can start it again', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  c.shortVideo.paused = true;
+  c.listeners.pause();
+  assert.equal(c.frames.size, 0);
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+});
+
+test('buffering suspends caption frames until playback resumes without a new play event', () => {
+  const c = setup();
+  c.shortVideo.paused = false;
+  c.listeners.play();
+  assert.equal(c.frames.size, 1);
+  c.listeners.waiting();
+  c.listeners.waiting();
+  assert.equal(c.shortVideo.paused, false);
+  assert.equal(c.frames.size, 0);
+
+  // Seeks and style edits still update captions while the frame loop is idle.
+  c.shortVideo.currentTime = 1.2;
+  c.listeners.seeked();
+  assert.match(c.markup(), /scale\(1.08\)[^>]*>world/);
+  c.state.captionColor = 'cyan';
+  c.sync();
+  assert.match(c.markup(), /#35e7ff/);
+  assert.equal(c.frames.size, 0);
+
+  c.listeners.playing();
+  c.listeners.playing();
+  assert.equal(c.frames.size, 1, 'resuming must not create duplicate loops');
+  c.listeners.waiting();
+  c.context.disposePreviewCaptionClock();
+  c.listeners.playing();
+  assert.equal(c.frames.size, 0, 'a detached preview must stay stopped');
+});

@@ -1,9 +1,28 @@
+import { updatePrecisionRuler } from './editor-precision-ruler.js';
+import { buildPreviewCaptionMarkup } from './preview-caption-markup.js';
+import { buildAnalyticsPosts, youtubeVideoId } from './analytics-posts.js';
+import { createEditorKeyboardHandler } from './editor-keyboard-shortcuts.js';
+import { campaignProgress } from './campaign-progress.js';
+import { sortLibraryItems } from './library-sort.js';
+import { waitForCampaignProject } from './campaign-project-polling.js';
+import { buildEditorPreferences } from './editor-preferences.js';
+import { projectDisplayState } from './project-display-state.js';
+import { readJsonResponse } from './api-response.js';
+import { buildRenderOptions } from './editor-render-options.js';
+import { hasCustomCaptionY, resolveCaptionY } from './editor-caption-position.js';
+import { previewCaptionFontSize, previewCaptionOutlineSize } from './preview-caption-appearance.js';
+import { isPreviewHookVisible } from './preview-hook-visibility.js';
+import { createPreviewWordLookup } from './preview-word-lookup.js';
+import { bindModalKeyboard } from './modal-keyboard.js';
+import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCaptionWordsForCandidate as captionWordsForCandidate, previewPlaybackWords } from './preview-caption-timeline.js';
+
 /* MINT-RED-NOIR-21.14.6 */
 /* MINT-HEADER-21.14.5 */
 /* MINT-NAVIGATION-21.14.3 */
 /* MINT-AI-STUDIO-21.14.2 */
 /* MINT-HOME-21.14.1 */
 (function(){
+  const editorToolGroupOpen=new Map();
   const validPages=new Set(['home','campaign-discover','campaigns','campaign-editor','analytics','studio','library','projects','publish','settings']);
   function pageFromHash(){
     const raw=String(location.hash||'').replace(/^#\/?/,'').split(/[?&]/)[0].trim();
@@ -15,16 +34,17 @@
   const campaignImportRecovery=loadCampaignImportRecovery();
   function loadCampaignSites(){try{const saved=JSON.parse(localStorage.getItem('clipboost:campaignSites')||'[]');return Array.isArray(saved)&&saved.length?saved:[{id:'clipping',name:'Clipping',url:'https://clipping.net/dashboard/campaigns'}]}catch{return [{id:'clipping',name:'Clipping',url:'https://clipping.net/dashboard/campaigns'}]}}
   function persistCampaignSites(){try{localStorage.setItem('clipboost:campaignSites',JSON.stringify(state.campaignSites||[]))}catch{}}
-  const state={previewFinalMode:false,page:pageFromHash(), video:null, studioMode:editorPrefs.studioMode||'shorts', shortsCount:[5,10,20].includes(Number(editorPrefs.shortsCount))?Number(editorPrefs.shortsCount):10, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, livePlayer:null, libraryLoadMoreBusy:false, libraryRefreshBusy:false, libraryRefreshMessage:'', youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, captionPreference:editorPrefs.captionPreference||'auto', captionColor:editorPrefs.captionColor||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionFont:({trebuchet:'social',verdana:'social'}[editorPrefs.captionFont]||editorPrefs.captionFont||'social'), captionEffect:({'word-by-word':'word-pop','punch-words':'keyword-color','static':'clean-bold'}[editorPrefs.captionEffect]||editorPrefs.captionEffect||'active-word'), hookTitleEnabled:Boolean(editorPrefs.hookTitleEnabled), hookTitleText:String(editorPrefs.hookTitleText||''), hookTitleDuration:String(editorPrefs.hookTitleDuration||'5'), hookTitleScale:Number.isFinite(Number(editorPrefs.hookTitleScale))?Math.max(.5,Math.min(2,Number(editorPrefs.hookTitleScale))):1, hookTitleX:Number.isFinite(Number(editorPrefs.hookTitleX))?Math.max(.08,Math.min(.92,Number(editorPrefs.hookTitleX))):.5, hookTitleY:Number.isFinite(Number(editorPrefs.hookTitleY))?Math.max(.08,Math.min(.92,Number(editorPrefs.hookTitleY))):.12, captionPosition:editorPrefs.captionPosition||'bottom', captionY:Number.isFinite(Number(editorPrefs.captionY))?Number(editorPrefs.captionY):null, captionSize:editorPrefs.captionSize||'medium', captionScale:Number.isFinite(Number(editorPrefs.captionScale))?Math.max(.4,Math.min(2,Number(editorPrefs.captionScale))):1, captionColor:editorPrefs.captionColor||'white',
+  const state={previewFinalMode:false,page:pageFromHash(), video:null, studioMode:editorPrefs.studioMode||'shorts', shortsCount:[5,10,20].includes(Number(editorPrefs.shortsCount))?Number(editorPrefs.shortsCount):10, restoringProject:false, uploadProgress:0, uploadStatus:'idle', selectedCandidate:0, library:null, libraryLoaded:false, libraryLoading:false, libraryError:'', youtubeConfigured:null, twitchConfigured:null, libraryPlatform:'youtube', librarySection:'videos', librarySort:'newest', libraryCreatorFilter:'all', addCreatorOpen:false, addCreatorBusy:false, creatorPlatform:'youtube', creatorQuery:'', creatorSearchResults:[], creatorSearchLoading:false, previewVideo:null, livePlayer:null, libraryLoadMoreBusy:false, libraryRefreshBusy:false, libraryRefreshMessage:'', youtubeHistoryExpanded:false, projectBusy:false, projects:null, projectsLoading:false, captionPreference:editorPrefs.captionPreference||'auto', captionColor:editorPrefs.captionColor||'auto', regenerating:false, timelineSeek:null, candidatePreviewLoading:false, candidatePreviewLoadingIndex:-1, candidatePreviewError:'', candidatePreviewRequestId:0, candidatePreviewAutoplay:false, editPreset:editorPrefs.editPreset||'dynamic', editIntensity:editorPrefs.editIntensity||'balanced', trackingMode:editorPrefs.trackingMode||'speaker', cameraMovement:editorPrefs.cameraMovement||'balanced', captionStyle:editorPrefs.captionStyle||'bold', captionFont:({trebuchet:'social',verdana:'social'}[editorPrefs.captionFont]||editorPrefs.captionFont||'social'), captionEffect:({'word-by-word':'word-pop','punch-words':'keyword-color','static':'clean-bold'}[editorPrefs.captionEffect]||editorPrefs.captionEffect||'active-word'), hookTitleEnabled:Boolean(editorPrefs.hookTitleEnabled), hookTitleText:String(editorPrefs.hookTitleText||''), hookTitleDuration:String(editorPrefs.hookTitleDuration||'5'), hookTitleScale:Number.isFinite(Number(editorPrefs.hookTitleScale))?Math.max(.5,Math.min(2,Number(editorPrefs.hookTitleScale))):1, hookTitleX:Number.isFinite(Number(editorPrefs.hookTitleX))?Math.max(.08,Math.min(.92,Number(editorPrefs.hookTitleX))):.5, hookTitleY:Number.isFinite(Number(editorPrefs.hookTitleY))?Math.max(.08,Math.min(.92,Number(editorPrefs.hookTitleY))):.12, captionPosition:editorPrefs.captionPosition||'bottom', captionY:hasCustomCaptionY(editorPrefs.captionY)?Number(editorPrefs.captionY):null, captionSize:editorPrefs.captionSize||'medium', captionScale:Number.isFinite(Number(editorPrefs.captionScale))?Math.max(.4,Math.min(2,Number(editorPrefs.captionScale))):1, captionColor:editorPrefs.captionColor||'white',
     sourceSubtitleMode:['keep','crop','hide'].includes(editorPrefs.sourceSubtitleMode)?editorPrefs.sourceSubtitleMode:'keep',
     sourceSubtitleBottom:Number.isFinite(Number(editorPrefs.sourceSubtitleBottom))?Math.max(.06,Math.min(.28,Number(editorPrefs.sourceSubtitleBottom))):.15,
     watermarkUrl:editorPrefs.watermarkUrl||'', watermarkName:editorPrefs.watermarkName||'', watermarkX:Number.isFinite(Number(editorPrefs.watermarkX))?Number(editorPrefs.watermarkX):.86, watermarkY:Number.isFinite(Number(editorPrefs.watermarkY))?Number(editorPrefs.watermarkY):.12, watermarkScale:Number.isFinite(Number(editorPrefs.watermarkScale))?Number(editorPrefs.watermarkScale):.18, watermarkOpacity:Number.isFinite(Number(editorPrefs.watermarkOpacity))?Number(editorPrefs.watermarkOpacity):.9,
     cleanupMode:editorPrefs.cleanupMode||'captions', zoomStyle:editorPrefs.zoomStyle||'natural', editOptions:{autoReframe:true,speakerTracking:true,reactionDetection:true,sceneAwareCuts:true,silenceRemoval:true,dynamicZoom:true,captions:true,...(editorPrefs.editOptions||{})}, exportBusy:false, exportAllBusy:false, campaigns:null, campaignsLoading:false, campaignSelected:null, campaignDetailsOpen:false, campaignFormOpen:false, campaignBusy:false, campaignMessage:campaignImportRecovery?'Unsaved Smart Import review available. You can reopen it anytime.':'', campaignVariants:null, campaignCompliance:null, campaignTab:'overview', campaignDraftUrl:campaignImportRecovery?.url||'', campaignSites:loadCampaignSites(), campaignImportDraft:campaignImportRecovery?.draft||null, campaignAssetBrowser:null, campaignAssetBusy:false, settings:null, settingsLoading:false, settingsSaving:false, settingsMessage:'', desktopSettings:null, systemHealth:null, systemHealthLoading:false, desktopUpdate:{status:'idle',version:null,percent:0}, publishDrafts:{},publishActivePlatform:'tiktok',publishNetworks:{tiktok:true,instagram:true,youtube:true,facebook:false,x:false},platformConnections:null,platformConnectionsLoading:false,platformConnectBusy:'',analyticsScope:'all',analyticsPlatform:'all',analyticsPeriod:'30',analyticsPeriodOpen:false,analyticsSearch:'',analyticsOrganicPosts:[],youtubeAnalytics:null,youtubeAnalyticsLoading:false,youtubeAnalyticsError:'',lastExport:null,uiModal:null};
   const autoIngestAttempted=new Set();
-  function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify({captionPreference:state.captionPreference,captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionFont:state.captionFont||'social',captionEffect:state.captionEffect||'active-word',hookTitleEnabled:Boolean(state.hookTitleEnabled),hookTitleText:String(state.hookTitleText||''),hookTitleDuration:String(state.hookTitleDuration||'5'),hookTitleScale:Number(state.hookTitleScale||1),hookTitleX:Number(state.hookTitleX||.5),hookTitleY:Number(state.hookTitleY||.12),keepFullSource:!isCampaign&&Boolean(state.video?.candidates?.[state.selectedCandidate||0]?.keepFullSource),captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:Number.isFinite(Number(state.captionY))?Number(state.captionY):null,sourceSubtitleMode:state.sourceSubtitleMode||'keep',sourceSubtitleBottom:Number(state.sourceSubtitleBottom||.15),watermarkUrl:state.watermarkUrl||'',watermarkName:state.watermarkName||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9),studioMode:state.studioMode||'shorts'}))}catch{}}
+  function persistEditorPrefs(){try{localStorage.setItem('clipboost:editorPrefs',JSON.stringify(buildEditorPreferences(state)))}catch{}}
   function persistCampaignImportReview(){try{if(state.campaignImportDraft)localStorage.setItem('clipboost:campaignImportReview',JSON.stringify({url:state.campaignDraftUrl||state.campaignImportDraft.campaignUrl||'',draft:state.campaignImportDraft,savedAt:Date.now()}));else localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
   function clearCampaignImportReview(){state.campaignImportDraft=null;state.campaignDraftUrl='';try{localStorage.removeItem('clipboost:campaignImportReview')}catch{}}
   let uiModalResolve=null;
+  let uiModalTriggerId=null;
   let rememberedReadyVersions=[];
   try{rememberedReadyVersions=JSON.parse(sessionStorage.getItem('clipboost:updateReadyPrompted')||'[]');if(!Array.isArray(rememberedReadyVersions))rememberedReadyVersions=[]}catch{rememberedReadyVersions=[]}
   const updateReadyPromptedVersions=new Set(rememberedReadyVersions.map(String));
@@ -42,13 +62,14 @@
     const kind=m.kind||'info';
     const mode=m.mode||'notice';
     const actions=mode==='progress'?`<div class="cb-modal-installing"><div class="cb-analysis-progress"><div class="cb-analysis-progress-head"><span>${escapeHtml(m.progressLabel||'Working…')}</span><strong>${Math.round(Math.max(0,Math.min(100,Number(m.progress||0))))}%</strong></div><div class="cb-analysis-progress-track"><i style="width:${Math.max(4,Math.min(100,Number(m.progress||4)))}%"></i></div></div></div>`:`<div class="cb-modal-actions">${mode==='confirm'?`<button class="btn secondary" id="cbModalCancel" type="button">${escapeHtml(m.cancelLabel||'Cancel')}</button>`:''}<button class="btn ${kind==='danger'?'danger':'primary'}" id="cbModalConfirm" type="button">${escapeHtml(m.confirmLabel||'OK')}</button></div>`;
-    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
+    return `<div class="cb-modal-backdrop" id="cbModalBackdrop"><section class="cb-modal cb-modal-${kind} ${mode==='progress'?'cb-modal-progress':''}" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="cbModalTitle"><div class="cb-modal-top"><div class="cb-modal-icon">${modalIcon(kind)}</div><div class="cb-modal-copy"><div class="eyebrow">${escapeHtml(m.eyebrow||'ClipBoost')}</div><h2 id="cbModalTitle">${escapeHtml(m.title||'ClipBoost')}</h2><p>${escapeHtml(m.message||'')}</p>${m.detail?`<div class="cb-modal-detail">${escapeHtml(m.detail)}</div>`:''}</div></div>${actions}</section></div>`;
   }
   function openModal(options={}){
+    if(!state.uiModal)uiModalTriggerId=document.activeElement?.id||null;
     if(uiModalResolve){try{uiModalResolve(false)}catch{}uiModalResolve=null}
     return new Promise(resolve=>{uiModalResolve=resolve;state.uiModal={mode:'notice',kind:'info',eyebrow:'ClipBoost',confirmLabel:'OK',...options};render();});
   }
-  function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(resolve)resolve(result)}
+  function finishModal(result){const resolve=uiModalResolve;uiModalResolve=null;state.uiModal=null;render();if(uiModalTriggerId)document.getElementById(uiModalTriggerId)?.focus();uiModalTriggerId=null;if(resolve)resolve(result)}
   function showNotice(options={}){return openModal({mode:'notice',...options})}
   function confirmAction(options={}){return openModal({mode:'confirm',cancelLabel:'Cancel',confirmLabel:'Confirm',...options})}
   async function promptReadyUpdate(version,{force=false}={}){
@@ -281,7 +302,7 @@
     const pct=t=>Math.max(0,Math.min(100,(Number(t||0)/timelineDuration)*100));
     const silenceLayers=timelineSilences.slice(0,500).map(s=>{const left=pct(s.start),right=pct(s.end),width=Math.max(.15,right-left);return `<span class="timeline-silence" style="left:${left}%;width:${width}%" title="Silence ${formatTime(s.start)}–${formatTime(s.end)}"></span>`}).join('');
     const sceneLayers=timelineScenes.slice(0,500).map(t=>`<span class="timeline-scene" style="left:${pct(t)}%" title="Scene change ${formatTime(t)}"></span>`).join('');
-    const clipLayers=candidates.slice(0,40).map((m,i)=>{const left=pct(m.start),width=Math.max(.8,pct(m.end)-left);return `<button type="button" class="timeline-clip ${i===selected?'active':''}" style="left:${left}%;width:${width}%" data-candidate="${i}" data-timeline-start="${Number(m.start||0)}" title="#${i+1} ${escapeHtml(m.title||m.reason||'Clip')} · ${formatTime(m.start)}–${formatTime(m.end)}"><span>${i+1}</span></button>`}).join('');
+    const clipLayers=candidates.slice(0,40).map((m,i)=>{const left=pct(m.start),width=Math.max(.8,pct(m.end)-left);return `<button type="button" class="timeline-clip ${i===selected?'active':''}" style="left:${left}%;width:${width}%" aria-pressed="${i===selected}" data-candidate="${i}" data-timeline-start="${Number(m.start||0)}" title="#${i+1} ${escapeHtml(m.title||m.reason||'Clip')} · ${formatTime(m.start)}–${formatTime(m.end)}"><span>${i+1}</span></button>`}).join('');
     const selectedStart=pct(c.start),selectedWidth=Math.max(0,pct(c.end)-selectedStart);
     const timelineMarkup=`<div class="smart-timeline" id="smartTimeline" data-duration="${timelineDuration}"><div class="smart-wave ${realWaveform?'mint-measured-wave':'mint-no-audio-wave'}">${wave||'<span class="mint-wave-unavailable">Audio waveform unavailable — analyze a local video</span>'}</div><div class="timeline-silences-layer">${silenceLayers}</div><div class="timeline-scenes-layer">${sceneLayers}</div><div class="timeline-selected-range" style="left:${selectedStart}%;width:${selectedWidth}%"></div><div class="timeline-clips-layer">${clipLayers}</div><div class="timeline-playhead" id="timelinePlayhead" style="left:${pct(state.timelineSeek??c.start)}%"></div></div><div class="timeline-axis"><span>00:00</span><span>${formatTime(timelineDuration*.25)}</span><span>${formatTime(timelineDuration*.5)}</span><span>${formatTime(timelineDuration*.75)}</span><span>${formatTime(timelineDuration)}</span></div><div class="timeline-legend"><span><i class="legend-clip"></i>AI clips</span><span><i class="legend-scene"></i>Scene changes</span><span><i class="legend-silence"></i>Silence</span><span>${realWaveform?'Measured waveform':'No waveform data'}</span></div>`;
     const editPlan=c?.previewMeta?.editPlan||c?.editPlan||null;
@@ -314,13 +335,13 @@
     const previewCaptionRows=previewCaptionRowsForCandidate(c);
     const firstCaption=previewCaptionRows[0]?.text||c.hook||'';
     const clipStartValue=Number(c.start||0),clipEndValue=Math.max(clipStartValue+.25,Number(c.end||clipStartValue+30)),clipDuration=Math.max(.25,clipEndValue-clipStartValue);
-    const clipPreviewLoading=state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
-    const previewError=state.candidatePreviewError&&state.candidatePreviewLoadingIndex===selected?state.candidatePreviewError:'';
+    const clipPreviewLoading=state.candidatePreviewVideoId===v?.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===selected;
+    const previewError=state.candidatePreviewVideoId===v?.id&&state.candidatePreviewError&&state.candidatePreviewLoadingIndex===selected?state.candidatePreviewError:'';
     const trackingInfo=c.previewMeta?.tracking||null;
     const trackingWarning=c.previewMeta?.trackingWarning||'';
     const trackingBadge=trackingInfo?`<div class="tracking-badge ${trackingWarning?'warning':''}"><span>◉</span><b>${trackingWarning?'Tracking fallback':`${trackingInfo.faceCountMax||0} face${Number(trackingInfo.faceCountMax||0)===1?'':'s'}`}</b><small>${trackingWarning?'Full source preserved':`${trackingInfo.speakerSwitches||0} switches · ${trackingInfo.reactionPeaks||0} reactions`}</small></div>`:'';
-    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222 ${state.previewFinalMode?'mint-final-render-mode':''}"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video>${state.watermarkUrl?`<img id="liveWatermark" class="mint-live-watermark-v224" src="${escapeHtml(state.watermarkUrl)}" alt="Watermark" draggable="false" style="left:${Math.round(Number(state.watermarkX||.86)*100)}%;top:${Math.round(Number(state.watermarkY||.12)*100)}%;width:${Math.round(Number(state.watermarkScale||.18)*100)}%;opacity:${Number(state.watermarkOpacity||.9)}">`:''}<div id="liveHookTitle" style="position:absolute;z-index:7;left:${Math.round(Number(state.hookTitleX||.5)*100)}%;top:${Math.round(Number(state.hookTitleY||.12)*100)}%;width:84%;padding:.38em .58em;border-radius:.48em;background:transparent;color:#fff;font-family:'Arial Black','Segoe UI Black',sans-serif;font-weight:900;font-size:clamp(15px,2.7vw,30px);line-height:1.06;text-align:center;text-transform:uppercase;text-shadow:0 2px 4px rgba(0,0,0,.65);transform:translate(-50%,-50%) scale(${Number(state.hookTitleScale||1)});pointer-events:auto;touch-action:none;user-select:none;cursor:grab;visibility:${state.hookTitleEnabled&&state.hookTitleText?'visible':'hidden'}">${escapeHtml(state.hookTitleText||'')}</div><div id="liveCaption" class="${liveCaptionClass()}" style="--caption-font-size:${liveCaptionFontSize(300)};top:${Math.round(currentCaptionY()*100)}%;${state.captionPreference==='off'?'display:none;':''}" role="button" tabindex="0" aria-label="Drag subtitles vertically">${escapeHtml(firstCaption||'Captions')}</div><div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
-    const moments=candidates.length?`<div class="moments-head"><strong>${candidates.length} clip${candidates.length===1?'':'s'} generated</strong><span>Click any clip to preview it</span></div>${candidates.slice(0,40).map((m,i)=>`<button class="clip candidate-btn ${i===selected?'candidate-active':''}" data-candidate="${i}"><div class="clip-thumb">${m.thumbnailUrl?`<img src="${m.thumbnailUrl}" alt="clip thumbnail">`:mediaThumb(i)}<div class="score">${Math.round(m.score||0)}</div><span class="clip-tag">#${i+1} · ${m.editPlan?'AI edit plan':m.signals?.semantic?'Local AI':'AI pick'}</span></div><div class="clip-info"><strong>${escapeHtml(m.title||m.reason||'Candidate clip')}</strong><small>${formatTime(m.start||0)} – ${formatTime(m.end||0)} · ${Math.round(m.duration||0)}s</small>${m.quality?`<div class="quality-mini"><span>Hook ${Math.round(m.quality.hook||0)}</span><span>Story ${Math.round(m.quality.story||0)}</span><span>Complete ${Math.round(m.quality.completeness||0)}</span><span>Retention ${Math.round(m.quality.retention||0)}</span><span>View ${Math.round(m.viewPotential||m.quality.retention||0)}</span>${m.campaignFit?`<span class="campaign-fit-mini">Campaign ${Math.round(m.campaignFit.score||0)}</span>`:''}</div>`:''}${m.hook?`<em>${escapeHtml(m.hook)}</em>`:''}<p>${escapeHtml(m.reason||'')}</p></div></button>`).join('')}`:`<div class="studio-empty-moments">${analyzing?'Local AI is still analyzing this video. Only clips that pass the quality bar will appear.':linked?'Upload the linked source file to detect moments.':'Upload a video and ClipBoost will keep only moments that pass the quality bar.'}</div>`;
+    const realPhone=hasLocal&&candidates.length?(c.previewUrl?`<div class="mint-short-video-frame-v222 ${state.previewFinalMode?'mint-final-render-mode':''}"><video id="shortVideo" class="real-short-video" controls preload="metadata" playsinline src="${c.previewUrl}" data-segmented="1"></video>${state.watermarkUrl?`<img id="liveWatermark" class="mint-live-watermark-v224" src="${escapeHtml(state.watermarkUrl)}" alt="Watermark" role="group" tabindex="0" aria-label="Watermark position. Use arrow keys to move." title="Drag or use arrow keys to move the watermark" draggable="false" style="left:${Math.round(Number(state.watermarkX||.86)*100)}%;top:${Math.round(Number(state.watermarkY||.12)*100)}%;width:${Math.round(Number(state.watermarkScale||.18)*100)}%;opacity:${Number(state.watermarkOpacity||.9)}">`:''}<div id="liveHookTitle" role="group" tabindex="0" aria-label="Hook title position. Use arrow keys to move." title="Drag or use arrow keys to move the hook title" style="position:absolute;z-index:7;left:${Math.round(Number(state.hookTitleX||.5)*100)}%;top:${Math.round(Number(state.hookTitleY||.12)*100)}%;width:84%;padding:.38em .58em;border-radius:.48em;background:transparent;color:#fff;font-family:'Arial Black','Segoe UI Black',sans-serif;font-weight:900;font-size:clamp(15px,2.7vw,30px);line-height:1.06;text-align:center;text-transform:uppercase;text-shadow:0 2px 4px rgba(0,0,0,.65);transform:translate(-50%,-50%) scale(${Number(state.hookTitleScale||1)});pointer-events:auto;touch-action:none;user-select:none;cursor:grab;visibility:${state.hookTitleEnabled&&state.hookTitleText?'visible':'hidden'}">${escapeHtml(state.hookTitleText||'')}</div><div id="liveCaption" class="${liveCaptionClass()}" style="--caption-font-size:${liveCaptionFontSize(300)};top:${Math.round(currentCaptionY()*100)}%;${state.captionPreference==='off'?'display:none;':''}" role="button" tabindex="0" aria-label="Drag subtitles vertically">${escapeHtml(firstCaption||'Captions')}</div><div class="ai-score-chip">AI ${Math.round(c.score||0)}</div><div class="rendered-badge">EDITED PREVIEW</div>${trackingBadge}</div>`:`<div class="clip-preview-loading">${c.thumbnailUrl?`<img src="${c.thumbnailUrl}" alt="Selected clip">`:''}<div class="clip-preview-loading-overlay"><span class="preview-spinner">↻</span><strong>${clipPreviewLoading?'Rendering edited preview…':previewError?'Preview unavailable':'Preparing edited preview…'}</strong><small>${previewError?escapeHtml(previewError):'Applying silence cuts, reframing, zooms and captions to this preview.'}</small>${previewError?'<button class="btn secondary" id="retryClipPreview" type="button">Retry preview</button>':''}</div></div>`):`<div class="linked-phone-placeholder"><span>${linked?'SOURCE LINKED':'NO CLIP YET'}</span><b>${linked?'Upload the file to generate shorts':'Upload and analyze a video'}</b></div>`;
+    const moments=candidates.length?`<div class="moments-head"><strong>${candidates.length} clip${candidates.length===1?'':'s'} generated</strong><span>Click any clip to preview it</span></div>${candidates.slice(0,40).map((m,i)=>`<button class="clip candidate-btn ${i===selected?'candidate-active':''}" aria-pressed="${i===selected}" data-candidate="${i}"><div class="clip-thumb">${m.thumbnailUrl?`<img src="${m.thumbnailUrl}" alt="clip thumbnail">`:mediaThumb(i)}<div class="score">${Math.round(m.score||0)}</div><span class="clip-tag">#${i+1} · ${m.editPlan?'AI edit plan':m.signals?.semantic?'Local AI':'AI pick'}</span></div><div class="clip-info"><strong>${escapeHtml(m.title||m.reason||'Candidate clip')}</strong><small>${formatTime(m.start||0)} – ${formatTime(m.end||0)} · ${Math.round(m.duration||0)}s</small>${m.quality?`<div class="quality-mini"><span>Hook ${Math.round(m.quality.hook||0)}</span><span>Story ${Math.round(m.quality.story||0)}</span><span>Complete ${Math.round(m.quality.completeness||0)}</span><span>Retention ${Math.round(m.quality.retention||0)}</span><span>View ${Math.round(m.viewPotential||m.quality.retention||0)}</span>${m.campaignFit?`<span class="campaign-fit-mini">Campaign ${Math.round(m.campaignFit.score||0)}</span>`:''}</div>`:''}${m.hook?`<em>${escapeHtml(m.hook)}</em>`:''}<p>${escapeHtml(m.reason||'')}</p></div></button>`).join('')}`:`<div class="studio-empty-moments">${analyzing?'Local AI is still analyzing this video. Only clips that pass the quality bar will appear.':linked?'Upload the linked source file to detect moments.':'Upload a video and ClipBoost will keep only moments that pass the quality bar.'}</div>`;
     const ai=v?.analysis||{};
     const transcriptPreview=(v?.transcript?.captions||[]).slice(0,10).map(x=>`<div class="transcript-line"><span>${formatTime(x.start)}</span><p>${escapeHtml(x.text)}</p></div>`).join('');
     const analysisStatus=hasLocal?`<section class="card ai-analysis-bar ${ai.aiError?'warning':''}"><div><span class="eyebrow">ANALYSIS ENGINE</span><strong>${escapeHtml(ai.engine||'Ready to analyze')}</strong><small>${ai.wordCount?`${formatCount(ai.wordCount)} cleaned words · ${formatCount(ai.captionCount||0)} caption groups${ai.transcriptCleanup?.removedWords?` · ${formatCount(ai.transcriptCleanup.removedWords)} fillers/repeats cleaned`:''}`:analyzing?`${ai.transcriptionPhase==='audio-prep'?'Preparing audio once':ai.transcriptionPhase==='speech-map'?'Mapping speech':ai.transcriptionPhase==='model-load'?'Loading Whisper':`Transcription · ${Math.round(Number(ai.transcriptionProgress||0))}% complete`}`:'Local faster-whisper + Quality Engine analysis'}</small></div><div class="analysis-pills"><span>${ai.scenesDetected||0} scenes</span><span>${ai.silencesDetected||0} pauses</span><span class="${ai.transcription&&ai.transcription!=='not-configured'?'ok':''}">${ai.transcription&&ai.transcription!=='not-configured'?'✓ transcript':analyzing?'Transcribing…':'No transcript'}</span>${ai.retryAttempt?`<span class="warning-pill">Retry ${ai.retryAttempt}</span>`:''}</div>${ai.warning?`<p>${escapeHtml(ai.warning)}</p>`:''}${ai.aiError?`<p>${escapeHtml(ai.aiError)}</p>`:''}</section>`:'';
@@ -336,7 +357,7 @@
     const sourcePending=Boolean(v&&!candidates.length&&((linked&&!hasLocal)||working));
     const showEditorWorkspace=Boolean(v&&!sourcePending);
     const shortsCountControl='';
-    const workflowSwitcher=generalStudio?`<section class="mint-editor-workflow-switcher"><div><span class="eyebrow">CREATION MODE</span><b>What do you want to make?</b><small>Library and uploads stay in AI Studio. Campaign media never enters this workspace.</small></div><div class="mint-editor-workflow-actions"><button type="button" data-studio-mode="shorts" class="${studioMode==='shorts'?'active':''}"><span>✦</span><b>Auto Shorts</b><small>Find, edit and export the strongest short-form moments.</small></button><button type="button" data-studio-mode="long" class="${studioMode==='long'?'active':''}"><span>▰</span><b>Long Video</b><small>Work from the full source with transcript, cleanup and AI editing.</small></button></div></section>`:'';
+    const workflowSwitcher=generalStudio?`<section class="mint-editor-workflow-switcher"><div><span class="eyebrow">CREATION MODE</span><b>What do you want to make?</b><small>Library and uploads stay in AI Studio. Campaign media never enters this workspace.</small></div><div class="mint-editor-workflow-actions"><button type="button" data-studio-mode="shorts" aria-pressed="${studioMode==='shorts'}" class="${studioMode==='shorts'?'active':''}"><span>✦</span><b>Auto Shorts</b><small>Find, edit and export the strongest short-form moments.</small></button><button type="button" data-studio-mode="long" aria-pressed="${studioMode==='long'}" class="${studioMode==='long'?'active':''}"><span>▰</span><b>Long Video</b><small>Work from the full source with transcript, cleanup and AI editing.</small></button></div></section>`:'';
     return `<div class="content mint-studio-page-v142 ${generalStudio?'mint-general-editor-v216':'mint-campaign-source-editor-v216'} ${!v?'mint-studio-empty-v221':''}">${workflowSwitcher}
       <section class="mint-studio-header-v142">
         <div>
@@ -379,13 +400,13 @@
                   <div class="mint-manual-trim-head"><div><span>MANUAL CUT</span><b>Retouch start / end</b></div><em>${c.manualTrim?'Adjusted':'AI cut'}</em></div>
                   <div class="mint-trim-row">
                     <div class="mint-trim-label"><span>Start</span><b id="manualTrimStartValue">${formatTime(clipStartValue)}</b></div>
-                    <div class="mint-trim-control"><button type="button" data-trim-boundary="start" data-trim-delta="-0.25">−0.25s</button><input id="manualTrimStart" type="range" min="0" max="${Math.max(0,clipEndValue-.25)}" step="0.01" value="${clipStartValue.toFixed(2)}"><button type="button" data-trim-boundary="start" data-trim-delta="0.25">+0.25s</button></div>
+                    <div class="mint-trim-control"><button type="button" data-trim-boundary="start" data-trim-delta="-0.25" aria-label="Move clip start earlier by 0.25 seconds">−0.25s</button><input id="manualTrimStart" type="range" aria-label="Clip start" aria-valuetext="${clipStartValue.toFixed(2)} seconds" min="0" max="${Math.max(0,clipEndValue-.25)}" step="0.01" value="${clipStartValue.toFixed(2)}"><button type="button" data-trim-boundary="start" data-trim-delta="0.25" aria-label="Move clip start later by 0.25 seconds">+0.25s</button></div>
                   </div>
                   <div class="mint-trim-row">
                     <div class="mint-trim-label"><span>End</span><b id="manualTrimEndValue">${formatTime(clipEndValue)}</b></div>
-                    <div class="mint-trim-control"><button type="button" data-trim-boundary="end" data-trim-delta="-0.25">−0.25s</button><input id="manualTrimEnd" type="range" min="${Math.min(timelineDuration,clipStartValue+.25)}" max="${timelineDuration}" step="0.01" value="${clipEndValue.toFixed(2)}"><button type="button" data-trim-boundary="end" data-trim-delta="0.25">+0.25s</button></div>
+                    <div class="mint-trim-control"><button type="button" data-trim-boundary="end" data-trim-delta="-0.25" aria-label="Move clip end earlier by 0.25 seconds">−0.25s</button><input id="manualTrimEnd" type="range" aria-label="Clip end" aria-valuetext="${clipEndValue.toFixed(2)} seconds" min="${Math.min(timelineDuration,clipStartValue+.25)}" max="${timelineDuration}" step="0.01" value="${clipEndValue.toFixed(2)}"><button type="button" data-trim-boundary="end" data-trim-delta="0.25" aria-label="Move clip end later by 0.25 seconds">+0.25s</button></div>
                   </div>
-                  <div class="mint-precision-trim-tools"><div class="mint-precision-trim-title">Precision cut <small>Zoom around each boundary · 0.01s resolution</small></div><div class="mint-cut-zoom"><div class="mint-cut-zoom-head"><b>Zoomed Cut Timeline</b><label>Window <select id="precisionWindow"><option value="2">±2s</option><option value="5" selected>±5s</option><option value="10">±10s</option></select></label></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>IN point</b><output id="precisionStartLabel">Start</output></div><div class="mint-cut-ruler" id="precisionStartRuler"></div><input id="precisionStart" type="range" step="0.01" aria-label="Zoomed clip start"><div class="mint-cut-axis"><span id="precisionStartMin"></span><span id="precisionStartMax"></span></div></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>OUT point</b><output id="precisionEndLabel">End</output></div><div class="mint-cut-ruler" id="precisionEndRuler"></div><input id="precisionEnd" type="range" step="0.01" aria-label="Zoomed clip end"><div class="mint-cut-axis"><span id="precisionEndMin"></span><span id="precisionEndMax"></span></div></div><div class="mint-cut-legend"><span>┃ Scene</span><span>▨ Silence</span><span>◆ Cut</span></div></div><div class="mint-precision-trim-actions"><button type="button" data-trim-boundary="start" data-trim-delta="-0.05">Start −0.05s</button><button type="button" data-trim-boundary="start" data-trim-delta="0.05">Start +0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="-0.05">End −0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="0.05">End +0.05s</button></div><div class="mint-precision-trim-actions"><button type="button" data-trim-play="start">▶ Check opening</button><button type="button" data-trim-play="end">▶ Check ending</button></div><small>Preview automatically regenerates after saving the cut.</small></div>${!(state.video?.campaign?.id||state.video?.campaignId)&&timelineDuration>=.25&&timelineDuration<=60?`<button type="button" class="btn secondary" id="keepFullShortBtn">Keep entire video (${formatTime(timelineDuration)})</button>`:""}<div class="mint-manual-trim-foot"><span id="manualTrimDuration">${clipDuration.toFixed(1)}s selected</span><button type="button" id="undoManualTrim" ${state.manualTrimUndo?.videoId===v?.id&&state.manualTrimUndo?.index===selected?'':'disabled'}>↶ Undo</button><button type="button" id="resetManualTrim" ${c.manualTrim?'':'disabled'}>Reset AI cut</button></div>
+                  <div class="mint-precision-trim-tools"><div class="mint-precision-trim-title">Precision cut <small>Zoom around each boundary · 0.01s resolution</small></div><div class="mint-cut-zoom"><div class="mint-cut-zoom-head"><b>Zoomed Cut Timeline</b><label>Window <select id="precisionWindow"><option value="2">±2s</option><option value="5" selected>±5s</option><option value="10">±10s</option></select></label></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>IN point</b><output id="precisionStartLabel">Start</output></div><div class="mint-cut-ruler" id="precisionStartRuler"></div><input id="precisionStart" type="range" step="0.01" aria-label="Zoomed clip start"><div class="mint-cut-axis"><span id="precisionStartMin"></span><span id="precisionStartMax"></span></div></div><div class="mint-cut-boundary"><div class="mint-cut-boundary-head"><b>OUT point</b><output id="precisionEndLabel">End</output></div><div class="mint-cut-ruler" id="precisionEndRuler"></div><input id="precisionEnd" type="range" step="0.01" aria-label="Zoomed clip end"><div class="mint-cut-axis"><span id="precisionEndMin"></span><span id="precisionEndMax"></span></div></div><div class="mint-cut-legend"><span>┃ Scene</span><span>▨ Silence</span><span>◆ Cut</span></div></div><div class="mint-precision-trim-actions"><button type="button" data-trim-boundary="start" data-trim-delta="-0.05" aria-label="Move clip start earlier by 0.05 seconds">Start −0.05s</button><button type="button" data-trim-boundary="start" data-trim-delta="0.05" aria-label="Move clip start later by 0.05 seconds">Start +0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="-0.05" aria-label="Move clip end earlier by 0.05 seconds">End −0.05s</button><button type="button" data-trim-boundary="end" data-trim-delta="0.05" aria-label="Move clip end later by 0.05 seconds">End +0.05s</button></div><div class="mint-precision-trim-actions"><button type="button" data-trim-play="start">▶ Check opening</button><button type="button" data-trim-play="end">▶ Check ending</button></div><small>Preview automatically regenerates after saving the cut.</small></div>${!(state.video?.campaign?.id||state.video?.campaignId)&&timelineDuration>=.25&&timelineDuration<=60?`<button type="button" class="btn secondary" id="keepFullShortBtn">Keep entire video (${formatTime(timelineDuration)})</button>`:""}<div class="mint-manual-trim-foot"><span id="manualTrimDuration">${clipDuration.toFixed(1)}s selected</span><button type="button" id="undoManualTrim" ${state.manualTrimUndo?.videoId===v?.id&&state.manualTrimUndo?.index===selected?'':'disabled'}>↶ Undo</button><button type="button" id="resetManualTrim" ${c.manualTrim?'':'disabled'}>Reset AI cut</button></div>
                 </div>
                 <button class="btn secondary mint-final-preview-button" type="button" id="validateFinalPreviewBtn">${state.previewFinalMode?'✓ Final render preview':'▶ Validate final preview (export renderer)'}</button><div class="mint-shorts-preview-actions-v220">
                   <button class="btn secondary" type="button" id="previousCandidateBtn" ${selected<=0?'disabled':''}>← Previous</button>
@@ -424,22 +445,22 @@
         <aside class="mint-studio-side-v142">
           <section class="card controls mint-ai-tools-v142">
             <div class="section-head"><div><div class="eyebrow">AI TOOLS</div><h3>Automatic editing</h3></div><span>✦</span></div>
-            <details class="mint-tool-group"><summary><b>AI Director</b><span>Framing · rhythm · analysis</span></summary><div class="mint-tool-group-content"><div class="auto-director-card">
+            <details class="mint-tool-group" data-editor-tool-group="director" ${editorToolGroupOpen.get('director')?'open':''}><summary><b>AI Director</b><span>Framing · rhythm · analysis</span></summary><div class="mint-tool-group-content"><div class="auto-director-card">
               <div class="auto-director-status"><span class="auto-director-dot"></span><div><strong>Auto Director</strong><small>Adapts every clip to speech, scenes and framing.</small></div></div>
               <div class="auto-director-tags">${autoTags.map(x=>`<span>${escapeHtml(x)}</span>`).join('')}</div>
               ${autoDirector?.reason?`<p>${escapeHtml(autoDirector.reason)}</p>`:''}
             </div>
-            </div></details><details class="mint-tool-group" open><summary><b>Captions & social presets</b><span>Style · timing · placement</span></summary><div class="mint-tool-group-content"><div class="mint-social-caption-presets"><button type="button" data-caption-preset="social">Social Bold</button><button type="button" data-caption-preset="active">Active Word</button><button type="button" data-caption-preset="clean">Clean Minimal</button><button type="button" data-caption-preset="dynamic">Dynamic Pop</button></div><div class="selectrow"><span>Captions</span><select id="captionPreferenceSelect"><option value="auto" ${state.captionPreference==='auto'?'selected':''}>Auto (recommended)</option><option value="on" ${state.captionPreference==='on'?'selected':''}>Always on</option><option value="off" ${state.captionPreference==='off'?'selected':''}>Off</option></select></div>
-            <div class="caption-color-control"><div class="caption-color-head"><span>Caption color</span><small>Social presets</small></div><div class="caption-color-palette">${[['auto','Auto'],['white','White'],['yellow','Yellow'],['lime','Lime'],['cyan','Cyan'],['pink','Pink'],['red','Red']].map(([value,label])=>`<button type="button" class="caption-color-chip ${state.captionColor===value?'active':''}" data-caption-color="${value}"><i class="caption-swatch swatch-${value}">${value==='auto'?'A':''}</i><span>${label}</span></button>`).join('')}</div></div><div class="mint-live-caption-controls-v134"><div class="caption-color-head"><span>Live caption design</span><small>Selected clip</small></div><div class="mint-caption-control-grid-v134"><label>Style<select id="captionStyleSelect"><option value="bold" ${state.captionStyle==='bold'?'selected':''}>Bold</option><option value="impact" ${state.captionStyle==='impact'?'selected':''}>Impact</option><option value="pop" ${state.captionStyle==='pop'?'selected':''}>Pop</option><option value="box" ${state.captionStyle==='box'?'selected':''}>Box</option><option value="karaoke" ${state.captionStyle==='karaoke'?'selected':''}>Karaoke</option><option value="clean" ${state.captionStyle==='clean'?'selected':''}>Clean</option><option value="neon" ${state.captionStyle==='neon'?'selected':''}>Neon</option><option value="minimal" ${state.captionStyle==='minimal'?'selected':''}>Minimal</option></select></label><label>Font<select id="captionFontSelect"><option value="social" ${state.captionFont==='social'?'selected':''}>Social Heavy</option><option value="impact" ${state.captionFont==='impact'?'selected':''}>Impact Heavy</option><option value="arial-black" ${state.captionFont==='arial-black'?'selected':''}>Arial Black</option><option value="segoe-black" ${state.captionFont==='segoe-black'?'selected':''}>Segoe UI Black</option></select></label><label>Effect<select id="captionEffectSelect"><option value="active-word" ${state.captionEffect==='active-word'?'selected':''}>Active Word</option><option value="word-pop" ${state.captionEffect==='word-pop'?'selected':''}>Word Pop</option><option value="karaoke" ${state.captionEffect==='karaoke'?'selected':''}>Karaoke</option><option value="keyword-color" ${state.captionEffect==='keyword-color'?'selected':''}>Highlight Keywords</option><option value="clean-bold" ${state.captionEffect==='clean-bold'?'selected':''}>Clean Bold</option></select></label><label>Size<select id="captionSizeSelect"><option value="small" ${state.captionSize==='small'?'selected':''}>Small</option><option value="medium" ${state.captionSize==='medium'?'selected':''}>Medium</option><option value="large" ${state.captionSize==='large'?'selected':''}>Large</option></select></label><label>Position<select id="captionPositionSelect"><option value="top" ${state.captionPosition==='top'&&!Number.isFinite(Number(state.captionY))?'selected':''}>Top</option><option value="center" ${state.captionPosition==='center'&&!Number.isFinite(Number(state.captionY))?'selected':''}>Center</option><option value="bottom" ${state.captionPosition==='bottom'&&!Number.isFinite(Number(state.captionY))?'selected':''}>Bottom</option>${Number.isFinite(Number(state.captionY))?'<option value="custom" selected>Custom</option>':''}</select></label></div><div class="mint-caption-size-slider-v227"><div><span>Exact size</span><b id="captionScaleValue">${Math.round(Number(state.captionScale||1)*100)}%</b></div><input id="captionScaleRange" type="range" min="40" max="200" step="1" value="${Math.round(Number(state.captionScale||1)*100)}"></div><small>Drag the subtitle text directly on the preview. Changes are instant.</small></div></div></details><details class="mint-tool-group"><summary><b>Titles & branding</b><span>Hook · source text · watermark</span></summary><div class="mint-tool-group-content"><div class="mint-hook-title-controls"><div class="caption-color-head"><span>Hook title</span><small>Preview instantanée</small></div><div class="selectrow"><span>Afficher</span><select id="hookTitleEnabledSelect"><option value="off" ${!state.hookTitleEnabled?'selected':''}>Off</option><option value="on" ${state.hookTitleEnabled?'selected':''}>On</option></select></div><label class="mint-hook-title-field"><span>Texte</span><input id="hookTitleTextInput" type="text" maxlength="120" value="${escapeHtml(state.hookTitleText||'')}" placeholder="${escapeHtml(c?.title||c?.hook||'Ajoute un titre hook')}"></label><div class="selectrow"><span>Durée</span><select id="hookTitleDurationSelect"><option value="3" ${state.hookTitleDuration==='3'?'selected':''}>3 sec</option><option value="5" ${state.hookTitleDuration==='5'?'selected':''}>5 sec</option><option value="8" ${state.hookTitleDuration==='8'?'selected':''}>8 sec</option><option value="full" ${state.hookTitleDuration==='full'?'selected':''}>Tout le clip</option></select></div><div class="mint-source-subtitles-range-v228"><div><span>Hook size</span><b id="hookTitleScaleValue">${Math.round(Number(state.hookTitleScale||1)*100)}%</b></div><input id="hookTitleScaleRange" type="range" min="50" max="200" step="5" value="${Math.round(Number(state.hookTitleScale||1)*100)}"><small>Drag the hook directly on the video to move it.</small></div><div class="mint-center-actions"><button class="btn secondary" id="hookTitleFromAiBtn" type="button">Utiliser le titre IA</button><button class="btn secondary" id="centerHookXBtn" type="button">Centrer X</button><button class="btn secondary" id="centerHookBtn" type="button">Centre vidéo</button></div></div>
+            </div></details><details class="mint-tool-group" data-editor-tool-group="captions" ${(editorToolGroupOpen.get('captions')??true)?'open':''}><summary><b>Captions & social presets</b><span>Style · timing · placement</span></summary><div class="mint-tool-group-content"><div class="mint-social-caption-presets"><button type="button" data-caption-preset="social">Social Bold</button><button type="button" data-caption-preset="active">Active Word</button><button type="button" data-caption-preset="clean">Clean Minimal</button><button type="button" data-caption-preset="dynamic">Dynamic Pop</button></div><div class="selectrow"><span>Captions</span><select id="captionPreferenceSelect" aria-label="Captions"><option value="auto" ${state.captionPreference==='auto'?'selected':''}>Auto (recommended)</option><option value="on" ${state.captionPreference==='on'?'selected':''}>Always on</option><option value="off" ${state.captionPreference==='off'?'selected':''}>Off</option></select></div>
+            <div class="caption-color-control"><div class="caption-color-head"><span>Caption color</span><small>Social presets</small></div><div class="caption-color-palette">${[['auto','Auto'],['white','White'],['yellow','Yellow'],['lime','Lime'],['cyan','Cyan'],['pink','Pink'],['red','Red']].map(([value,label])=>`<button type="button" class="caption-color-chip ${state.captionColor===value?'active':''}" data-caption-color="${value}"><i class="caption-swatch swatch-${value}">${value==='auto'?'A':''}</i><span>${label}</span></button>`).join('')}</div></div><div class="mint-live-caption-controls-v134"><div class="caption-color-head"><span>Live caption design</span><small>Selected clip</small></div><div class="mint-caption-control-grid-v134"><label>Style<select id="captionStyleSelect"><option value="bold" ${state.captionStyle==='bold'?'selected':''}>Bold</option><option value="impact" ${state.captionStyle==='impact'?'selected':''}>Impact</option><option value="pop" ${state.captionStyle==='pop'?'selected':''}>Pop</option><option value="box" ${state.captionStyle==='box'?'selected':''}>Box</option><option value="karaoke" ${state.captionStyle==='karaoke'?'selected':''}>Karaoke</option><option value="clean" ${state.captionStyle==='clean'?'selected':''}>Clean</option><option value="neon" ${state.captionStyle==='neon'?'selected':''}>Neon</option><option value="minimal" ${state.captionStyle==='minimal'?'selected':''}>Minimal</option></select></label><label>Font<select id="captionFontSelect"><option value="social" ${state.captionFont==='social'?'selected':''}>Social Heavy</option><option value="impact" ${state.captionFont==='impact'?'selected':''}>Impact Heavy</option><option value="arial-black" ${state.captionFont==='arial-black'?'selected':''}>Arial Black</option><option value="segoe-black" ${state.captionFont==='segoe-black'?'selected':''}>Segoe UI Black</option></select></label><label>Effect<select id="captionEffectSelect"><option value="active-word" ${state.captionEffect==='active-word'?'selected':''}>Active Word</option><option value="word-pop" ${state.captionEffect==='word-pop'?'selected':''}>Word Pop</option><option value="karaoke" ${state.captionEffect==='karaoke'?'selected':''}>Karaoke</option><option value="keyword-color" ${state.captionEffect==='keyword-color'?'selected':''}>Highlight Keywords</option><option value="clean-bold" ${state.captionEffect==='clean-bold'?'selected':''}>Clean Bold</option></select></label><label>Size<select id="captionSizeSelect"><option value="small" ${state.captionSize==='small'?'selected':''}>Small</option><option value="medium" ${state.captionSize==='medium'?'selected':''}>Medium</option><option value="large" ${state.captionSize==='large'?'selected':''}>Large</option></select></label><label>Position<select id="captionPositionSelect"><option value="top" ${state.captionPosition==='top'&&!hasCustomCaptionY(state.captionY)?'selected':''}>Top</option><option value="center" ${state.captionPosition==='center'&&!hasCustomCaptionY(state.captionY)?'selected':''}>Center</option><option value="bottom" ${state.captionPosition==='bottom'&&!hasCustomCaptionY(state.captionY)?'selected':''}>Bottom</option>${hasCustomCaptionY(state.captionY)?'<option value="custom" selected>Custom</option>':''}</select></label></div><div class="mint-caption-size-slider-v227"><div><span>Exact size</span><b id="captionScaleValue">${Math.round(Number(state.captionScale||1)*100)}%</b></div><input id="captionScaleRange" aria-label="Caption size (percent)" type="range" min="40" max="200" step="1" value="${Math.round(Number(state.captionScale||1)*100)}"></div><small>Drag the subtitle text directly on the preview. Changes are instant.</small></div></div></details><details class="mint-tool-group" data-editor-tool-group="branding" ${editorToolGroupOpen.get('branding')?'open':''}><summary><b>Titles & branding</b><span>Hook · source text · watermark</span></summary><div class="mint-tool-group-content"><div class="mint-hook-title-controls"><div class="caption-color-head"><span>Hook title</span><small>Preview instantanée</small></div><div class="selectrow"><span>Afficher</span><select id="hookTitleEnabledSelect" aria-label="Show hook title"><option value="off" ${!state.hookTitleEnabled?'selected':''}>Off</option><option value="on" ${state.hookTitleEnabled?'selected':''}>On</option></select></div><label class="mint-hook-title-field"><span>Texte</span><input id="hookTitleTextInput" type="text" maxlength="120" value="${escapeHtml(state.hookTitleText||'')}" placeholder="${escapeHtml(c?.title||c?.hook||'Ajoute un titre hook')}"></label><div class="selectrow"><span>Durée</span><select id="hookTitleDurationSelect" aria-label="Hook title duration"><option value="3" ${state.hookTitleDuration==='3'?'selected':''}>3 sec</option><option value="5" ${state.hookTitleDuration==='5'?'selected':''}>5 sec</option><option value="8" ${state.hookTitleDuration==='8'?'selected':''}>8 sec</option><option value="full" ${state.hookTitleDuration==='full'?'selected':''}>Tout le clip</option></select></div><div class="mint-source-subtitles-range-v228"><div><span>Hook size</span><b id="hookTitleScaleValue">${Math.round(Number(state.hookTitleScale||1)*100)}%</b></div><input id="hookTitleScaleRange" aria-label="Hook title size (percent)" type="range" min="50" max="200" step="5" value="${Math.round(Number(state.hookTitleScale||1)*100)}"><small>Drag the hook on the video, or focus it with Tab and use arrow keys to move it.</small></div><div class="mint-center-actions"><button class="btn secondary" id="hookTitleFromAiBtn" type="button">Utiliser le titre IA</button><button class="btn secondary" id="centerHookXBtn" type="button">Centrer X</button><button class="btn secondary" id="centerHookBtn" type="button">Centre vidéo</button></div></div>
             ${!(state.video?.campaign?.id||state.video?.campaignId)?`<div class="mint-source-subtitles-v228">
               <div class="caption-color-head"><span>Source subtitles</span><small>Baked-in text</small></div>
-              <div class="selectrow mint-source-subtitles-row-v228"><span>Remove Twitch / source captions</span><select id="sourceSubtitleModeSelect"><option value="keep" ${state.sourceSubtitleMode==='keep'?'selected':''}>Keep</option><option value="crop" ${state.sourceSubtitleMode==='crop'?'selected':''}>Crop out</option><option value="hide" ${state.sourceSubtitleMode==='hide'?'selected':''}>Hide</option></select></div>
-              ${state.sourceSubtitleMode!=='keep'?`<div class="mint-source-subtitles-range-v228"><div><span>Bottom area</span><b id="sourceSubtitleBottomValue">${Math.round(Number(state.sourceSubtitleBottom||.15)*100)}%</b></div><input id="sourceSubtitleBottomRange" type="range" min="6" max="28" step="1" value="${Math.round(Number(state.sourceSubtitleBottom||.15)*100)}"><small>${state.sourceSubtitleMode==='crop'?'Crop this much from the bottom of the original video.':'Cover this much of the lower video area.'}</small></div>`:''}
+              <div class="selectrow mint-source-subtitles-row-v228"><span>Remove Twitch / source captions</span><select id="sourceSubtitleModeSelect" aria-label="Remove Twitch / source captions"><option value="keep" ${state.sourceSubtitleMode==='keep'?'selected':''}>Keep</option><option value="crop" ${state.sourceSubtitleMode==='crop'?'selected':''}>Crop out</option><option value="hide" ${state.sourceSubtitleMode==='hide'?'selected':''}>Hide</option></select></div>
+              ${state.sourceSubtitleMode!=='keep'?`<div class="mint-source-subtitles-range-v228"><div><span>Bottom area</span><b id="sourceSubtitleBottomValue">${Math.round(Number(state.sourceSubtitleBottom||.15)*100)}%</b></div><input id="sourceSubtitleBottomRange" aria-label="Source subtitle bottom area (percent)" type="range" min="6" max="28" step="1" value="${Math.round(Number(state.sourceSubtitleBottom||.15)*100)}"><small>${state.sourceSubtitleMode==='crop'?'Crop this much from the bottom of the original video.':'Cover this much of the lower video area.'}</small></div>`:''}
             </div>`:''}
                         <div class="mint-watermark-controls-v224">
               <div class="caption-color-head"><span>Image watermark</span><small>Optional</small></div>
               ${state.watermarkUrl?`<div class="mint-watermark-file-v224"><img src="${escapeHtml(state.watermarkUrl)}" alt=""><span>${escapeHtml(state.watermarkName||'Watermark')}</span><button class="btn secondary" type="button" id="removeWatermarkBtn">Remove</button></div>
-              <div class="mint-watermark-sliders-v224"><label>Size <input id="watermarkScaleRange" type="range" min="5" max="42" value="${Math.round(Number(state.watermarkScale||.18)*100)}"></label><label>Opacity <input id="watermarkOpacityRange" type="range" min="10" max="100" value="${Math.round(Number(state.watermarkOpacity||.9)*100)}"></label></div><div class="mint-center-actions"><button class="btn secondary" id="centerWatermarkXBtn" type="button">Centrer X</button><button class="btn secondary" id="centerWatermarkBtn" type="button">Centre vidéo</button></div><small>Drag the image directly anywhere on the preview.</small>`:`<label class="btn secondary full mint-watermark-upload-v224" for="watermarkFile">＋ Add image watermark</label><input id="watermarkFile" class="native-file-input" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG or WebP · max 10 MB</small>`}
+              <div class="mint-watermark-sliders-v224"><label>Size <input id="watermarkScaleRange" type="range" min="5" max="42" value="${Math.round(Number(state.watermarkScale||.18)*100)}"></label><label>Opacity <input id="watermarkOpacityRange" type="range" min="10" max="100" value="${Math.round(Number(state.watermarkOpacity||.9)*100)}"></label></div><div class="mint-center-actions"><button class="btn secondary" id="centerWatermarkXBtn" type="button">Centrer X</button><button class="btn secondary" id="centerWatermarkBtn" type="button">Centre vidéo</button></div><small>Drag the image on the preview, or focus it with Tab and use arrow keys to move it.</small>`:`<label class="btn secondary full mint-watermark-upload-v224" for="watermarkFile">＋ Add image watermark</label><input id="watermarkFile" class="native-file-input" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG, JPG or WebP · max 10 MB</small>`}
             </div>
             </div></details><div class="quality-explainer"><b>Automatic per clip</b><span>Framing, face safety, silence cuts, speech cleanup, captions and zooms adapt to the source.</span></div>
             ${editPlan?`<div class="edit-plan-card"><span class="eyebrow">AUTO EDIT PLAN</span><strong>${activeSummary.cuts} silence cuts · ${activeSummary.disfluencies} cleanups · ${activeSummary.zooms} zooms</strong><small>${activeSummary.reframes} reframe pass${trackingInfo?` · ${trackingInfo.faceCountMax||0} faces max`:''}${editApplied?.preset?` · ${escapeHtml(editApplied.preset)} profile`:''}</small></div>`:''}
@@ -481,140 +502,72 @@
   }
 
   async function uploadVideo(file){
-    if(!file) return;
-    if(!(await ensureStudioPreflight({needsDownload:false})))return;
-    state.uploadStatus='uploading'; state.uploadProgress=8; render();
+    if(!file||state.uploadBusy) return;
+    state.uploadBusy=true;
     try{
+      if(!(await ensureStudioPreflight({needsDownload:false})))return;
+      state.uploadStatus='uploading'; state.uploadProgress=8; render();
       const fd=new FormData(); if(state.video?.status==='linked'&&state.video?.id)fd.append('projectId',state.video.id); fd.append('video',file);
       const xhr=new XMLHttpRequest();
       const uploaded=await new Promise((resolve,reject)=>{
         xhr.open('POST','/api/videos');
         xhr.upload.onprogress=e=>{if(e.lengthComputable){state.uploadProgress=Math.max(8,Math.round((e.loaded/e.total)*70)); const bar=document.querySelector('.upload-progress i'); if(bar)bar.style.width=state.uploadProgress+'%';}};
-        xhr.onload=()=>{try{const data=JSON.parse(xhr.responseText||'{}'); if(xhr.status>=200&&xhr.status<300)resolve(data); else reject(new Error(data.error||'Upload failed'));}catch(e){reject(e)}};
+        xhr.onload=()=>readJsonResponse({status:xhr.status,ok:xhr.status>=200&&xhr.status<300,text:async()=>xhr.responseText||''},'Upload failed').then(resolve,reject);
         xhr.onerror=()=>reject(new Error('Upload failed')); xhr.send(fd);
       });
+      if(typeof uploaded?.id!=='string'||!uploaded.id.trim())throw new Error('Upload failed: the server did not return a project ID. Please try again.');
       state.video=uploaded; try{localStorage.setItem('clipboost:lastProjectId',uploaded.id)}catch{} state.uploadStatus='analyzing'; state.uploadProgress=78; render();
       const r=await fetch(`/api/videos/${uploaded.id}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})}); const data=await readJsonResponse(r,'Analysis failed');
       state.video=data; state.selectedCandidate=0; state.uploadStatus='idle'; state.uploadProgress=100; render();
       pollProjectUntilSettled(uploaded.id);
     }catch(e){state.uploadStatus='idle'; state.uploadProgress=0; showNotice({kind:'danger',title:'Upload failed',message:e.message||'Upload failed'}); render();}
+    finally{state.uploadBusy=false;}
   }
 
-  function captionPresetY(position=state.captionPosition){
-    return position==='top'?.18:position==='center'?.50:.82;
-  }
   function currentCaptionY(){
-    const y=Number(state.captionY);
-    return Number.isFinite(y)?Math.max(.12,Math.min(.88,y)):captionPresetY();
+    return resolveCaptionY(state);
   }
   function liveCaptionClass(){
     return ['mint-social-caption-v223',`style-${state.captionStyle||'bold'}`,`size-${state.captionSize||'medium'}`].join(' ');
   }
-  function captionRenderScale(){
-    return state.captionSize==='large'?.086:state.captionSize==='small'?.044:.072;
-  }
   function liveCaptionFontSize(frameWidth=0){
-    const scale=Math.max(.4,Math.min(2,Number(state.captionScale||1)));
-    const width=Math.max(120,Number(frameWidth)||300);
-    return `${Math.max(10,width*captionRenderScale()*scale).toFixed(2)}px`;
+    return previewCaptionFontSize(state,frameWidth);
   }
   function liveCaptionOutlineSize(frameWidth=0){
-    const width=Math.max(120,Number(frameWidth)||300);
-    const style=state.captionStyle||'bold';
-    const ratio=style==='minimal'?.0032:style==='clean'?.0052:style==='neon'?.0060:style==='box'?.0025:style==='impact'?.0074:style==='pop'?.0068:style==='karaoke'?.0064:.0065;
-    return Math.max(1,width*ratio);
-  }
-  function compactPreviewCaptions(rows=[],maxWords=4,maxChars=22){
-    const phrases=[
-      ['thank','you'],['thanks','so','much'],['so','much'],['do','you'],['did','you'],['are','you'],['can','you'],['could','you'],['would','you'],
-      ['you','want','to'],['want','to'],['going','to'],['have','to'],['need','to'],['got','to'],['let','me'],['i','want'],['i','need'],['i','think'],['i','know'],
-      ['what','do','you'],['how','do','you'],['why','do','you'],['merci','beaucoup'],['est-ce','que'],['tu','veux'],['vous','voulez'],['je','veux'],['je','pense'],
-      ['je','sais'],['on','va'],['il','faut'],['parce','que'],['pour','que']
-    ];
-    const clean=w=>String(w||'').toLowerCase().replace(/^[("'‘’“”\[]+|[)"'‘’“”\],.!?…:;]+$/g,'').replace(/[’]/g,"'");
-    const phraseLen=(tokens,index)=>{
-      const rem=tokens.slice(index,index+maxWords).map(t=>clean(t.word));
-      for(const p of phrases)if(p.length<=maxWords&&p.length<=rem.length&&p.every((w,i)=>rem[i]===w))return p.length;
-      return 0;
-    };
-    const timed=[];
-    for(const row of rows||[]){
-      const words=String(row?.text||'').trim().split(/\s+/).filter(Boolean);if(!words.length)continue;
-      const start=Number(row.start||0),end=Math.max(start+.05,Number(row.end||start+.05)),span=end-start;
-      words.forEach((word,i)=>timed.push({word,start:start+span*(i/words.length),end:start+span*((i+1)/words.length)}));
-    }
-    const out=[];let i=0;
-    while(i<timed.length){
-      let take=phraseLen(timed,i);
-      if(!take){
-        take=1;
-        for(let n=2;n<=maxWords&&i+n<=timed.length;n++){
-          const text=timed.slice(i,i+n).map(t=>t.word).join(' ');
-          if(text.length>maxChars)break;
-          take=n;
-          if(phraseLen(timed,i+n)&&n>=2)break;
-          if(/[.!?…]$/.test(timed[i+n-1].word))break;
-        }
-      }
-      const chunk=timed.slice(i,i+take);
-      out.push({start:Number(chunk[0].start.toFixed(3)),end:Number(Math.max(chunk[0].start+.05,chunk.at(-1).end).toFixed(3)),text:chunk.map(t=>t.word).join(' ')});
-      i+=take;
-    }
-    return out;
+    return previewCaptionOutlineSize(state,frameWidth);
   }
   function previewCaptionRowsForCandidate(cand){
-    if(!cand)return[];
-    // AI Studio and Campaign Studio must consume the exact same transcript
-    // timeline. Campaign candidates may carry legacy caption rows, but those
-    // are now fallback-only when the project has no transcript captions.
-    const absolute=(state.video?.transcript?.captions||[]).filter(row=>Number(row.end||0)>=Number(cand.start||0)&&Number(row.start||0)<=Number(cand.end||0)).map(row=>({
-      ...row,
-      start:Math.max(0,Number(row.start||0)-Number(cand.start||0)),
-      end:Math.max(.05,Math.min(Number(cand.end||0),Number(row.end||0))-Number(cand.start||0))
-    }));
-    return compactPreviewCaptions(absolute.length?absolute:(cand.captions||[]),4,22);
+    return captionRowsForCandidate(cand,state.video?.transcript);
   }
-
   function previewCaptionWordsForCandidate(cand){
-    if(!cand)return[];
-    const start=Number(cand.start||0),end=Number(cand.end||start);
-    const raw=(state.video?.transcript?.words||state.video?.transcript?.rawWords||[])
-      .filter(w=>w?.word&&Number(w.end||0)>start+.01&&Number(w.start||0)<end-.01)
-      .map(w=>({
-        word:String(w.word||'').trim(),
-        start:Math.max(0,Number(w.start||0)-start),
-        end:Math.max(.03,Math.min(end,Number(w.end||0))-start)
-      }))
-      .filter(w=>w.word&&w.end>w.start)
-      .sort((a,b)=>a.start-b.start);
-    const cleanWord=w=>String(w||'').toLowerCase().replace(/^\W+|\W+$/g,'');
-    const words=[];
-    for(const w of raw){
-      const prev=words[words.length-1];
-      const same=prev&&cleanWord(prev.word)&&cleanWord(prev.word)===cleanWord(w.word);
-      const gap=same?Math.max(0,Number(w.start||0)-Number(prev.end||0)):Infinity;
-      if(same&&gap<=.18){prev.end=Math.max(prev.end,w.end);continue}
-      words.push({...w});
-    }
-    return words;
-  }
-  function captionWordImportant(word=''){
-    const raw=String(word||'').trim();
-    const lex=raw.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%]+$/gu,'');
-    return /\d/.test(raw)||raw.length>=8||/^(secret|erreur|problème|vérité|jamais|toujours|résultat|argent|million|mille|pourcent|important|incroyable|impossible|meilleur|pire|mistake|problem|truth|never|always|result|money|percent|crazy|best|worst)$/.test(lex);
+    return captionWordsForCandidate(cand,state.video?.transcript);
   }
 
-    function currentRenderOptions(){const isCampaign=Boolean(state.video?.campaign?.id||state.video?.campaignId);const isLong=state.studioMode==='long'&&!isCampaign;return {autoDirector:true,editorContext:isCampaign?'campaign':'general',outputFormat:isLong?'source':'shorts-9x16',captionPreference:state.captionPreference||'auto',captionColor:state.captionColor||'auto',captionStyle:state.captionStyle||'bold',captionFont:state.captionFont||'social',captionEffect:state.captionEffect||'active-word',hookTitleEnabled:Boolean(state.hookTitleEnabled),hookTitleText:String(state.hookTitleText||''),hookTitleDuration:String(state.hookTitleDuration||'5'),hookTitleScale:Number(state.hookTitleScale||1),hookTitleX:Number(state.hookTitleX||.5),hookTitleY:Number(state.hookTitleY||.12),captionSize:state.captionSize||'medium',captionScale:Number(state.captionScale||1),captionPosition:state.captionPosition||'bottom',captionY:currentCaptionY(),sourceSubtitleMode:isCampaign?'keep':(state.sourceSubtitleMode||'keep'),sourceSubtitleBottom:Number(state.sourceSubtitleBottom||.15),watermarkUrl:state.watermarkUrl||'',watermarkX:Number(state.watermarkX||.86),watermarkY:Number(state.watermarkY||.12),watermarkScale:Number(state.watermarkScale||.18),watermarkOpacity:Number(state.watermarkOpacity||.9)}}
+  function currentRenderOptions(){return buildRenderOptions(state,currentCaptionY())}
+  let watermarkUploadRevision=0;
+  function saveWatermarkImageChange(){
+    // A final preview contains the old image in its pixels. Rebuild a clean
+    // editable preview before displaying the updated branding overlay.
+    if(state.previewFinalMode){state.previewFinalMode=false;invalidateRenderedPreviews();}
+    persistEditorPrefs();render();
+  }
+  function removeWatermark(){
+    watermarkUploadRevision++;
+    state.watermarkUrl='';state.watermarkName='';saveWatermarkImageChange();
+  }
   async function uploadWatermark(file){
     if(!file)return;
+    const revision=++watermarkUploadRevision;
     try{
       const fd=new FormData();fd.append('watermark',file);
       const r=await fetch('/api/watermarks',{method:'POST',body:fd});
       const data=await readJsonResponse(r,'Could not upload watermark');
+      if(revision!==watermarkUploadRevision)return;
+      if(typeof data?.url!=='string'||!data.url.trim())throw new Error('Could not upload watermark: the server did not return an image URL. Please try again.');
       state.watermarkUrl=data.url;state.watermarkName=data.originalName||file.name||'Watermark';
       state.watermarkX=.86;state.watermarkY=.12;state.watermarkScale=.18;state.watermarkOpacity=.9;
-      persistEditorPrefs();render();
-    }catch(e){showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
+      saveWatermarkImageChange();
+    }catch(e){if(revision===watermarkUploadRevision)showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
   }
     function invalidateRenderedPreviews(){state.candidatePreviewRequestId++;for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;state.candidatePreviewLoadingIndex=-1;}
   async function loadPlatformConnections({quiet=false}={}){
@@ -625,20 +578,6 @@
     }catch(e){
       if(!quiet)showNotice({kind:'danger',eyebrow:'Platform connections',title:'Could not load connections',message:e.message||'Could not read platform connection status.'});
     }finally{state.platformConnectionsLoading=false;render();if(state.page==='analytics'&&state.platformConnections?.youtube?.connected&&!state.youtubeAnalytics&&!state.youtubeAnalyticsLoading)setTimeout(()=>loadYouTubeAnalytics({quiet:true}),0)}
-  }
-  function youtubeVideoId(value=''){
-    const raw=String(value||'').trim();if(!raw)return '';
-    if(/^[A-Za-z0-9_-]{11}$/.test(raw))return raw;
-    try{
-      const u=new URL(raw);
-      if(/youtu\.be$/i.test(u.hostname))return String(u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);
-      if(/youtube\.com$/i.test(u.hostname)||/\.youtube\.com$/i.test(u.hostname)){
-        if(u.searchParams.get('v'))return String(u.searchParams.get('v')).slice(0,11);
-        const parts=u.pathname.split('/').filter(Boolean),idx=parts.findIndex(x=>['shorts','live','embed'].includes(x));
-        if(idx>=0&&parts[idx+1])return String(parts[idx+1]).slice(0,11);
-      }
-    }catch{}
-    return '';
   }
   async function loadYouTubeAnalytics({force=false,quiet=true}={}){
     if(state.youtubeAnalyticsLoading||!state.platformConnections?.youtube?.connected||!window.clipboostDesktop?.getYouTubeAnalytics)return;
@@ -709,26 +648,45 @@
     finally{state.platformConnectBusy='';render()}
   }
   async function exportCurrent(mode='publish'){
+    if(state.exportBusy)return;
     const v=state.video; if(!v?.sourceUrl) return showNotice({kind:'warning',title:'Source file required',message:'Upload or ingest the source file before exporting this clip.'});
     const index=state.selectedCandidate||0;const start=Number(document.getElementById('clipStart')?.value||v.candidates?.[index]?.start||0); const end=Number(document.getElementById('clipEnd')?.value||v.candidates?.[index]?.end||start+30);
+    // Keep the checked and rendered settings tied to this export action.
+    const options=currentRenderOptions();
+    const exportPage=state.page;
     state.exportBusy=true;render();
     try{
-      if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
-      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options:currentRenderOptions()})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};
+      if(v.campaign?.id){const checkRes=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options})});const check=await readJsonResponse(checkRes,'Campaign check failed');state.campaignCompliance=check;if(!check.passed){const failed=(check.checks||[]).filter(x=>!x.ok);state.exportBusy=false;render();return showNotice({kind:'warning',eyebrow:'Campaign check',title:`${failed.length||1} campaign check${failed.length===1?'':'s'} failed`,message:failed.length?failed.map(x=>x.label).join(' · '):'Review the failed campaign requirements below before publishing.',detail:failed.length?failed.map(x=>`${x.label}: ${x.detail||'Requirement not met'}`).join('  •  '):'Open Campaign Studio rules for details.'})}}
+      const r=await fetch(`/api/videos/${v.id}/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start,end,options})});const data=await readJsonResponse(r,'Could not prepare clip');state.lastExport={...data,projectId:v.id,index,title:v.candidates?.[index]?.title||v.originalName||'Clip'};
       if(mode==='download'){
-        if(window.clipboostDesktop?.openExportsFolder)await window.clipboostDesktop.openExportsFolder();
+        if(window.clipboostDesktop?.openExportsFolder){
+          try{
+            const folderError=await window.clipboostDesktop.openExportsFolder();
+            if(folderError)throw new Error(folderError);
+          }catch(e){
+            showNotice({kind:'warning',eyebrow:'Export',title:'Clip exported; folder could not open',message:`${data.filename||'Your clip'} is saved. ${e.message||'Open the exports folder manually.'}`});
+            return;
+          }
+        }
         else if(data.url){const a=document.createElement('a');a.href=data.url;a.download=data.filename||'clip.mp4';document.body.appendChild(a);a.click();a.remove();}
         showNotice({kind:'success',eyebrow:'Export',title:'Files ready',message:`${data.filename||'Your clip'} is ready in the ClipBoost exports folder.`});
-      }else{
+      }else if(state.page===exportPage&&state.video?.id===v.id){
         state.publishActivePlatform=state.publishActivePlatform||'tiktok';
         navigate('publish');
+      }else{
+        showNotice({kind:'success',eyebrow:'Export',title:'Clip ready',message:`${data.filename||'Your clip'} is ready. Open Publish to continue.`});
       }}
     catch(e){showNotice({kind:'danger',title:mode==='download'?'Download preparation failed':'Publish preparation failed',message:e.message||'Could not prepare the selected clip'})} finally {state.exportBusy=false;render()}
   }
   async function exportAll(){
     const v=state.video;if(!v?.sourceUrl||!(v.candidates||[]).length)return;
     if(state.exportAllBusy)return;state.exportAllBusy=true;render();
-    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');showNotice({kind:data.blockedCount?'warning':'success',title:'Export complete',message:`${data.count||0} edited clips exported${data.blockedCount?` · ${data.blockedCount} blocked by campaign checks`:''}.`});if(data.count&&window.clipboostDesktop?.openExportsFolder)window.clipboostDesktop.openExportsFolder();}
+    try{const r=await fetch(`/api/videos/${v.id}/export-all`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:currentRenderOptions()})});const data=await readJsonResponse(r,'Export all failed');showNotice({kind:data.blockedCount?'warning':'success',title:'Export complete',message:`${data.count||0} edited clips exported${data.blockedCount?` · ${data.blockedCount} blocked by campaign checks`:''}.`});if(data.count&&window.clipboostDesktop?.openExportsFolder){
+        try{
+          const folderError=await window.clipboostDesktop.openExportsFolder();
+          if(folderError)throw new Error(folderError);
+        }catch(e){showNotice({kind:'warning',title:'Clips exported; folder could not open',message:`Your ${data.count} exported clips are saved. ${e.message||'Open the exports folder manually.'}`,detail:data.exportDir||''})}
+      }}
     catch(e){showNotice({kind:'danger',title:'Export failed',message:e.message||'Export all failed'})}finally{state.exportAllBusy=false;render()}
   }
   function chart(){return `<svg viewBox="0 0 900 260" preserveAspectRatio="none">${[40,90,140,190,240].map(y=>`<line class="gridline" x1="0" x2="900" y1="${y}" y2="${y}"/>`).join('')}<polyline class="line1" points="0,215 70,198 140,202 210,168 280,175 350,141 420,150 490,112 560,130 630,92 700,104 780,55 900,31"/><polyline class="line2" points="0,224 70,215 140,204 210,190 280,193 350,166 420,172 490,152 560,160 630,137 700,145 780,105 900,88"/><polyline class="line3" points="0,230 70,225 140,218 210,209 280,214 350,198 420,202 490,183 560,188 630,172 700,178 780,150 900,134"/></svg>`}
@@ -788,34 +746,7 @@
       unknown:{label:'Other',icon:'•'}
     };
     const youtubePosts=Array.isArray(state.analyticsOrganicPosts)?state.analyticsOrganicPosts:[];
-    const youtubeById=new Map(youtubePosts.map(p=>[String(p._youtubeId||p.id||p.postId||''),p]).filter(([id])=>id));
-    const campaignYoutubeIds=new Set();
-    const campaignPosts=campaignsList.flatMap(c=>(Array.isArray(c.posts)?c.posts:[]).map((p,i)=>{
-      const platform=String(p.platform||'unknown').toLowerCase();
-      const ytId=platform==='youtube'?String(p.postId||youtubeVideoId(p.url)||''):'';
-      if(ytId)campaignYoutubeIds.add(ytId);
-      const live=ytId?youtubeById.get(ytId):null;
-      return {
-        ...p,
-        _id:String(p.id||p.postId||p.url||`${c.id}-${i}`),
-        _kind:'campaign',
-        _campaignId:c.id,
-        _campaignName:c.name||'Campaign',
-        _currency:c.currency||'USD',
-        _platform:platform,
-        _title:String(live?._title||p.title||p.caption||p.description||p.url||`Campaign post ${i+1}`),
-        _date:live?._date||p.publishedAt||p.submittedAt||p.createdAt||c.updatedAt||c.createdAt||null,
-        _views:live ? Number(live._views||0) : Math.max(0,Number(p.views||0)),
-        _likes:live ? live._likes : (Number.isFinite(Number(p.likes??p.likeCount))?Math.max(0,Number(p.likes??p.likeCount)):null),
-        _comments:live ? live._comments : (Number.isFinite(Number(p.comments??p.commentCount))?Math.max(0,Number(p.comments??p.commentCount)):null),
-        _shares:Number.isFinite(Number(p.shares??p.shareCount))?Math.max(0,Number(p.shares??p.shareCount)):null,
-        _revenue:Math.max(0,Number(p.payoutConfirmed||p.revenue||0)),
-        _thumb:live?._thumb||p.thumbnail||p.thumbnailUrl||p.previewUrl||'',
-        _youtubeId:ytId
-      };
-    }));
-    const organicPosts=youtubePosts.filter(p=>!campaignYoutubeIds.has(String(p._youtubeId||'')));
-    const allPosts=[...campaignPosts,...organicPosts];
+    const { campaignPosts, organicPosts, allPosts }=buildAnalyticsPosts(campaignsList,youtubePosts);
 
     const scope=state.analyticsScope||'all';
     const platform=state.analyticsPlatform||'all';
@@ -968,15 +899,6 @@
   function formatCount(n){const x=Number(n||0);if(x>=1e9)return (x/1e9).toFixed(x>=1e10?0:1)+'B';if(x>=1e6)return (x/1e6).toFixed(x>=1e7?0:1)+'M';if(x>=1e3)return (x/1e3).toFixed(x>=1e4?0:1)+'K';return String(x)}
   function formatDuration(sec){const n=Math.max(0,Math.floor(Number(sec)||0));const h=Math.floor(n/3600),m=Math.floor((n%3600)/60),ss=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`:`${m}:${String(ss).padStart(2,'0')}`}
   function relativeDate(value){if(!value)return '';const d=new Date(value),diff=Math.max(0,Date.now()-d.getTime());const min=Math.floor(diff/60000);if(min<60)return `${Math.max(1,min)}m ago`;const h=Math.floor(min/60);if(h<24)return `${h}h ago`;const days=Math.floor(h/24);if(days<30)return `${days}d ago`;return d.toLocaleDateString()}
-  function sortLibraryItems(items){
-    const list=[...items];
-    const dateOf=x=>new Date(x.publishedAt||x.createdAt||0).getTime()||0;
-    const viewsOf=x=>Number(x.viewCount||0);
-    if(state.librarySort==='oldest') return list.sort((a,b)=>dateOf(a)-dateOf(b));
-    if(state.librarySort==='views-desc') return list.sort((a,b)=>viewsOf(b)-viewsOf(a));
-    if(state.librarySort==='views-asc') return list.sort((a,b)=>viewsOf(a)-viewsOf(b));
-    return list.sort((a,b)=>dateOf(b)-dateOf(a));
-  }
   function mediaRow(item,creator,platform,type){
     const isYT=platform==='youtube';
     const previewKind=isYT?'youtube':(type==='clip'?'twitch-clip':'twitch-vod');
@@ -1010,7 +932,7 @@
     }
     else if(section==='clips') items=filteredCreators.flatMap(c=>(c.clips||[]).map(v=>({...v,creator:c,mediaType:'clip'})));
     else if(section==='vods') items=filteredCreators.flatMap(c=>(c.vods||[]).map(v=>({...v,creator:c,mediaType:'vod'})));
-    items=sortLibraryItems(items);
+    items=sortLibraryItems(items,state.librarySort);
     const creatorsHtml=creators.length?creators.map(c=>`<div class="creator creator-live ${c.isLive?'is-live':''} ${state.libraryCreatorFilter===c.id?'selected':''}" role="button" tabindex="0" data-filter-creator="${escapeHtml(c.id)}" title="Show only ${escapeHtml(c.name)}"><div class="creator-avatar-wrap">${creatorAvatarMarkup(c)}${c.isLive?'<span class="live-dot">LIVE</span>':''}<button class="creator-remove" data-remove-platform="${escapeHtml(c.platform)}" data-remove-id="${escapeHtml(c.id)}" data-remove-name="${escapeHtml(c.name)}" title="Remove ${escapeHtml(c.name)}">×</button></div><span>${escapeHtml(c.name)}</span><small>${platform==='youtube'?`${formatCount(c.subscribers)} subs`:(c.isLive?`${formatCount(c.live?.viewerCount||0)} watching`:'Offline')}</small></div>`).join(''):`<div class="library-empty-inline"><span>${platform==='youtube'?'▶':'▣'}</span><div><b>No ${platform==='youtube'?'YouTube creators':'Twitch streamers'} followed yet</b><small>Add one to start building this section of your library.</small></div></div>`;
     let mediaHtml='';
     if(platform==='twitch'&&section==='live'){
@@ -1024,17 +946,17 @@
     const statusYT=state.youtubeConfigured===false?`<span class="integration-badge error">YouTube API not configured</span>`:`<span class="integration-badge ok">● YouTube connected</span>`;
     const statusTW=state.twitchConfigured===false?`<span class="integration-badge error">Twitch API not configured</span>`:`<span class="integration-badge twitch-ok">● Twitch connected</span>`;
     const status=platform==='youtube'?statusYT:statusTW;
-    const results=(state.creatorSearchResults||[]).map(c=>`<button class="creator-search-result" type="button" data-add-channel="${escapeHtml(c.id||c.login||c.handle||'')}" data-add-input="${escapeHtml(c.login||c.handle||c.id||'')}">${creatorAvatarMarkup(c,'search-avatar')}<div class="grow"><strong>${escapeHtml(c.name)}</strong><small>${platform==='youtube'?`${escapeHtml(c.handle||'')}${c.handle?' · ':''}${formatCount(c.subscribers)} subscribers`:`@${escapeHtml(c.login||c.handle||'')}${c.isLive?' · LIVE':''}`}</small><p>${escapeHtml((c.description||'').slice(0,120))}</p></div><span class="result-add">Add</span></button>`).join('');
+    const results=(state.creatorSearchResults||[]).map(c=>`<button class="creator-search-result" type="button" ${state.addCreatorBusy?'disabled':''} data-add-channel="${escapeHtml(c.id||c.login||c.handle||'')}" data-add-input="${escapeHtml(c.login||c.handle||c.id||'')}">${creatorAvatarMarkup(c,'search-avatar')}<div class="grow"><strong>${escapeHtml(c.name)}</strong><small>${platform==='youtube'?`${escapeHtml(c.handle||'')}${c.handle?' · ':''}${formatCount(c.subscribers)} subscribers`:`@${escapeHtml(c.login||c.handle||'')}${c.isLive?' · LIVE':''}`}</small><p>${escapeHtml((c.description||'').slice(0,120))}</p></div><span class="result-add">Add</span></button>`).join('');
     const query=escapeHtml(state.creatorQuery||'');
     const searchState=state.creatorSearchLoading?`<div class="creator-search-state">Searching ${platform==='youtube'?'YouTube':'Twitch'}…</div>`:(state.creatorQuery&&state.creatorQuery.length>=2&&!results?`<div class="creator-search-state">No matching ${platform==='youtube'?'channels':'streamers'} found. You can still paste an exact ${platform==='youtube'?'@handle or URL':'username or Twitch URL'}.</div>`:'');
-    const modal=state.addCreatorOpen?`<div class="modal-backdrop" id="creatorModalBackdrop"><div class="card creator-modal smart-search-modal"><button class="modal-close" id="closeCreatorModal">×</button><div class="modal-platform-switch"><button type="button" data-creator-platform="youtube" class="${state.creatorPlatform==='youtube'?'active':''}">▶ YouTube</button><button type="button" data-creator-platform="twitch" class="${state.creatorPlatform==='twitch'?'active':''}">▣ Twitch</button></div><div class="eyebrow">Smart creator search</div><h2>Find a ${state.creatorPlatform==='youtube'?'YouTube creator':'Twitch streamer'}</h2><p>Type a name, ${state.creatorPlatform==='youtube'?'@handle or channel URL':'username or Twitch channel URL'}. ClipBoost will suggest matching accounts.</p><form id="creatorForm"><label>Creator</label><div class="creator-search-box"><input id="creatorInput" value="${query}" placeholder="${state.creatorPlatform==='youtube'?'MrBeast, @Kameto, or a YouTube URL':'Kameto, xQc, or a Twitch URL'}" autocomplete="off"><button type="submit" class="btn secondary" ${state.creatorSearchLoading?'disabled':''}>Search</button></div></form><div class="creator-search-results">${searchState}${results}</div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelCreator">Cancel</button>${state.creatorQuery?`<button type="button" class="btn primary" id="addExactCreator" ${state.addCreatorBusy?'disabled':''}>${state.addCreatorBusy?'Adding…':'Add exact input'}</button>`:''}</div>${state.libraryError?`<div class="library-error">${escapeHtml(state.libraryError)}</div>`:''}</div></div>`:'';
+    const modal=state.addCreatorOpen?`<div class="modal-backdrop" id="creatorModalBackdrop"><div class="card creator-modal smart-search-modal" role="dialog" aria-modal="true" aria-labelledby="creatorModalTitle" tabindex="-1"><button class="modal-close" id="closeCreatorModal" type="button" aria-label="Close creator search">×</button><div class="modal-platform-switch"><button type="button" data-creator-platform="youtube" class="${state.creatorPlatform==='youtube'?'active':''}">▶ YouTube</button><button type="button" data-creator-platform="twitch" class="${state.creatorPlatform==='twitch'?'active':''}">▣ Twitch</button></div><div class="eyebrow">Smart creator search</div><h2 id="creatorModalTitle">Find a ${state.creatorPlatform==='youtube'?'YouTube creator':'Twitch streamer'}</h2><p>Type a name, ${state.creatorPlatform==='youtube'?'@handle or channel URL':'username or Twitch channel URL'}. ClipBoost will suggest matching accounts.</p><form id="creatorForm"><label for="creatorInput">Creator</label><div class="creator-search-box"><input id="creatorInput" value="${query}" placeholder="${state.creatorPlatform==='youtube'?'MrBeast, @Kameto, or a YouTube URL':'Kameto, xQc, or a Twitch URL'}" autocomplete="off"><button type="submit" class="btn secondary" ${state.creatorSearchLoading?'disabled':''}>Search</button></div></form><div class="creator-search-results">${searchState}${results}</div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelCreator">Cancel</button>${state.creatorQuery?`<button type="button" class="btn primary" id="addExactCreator" ${state.addCreatorBusy?'disabled':''}>${state.addCreatorBusy?'Adding…':'Add exact input'}</button>`:''}</div>${state.libraryError?`<div class="library-error">${escapeHtml(state.libraryError)}</div>`:''}</div></div>`:'';
     let preview='';
     if(state.previewVideo){
       const p=state.previewVideo;const host=location.hostname||'localhost';let src='';let label='Preview';
       if(p.kind==='youtube'){src=`https://www.youtube.com/embed/${encodeURIComponent(p.id)}?autoplay=1&rel=0`;label='YouTube preview'}
       if(p.kind==='twitch-vod'){src=`https://player.twitch.tv/?video=v${encodeURIComponent(p.id)}&parent=${encodeURIComponent(host)}&autoplay=true`;label='Twitch VOD preview'}
       if(p.kind==='twitch-clip'){src=`https://clips.twitch.tv/embed?clip=${encodeURIComponent(p.id)}&parent=${encodeURIComponent(host)}&autoplay=true`;label='Twitch clip preview'}
-      preview=`<div class="modal-backdrop video-preview-backdrop" id="videoPreviewBackdrop"><div class="card video-preview-modal"><button class="modal-close" id="closeVideoPreview">×</button><div class="eyebrow">${label}</div><h2>${escapeHtml(p.title||'Video preview')}</h2><div class="video-embed-wrap"><iframe src="${src}" title="${escapeHtml(p.title||'Video preview')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div><div class="preview-modal-footer"><span>Playback availability depends on the creator and platform embed settings.</span><a class="btn secondary" href="${escapeHtml(p.url||'#')}" target="_blank" rel="noreferrer">Open on ${p.kind==='youtube'?'YouTube':'Twitch'} ↗</a></div></div></div>`;
+      preview=`<div class="modal-backdrop video-preview-backdrop" id="videoPreviewBackdrop"><div class="card video-preview-modal" role="dialog" aria-modal="true" aria-labelledby="videoPreviewTitle"><button class="modal-close" id="closeVideoPreview" type="button" aria-label="Close video preview">×</button><div class="eyebrow">${label}</div><h2 id="videoPreviewTitle">${escapeHtml(p.title||'Video preview')}</h2><div class="video-embed-wrap"><iframe src="${src}" title="${escapeHtml(p.title||'Video preview')}" frameborder="0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div><div class="preview-modal-footer"><span>Playback availability depends on the creator and platform embed settings.</span><a class="btn secondary" href="${escapeHtml(p.url||'#')}" target="_blank" rel="noreferrer">Open on ${p.kind==='youtube'?'YouTube':'Twitch'} ↗</a></div></div></div>`;
     }
     let livePlayer='';
     if(state.livePlayer){
@@ -1061,13 +983,14 @@
   function escapeHtml(value=''){return String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
   function creatorAvatarMarkup(c,size='normal'){const name=(c&&c.name)||'Creator';const initial=escapeHtml(String(name).trim().charAt(0).toUpperCase()||'?');const src=escapeHtml((c&&c.avatar)||'');const img=src?'<img src="'+src+'" alt="'+escapeHtml(name)+'" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'">':'';return '<div class="creator-avatar-fallback '+escapeHtml(size)+'"><span>'+initial+'</span>'+img+'</div>';}
   async function pollProjectUntilSettled(id){
+    if(state.video?.id!==id)return;
     clearTimeout(window.__clipboostProjectPoll);
     const pollKey=String(id||'');
     window.__clipboostActiveProjectPoll=pollKey;
     try{
       const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
       const data=await readJsonResponse(r,'Could not refresh project');
-      if(window.__clipboostActiveProjectPoll!==pollKey)return;
+      if(window.__clipboostActiveProjectPoll!==pollKey||state.video?.id!==id)return;
       const previousStatus=state.video?.id===data.id?state.video?.status:null;
       state.video=data;
       if(['ingesting','analyzing'].includes(data.status)){
@@ -1090,7 +1013,7 @@
       }
     }catch(e){
       console.warn(e);
-      if(window.__clipboostActiveProjectPoll===pollKey)window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),2500);
+      if(window.__clipboostActiveProjectPoll===pollKey&&state.video?.id===id)window.__clipboostProjectPoll=setTimeout(()=>pollProjectUntilSettled(id),2500);
     }
   }
   async function startProjectIngestion(id){
@@ -1142,19 +1065,10 @@
     }catch(e){try{localStorage.removeItem('clipboost:lastProjectId')}catch{}}
     finally{state.restoringProject=false}
   }
-  async function readJsonResponse(response, fallbackMessage='Request failed'){
-    const text=await response.text();
-    let data={};
-    if(text){
-      try{data=JSON.parse(text)}catch(_){
-        throw new Error(`${fallbackMessage} (server returned an invalid response, HTTP ${response.status})`);
-      }
-    }
-    if(!response.ok)throw new Error(data?.error||`${fallbackMessage} (HTTP ${response.status})`);
-    return data;
-  }
+  let twitchLiveLastAttempt=0;
   async function refreshTwitchLive({silent=false}={}){
     if(state.libraryPlatform!=='twitch')return;
+    if(silent&&(state.page!=='library'||state.librarySection!=='live'))return;
     if(state.twitchLiveRefreshing)return;
     state.twitchLiveRefreshing=true;
     if(!silent){state.libraryError='';render()}
@@ -1166,20 +1080,25 @@
     }catch(e){
       if(!silent)state.libraryError=e.message||'Could not refresh Twitch live status';
     }finally{
+      twitchLiveLastAttempt=Date.now();
       state.twitchLiveRefreshing=false;
-      render();
+      // Cache the result without rebuilding another page's active video preview.
+      if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')render();
     }
   }
   function scheduleTwitchLiveRefresh(){
     clearTimeout(window.__clipboostTwitchLiveRefresh);
-    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='live')return;
+    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='live'||state.twitchLiveRefreshing)return;
     const age=Date.now()-Number(state.twitchLiveLastRefresh||0);
-    if(age>20000)setTimeout(()=>refreshTwitchLive({silent:true}),80);
+    // Failed attempts need the same cooldown as successful refreshes. Keep the
+    // catch-up refresh in the tracked timer so renders and navigation cancel it.
+    const delay=twitchLiveLastAttempt?Math.max(80,60000-(Date.now()-twitchLiveLastAttempt)):(age>20000?80:60000);
     window.__clipboostTwitchLiveRefresh=setTimeout(async()=>{
       await refreshTwitchLive({silent:true});
       scheduleTwitchLiveRefresh();
-    },60000);
+    },delay);
   }
+  let twitchClipsLastAttempt=0;
   async function refreshTwitchClips({silent=true}={}){
     if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
     if(state.twitchClipsRefreshing)return;
@@ -1198,29 +1117,42 @@
     }catch(e){
       if(!silent)state.libraryError=e.message||'Could not refresh Twitch clips';
     }finally{
+      twitchClipsLastAttempt=Date.now();
       state.twitchClipsRefreshing=false;
-      render();
+      // Cache the result without rebuilding another page's active video preview.
+      if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')render();
     }
   }
   function scheduleTwitchClipsRefresh(){
     clearTimeout(window.__clipboostTwitchClipsRefresh);
-    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips')return;
+    if(state.page!=='library'||state.libraryPlatform!=='twitch'||state.librarySection!=='clips'||state.twitchClipsRefreshing)return;
     const age=Date.now()-Number(state.twitchClipsLastRefresh||0);
-    if(age>15000)setTimeout(()=>refreshTwitchClips({silent:true}),100);
+    // Track catch-up work too, and cool down failed attempts just like successes.
+    const delay=twitchClipsLastAttempt?Math.max(100,45000-(Date.now()-twitchClipsLastAttempt)):(age>15000?100:45000);
     window.__clipboostTwitchClipsRefresh=setTimeout(async()=>{
       await refreshTwitchClips({silent:true});
       scheduleTwitchClipsRefresh();
-    },45000);
+    },delay);
   }
   async function loadLibrary(){if(state.libraryLoading)return;state.libraryLoading=true;state.libraryError='';render();try{const [lib,status]=await Promise.all([fetch('/api/library/creators'),fetch('/api/integrations/status')]);const data=await readJsonResponse(lib,'Could not load library');const st=await readJsonResponse(status,'Could not read integration status');state.library=data;state.youtubeConfigured=Boolean(st?.youtube?.configured);state.twitchConfigured=Boolean(st?.twitch?.configured);state.libraryLoaded=true;}catch(e){state.libraryError=e.message||'Could not load library';state.libraryLoaded=true;}finally{state.libraryLoading=false;render()}}
-  async function addCreatorByPlatform(input){const platform=state.creatorPlatform||state.libraryPlatform||'youtube';state.addCreatorBusy=true;state.libraryError='';render();try{const r=await fetch(`/api/library/${platform}/creator`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input})});const data=await readJsonResponse(r,'Could not add creator');state.library=data.library;state.libraryLoaded=true;state.addCreatorOpen=false;state.libraryPlatform=platform;state.librarySection=platform==='youtube'?'videos':'vods';}catch(e){state.libraryError=e.message||'Could not add creator'}finally{state.addCreatorBusy=false;render()}}
+  async function addCreatorByPlatform(input){if(state.addCreatorBusy)return;const platform=state.creatorPlatform||state.libraryPlatform||'youtube';state.addCreatorBusy=true;state.libraryError='';render();try{const r=await fetch(`/api/library/${platform}/creator`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input})});const data=await readJsonResponse(r,'Could not add creator');state.library=data.library;state.libraryLoaded=true;state.addCreatorOpen=false;state.libraryPlatform=platform;state.librarySection=platform==='youtube'?'videos':'vods';}catch(e){state.libraryError=e.message||'Could not add creator'}finally{state.addCreatorBusy=false;render()}}
+  let creatorSearchRevision=0;
+  function resetCreatorSearch(){
+    creatorSearchRevision++;
+    clearTimeout(window.__clipboostCreatorSearchTimer);
+    state.creatorSearchResults=[];
+    state.creatorSearchLoading=false;
+  }
   async function searchCreators(query){
+    resetCreatorSearch();
+    const revision=creatorSearchRevision;
+    const isCurrent=()=>revision===creatorSearchRevision&&state.addCreatorOpen;
     const platform=state.creatorPlatform||'youtube';const q=String(query||'').trim();state.creatorQuery=q;state.libraryError='';
     if(q.length<2){state.creatorSearchResults=[];state.creatorSearchLoading=false;render();return}
     state.creatorSearchLoading=true;render();
-    try{const r=await fetch(`/api/library/${platform}/search?q=${encodeURIComponent(q)}`);const data=await readJsonResponse(r,'Search failed');state.creatorSearchResults=data.results||[]}
-    catch(e){state.libraryError=e.message||'Search failed';state.creatorSearchResults=[]}
-    finally{state.creatorSearchLoading=false;render();setTimeout(()=>{const el=document.getElementById('creatorInput');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},0)}
+    try{const r=await fetch(`/api/library/${platform}/search?q=${encodeURIComponent(q)}`);const data=await readJsonResponse(r,'Search failed');if(isCurrent())state.creatorSearchResults=data.results||[]}
+    catch(e){if(isCurrent()){state.libraryError=e.message||'Search failed';state.creatorSearchResults=[]}}
+    finally{if(isCurrent()){state.creatorSearchLoading=false;render();setTimeout(()=>{if(!isCurrent())return;const el=document.getElementById('creatorInput');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}},0)}}
   }
   async function removeCreator(platform,id,name){
     const label=name||'this creator';
@@ -1488,7 +1420,7 @@
     const tabs=`<div class="campaign-tabs campaign-tabs-v2"><button class="${tab==='overview'?'active':''}" data-campaign-tab="overview">Studio</button><button class="${tab==='sources'?'active':''}" data-campaign-tab="sources">Sources <span>${sources.length+resources.length}</span></button><button class="${tab==='results'?'active':''}" data-campaign-tab="results">Results <span>${posts.length}</span></button><button class="${tab==='published'?'active':''}" data-campaign-tab="published">Published <span>${posts.length}</span></button><button class="${tab==='rules'?'active':''}" data-campaign-tab="rules">Rules</button></div>`;
     const overview=`<div class="campaign-tab-panel campaign-overview-panel"><div class="campaign-primary-kpis"><div><span>Payment</span><b>${escapeHtml(paymentValue)}</b><small>${model==='per-views'?`per ${formatCount(Number(c.rateBasisViews||100000))} views`:model==='bounty-pool'?'shared campaign pool':model==='fixed-reward'?'fixed campaign reward':'campaign terms'}</small></div><div><span>Minimum</span><b>${q?formatCount(q):'—'}</b><small>${q?`${String(c.qualificationScope||'per-post')==='per-post'?'per post':'campaign total'}`:'No threshold saved'}</small></div><div><span>Tracked views</span><b>${formatCount(t.totalViews||0)}</b><small>${q?`${Math.round(t.progress||0)}% qualified`:`${t.postCount||0} published clips`}</small></div><div><span>Deadline</span><b>${escapeHtml(deadlineValue)}</b><small>${c.status||'active'} · ${campaignAccessLabel(c)}</small></div></div>${q?`<div class="campaign-progress-compact"><div><b>${Math.round(t.progress||0)}% toward qualification</b><span>${escapeHtml(progressText)}</span></div><div class="campaign-progress big"><i style="width:${Math.min(100,Number(t.progress||0))}%"></i></div></div>`:''}<div class="campaign-overview-lower"><div class="campaign-earnings-card"><div><span>Estimated payout</span><b>${formatMoney(t.estimatedRevenue||0,c.currency)}</b></div><div><span>Confirmed payout</span><b>${formatMoney(t.confirmedRevenue||0,c.currency)}</b></div><div><span>Best clip</span><b>${formatCount(t.bestViews||0)}</b></div><div><span>Average</span><b>${formatCount(t.avgViews||0)}</b></div></div><div class="campaign-readiness-compact ${ready.ready?'ready':''}"><div><span>${ready.ready?'✓':'!'}</span><div><b>${ready.ready?'Ready to create':'Setup needs attention'}</b><small>${ready.ready?'Campaign has the essentials to start creating clips.':missing.map(x=>x.label).join(' · ')}</small></div></div><strong>${ready.score}%</strong></div></div>${rates.length?`<div class="campaign-platform-rate-panel compact"><div><b>Platform rates</b><span>Saved payout terms</span></div><div class="campaign-rate-badges large">${rates.map(r=>`<span><small>${escapeHtml(r.label)}</small><b>${formatMoney(r.value,c.currency)}</b></span>`).join('')}</div></div>`:''}<div class="campaign-studio-v2-grid"><section class="campaign-studio-v2-panel"><div class="eyebrow">CAMPAIGN BRIEF</div><h3>${c.brief?'Objective':'Objective needed'}</h3><p>${escapeHtml(c.brief||'No objective was provided by the campaign. Add a short working objective so the AI knows what to prioritize.')}</p><div class="campaign-studio-mini-facts">${c.audience?`<span><small>Audience</small><b>${escapeHtml(c.audience)}</b></span>`:''}<span><small>Requirements</small><b>${(c.requirements||[]).length}</b></span><span><small>Violations</small><b>${(c.violations||[]).length}</b></span></div><button class="btn secondary compact-btn" id="editCampaignRulesBtn">${c.brief?'Edit campaign context':'Add objective'}</button></section><section class="campaign-studio-v2-panel"><div class="section-head"><div><div class="eyebrow">SOURCE MEDIA</div><h3>${sources.length+resources.length} source${sources.length+resources.length===1?'':'s'} available</h3></div><button class="btn secondary compact-btn" data-campaign-tab="sources">Manage sources</button></div><div class="campaign-studio-source-stack">${sources.slice(0,2).map((src,i)=>`<button data-campaign-source="${escapeHtml(src.id)}"><span class="campaign-source-type">${campaignSourcePlatform(src.url)}</span><b>${escapeHtml(src.label||`Source ${i+1}`)}</b><small>Open in Campaign Editor</small></button>`).join('')}${resources.slice(0,2).map((r,i)=>`<button data-campaign-pack="${i}"><span class="campaign-source-type">Pack</span><b>${escapeHtml(r.label||`Asset pack ${i+1}`)}</b><small>${escapeHtml(campaignAssetMediaLabel(r))}</small></button>`).join('')}${!sources.length&&!resources.length?'<div class="campaign-mini-empty">Add a campaign source before generating clips.</div>':''}</div></section><section class="campaign-studio-v2-panel campaign-generate-panel"><div class="eyebrow">CREATE</div><h3>Generate campaign clips</h3><p>Choose campaign-supplied media, then edit it in the dedicated Campaign Editor with the campaign brief, rules and compliance always attached.</p><div class="campaign-generate-counts"><span><b>${sources.length}</b> direct</span><span><b>${resources.length}</b> packs</span><span><b>${references.length}</b> references</span></div><button class="btn primary full" id="batchCampaignBtn" ${sources.length?'':'disabled'}>Queue direct sources</button>${resources.length?`<button class="btn secondary full" data-campaign-tab="sources">Browse asset packs</button>`:''}<small class="campaign-generate-note">The existing AI engine, campaign fit and compliance checks are reused unchanged.</small></section></div></div>`;
     const sourcesPanel=`<div class="campaign-tab-panel"><div class="campaign-tab-head"><div><div class="eyebrow">AUTHORIZED SOURCES</div><h3>Sources</h3><p>Editable campaign media opens only in Campaign Editor. Asset packs and reference artwork stay separate so preview images are never mistaken for editable video.</p></div><button class="btn secondary compact-btn" id="batchCampaignBtn" ${sources.length?'':'disabled'}>Queue all</button></div><div class="campaign-source-add"><input id="campaignSourceUrl" placeholder="YouTube / Twitch / source URL"><input id="campaignSourceLabel" placeholder="Label (optional)"><button class="btn secondary" id="addCampaignSourceBtn">Add source</button></div><div class="campaign-source-list">${sources.length?sources.map((src,i)=>`<div class="campaign-source-row"><div class="campaign-source-copy"><span class="campaign-source-type">${campaignSourcePlatform(src.url)}</span><b>${escapeHtml(src.label||`Source ${i+1}`)}</b><small>${escapeHtml(src.url)}</small></div><div class="campaign-source-actions"><button class="btn primary" data-campaign-source="${escapeHtml(src.id)}">✦ Open in Campaign Editor</button><button class="icon-btn danger-lite" data-campaign-source-remove="${escapeHtml(src.id)}" title="Remove source">×</button></div></div>`).join(''):'<div class="campaign-mini-empty">No direct media source yet. Smart Import keeps unknown sources empty instead of guessing.</div>'}</div>${resources.length?`<div class="campaign-resource-section"><div class="eyebrow">CAMPAIGN ASSET PACKS</div><div class="campaign-resource-list">${resources.map((r,i)=>{const kind=r.kind==='video-pack'?'Video pack':r.kind==='image-pack'?'Image pack':r.kind==='mixed-pack'?'Mixed media':'Asset pack';const detail=r.inspectStatus==='unavailable'?'Media type could not be inspected automatically':campaignAssetMediaLabel(r).replace(/^.*? · /,'')||'Open the pack to use its approved campaign media';return `<div class="campaign-resource-row"><span><em class="campaign-resource-kind">${escapeHtml(kind)}</em><b>${escapeHtml(r.label||`Asset pack ${i+1}`)}</b><small>${escapeHtml(detail)}</small></span><div class="campaign-resource-actions"><button class="btn primary compact-btn" data-campaign-pack="${i}">Browse media</button><a class="btn secondary compact-btn" href="${escapeHtml(r.url)}" target="_blank" rel="noreferrer">Open pack ↗</a></div></div>`}).join('')}</div></div>`:''}${references.length?`<div class="campaign-resource-section campaign-reference-section"><div class="eyebrow">REFERENCE ARTWORK</div><p class="campaign-resource-note">These images come from campaign requirements and are kept as visual references only.</p><div class="campaign-resource-list">${references.map((r,i)=>`<div class="campaign-resource-row"><span><em class="campaign-resource-kind">Reference</em><b>${escapeHtml(r.label||`Reference image ${i+1}`)}</b><small>Reference only · not editable media</small></span><a class="btn secondary compact-btn" href="${escapeHtml(r.url)}" target="_blank" rel="noreferrer">Open ↗</a></div>`).join('')}</div></div>`:''}</div>`;
-    const publishedPanel=`<div class="campaign-tab-panel"><div class="campaign-tab-head"><div><div class="eyebrow">SUBMISSION & PERFORMANCE</div><h3>Published clips</h3><p>Track views, validation status and confirmed payout after publishing.</p></div><button class="btn secondary" id="downloadSubmissionPackBtn">Submission pack</button></div><div class="campaign-post-add campaign-post-add-real"><input class="campaign-post-url" id="campaignPostUrl" placeholder="Post URL"><select id="campaignPostPlatform"><option>TikTok</option><option>Instagram</option><option>YouTube Shorts</option><option>X</option></select><input id="campaignPostViews" type="number" min="0" placeholder="Views"><input id="campaignPostDuration" type="number" min="0" placeholder="Clip sec"><input id="campaignPostMinutes" type="number" min="0" placeholder="Edit min"><input id="campaignPostPayout" type="number" min="0" step="0.01" placeholder="Confirmed $"><select id="campaignPostStatus"><option value="pending">Pending</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select><button class="btn secondary" id="addCampaignPostBtn">Track</button></div><div class="campaign-post-list">${posts.length?posts.slice(0,30).map(p=>`<div class="campaign-post-row campaign-post-row-real"><div class="campaign-post-main"><span>${escapeHtml(p.platform||'Post')} · <b class="submission-${escapeHtml(p.submissionStatus||'pending')}">${escapeHtml(p.submissionStatus||'pending')}</b></span>${p.url?`<small title="${escapeHtml(p.url)}">${escapeHtml(p.url)}</small>`:`<small>${relativeDate(p.publishedAt||p.createdAt)}</small>`}</div><label><small>Views</small><input class="campaign-view-input" data-post-view-input="${escapeHtml(p.id)}" type="number" min="0" value="${Number(p.views||0)}"></label><label><small>Confirmed</small><input class="campaign-view-input" data-post-payout-input="${escapeHtml(p.id)}" type="number" min="0" step="0.01" value="${Number(p.payoutConfirmed||0)}"></label><label><small>Status</small><select class="campaign-view-input" data-post-status-input="${escapeHtml(p.id)}"><option value="pending" ${String(p.submissionStatus||'pending')==='pending'?'selected':''}>Pending</option><option value="accepted" ${p.submissionStatus==='accepted'?'selected':''}>Accepted</option><option value="rejected" ${p.submissionStatus==='rejected'?'selected':''}>Rejected</option></select></label><div class="campaign-post-actions"><button class="btn secondary compact-btn" data-campaign-post-update="${escapeHtml(p.id)}">Update</button><button class="icon-btn danger-lite" data-campaign-post-delete="${escapeHtml(p.id)}" title="Remove tracked post">×</button></div></div>`).join(''):'<div class="campaign-mini-empty">No published clips tracked yet.</div>'}</div></div>`;
+    const publishedPanel=`<div class="campaign-tab-panel"><div class="campaign-tab-head"><div><div class="eyebrow">SUBMISSION & PERFORMANCE</div><h3>Published clips</h3><p>Track views, validation status and confirmed payout after publishing.</p></div><button class="btn secondary" id="downloadSubmissionPackBtn">Submission pack</button></div><div class="campaign-post-add campaign-post-add-real"><label class="campaign-post-field"><span>Post URL</span><input class="campaign-post-url" id="campaignPostUrl" placeholder="Post URL"></label><label class="campaign-post-field"><span>Platform</span><select id="campaignPostPlatform"><option>TikTok</option><option>Instagram</option><option>YouTube Shorts</option><option>X</option></select></label><label class="campaign-post-field"><span>Views</span><input id="campaignPostViews" type="number" min="0" placeholder="Views"></label><label class="campaign-post-field"><span>Clip (sec)</span><input id="campaignPostDuration" type="number" min="0" placeholder="Clip sec"></label><label class="campaign-post-field"><span>Edit (min)</span><input id="campaignPostMinutes" type="number" min="0" placeholder="Edit min"></label><label class="campaign-post-field"><span>Confirmed ($)</span><input id="campaignPostPayout" type="number" min="0" step="0.01" placeholder="Confirmed $"></label><label class="campaign-post-field"><span>Status</span><select id="campaignPostStatus"><option value="pending">Pending</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></label><button class="btn secondary" id="addCampaignPostBtn">Track</button></div><div class="campaign-post-list">${posts.length?posts.slice(0,30).map(p=>`<div class="campaign-post-row campaign-post-row-real"><div class="campaign-post-main"><span>${escapeHtml(p.platform||'Post')} · <b class="submission-${escapeHtml(p.submissionStatus||'pending')}">${escapeHtml(p.submissionStatus||'pending')}</b></span>${p.url?`<small title="${escapeHtml(p.url)}">${escapeHtml(p.url)}</small>`:`<small>${relativeDate(p.publishedAt||p.createdAt)}</small>`}</div><label><small>Views</small><input class="campaign-view-input" data-post-view-input="${escapeHtml(p.id)}" type="number" min="0" value="${Number(p.views||0)}"></label><label><small>Confirmed</small><input class="campaign-view-input" data-post-payout-input="${escapeHtml(p.id)}" type="number" min="0" step="0.01" value="${Number(p.payoutConfirmed||0)}"></label><label><small>Status</small><select class="campaign-view-input" data-post-status-input="${escapeHtml(p.id)}"><option value="pending" ${String(p.submissionStatus||'pending')==='pending'?'selected':''}>Pending</option><option value="accepted" ${p.submissionStatus==='accepted'?'selected':''}>Accepted</option><option value="rejected" ${p.submissionStatus==='rejected'?'selected':''}>Rejected</option></select></label><div class="campaign-post-actions"><button class="btn secondary compact-btn" data-campaign-post-update="${escapeHtml(p.id)}">Update</button><button class="icon-btn danger-lite" data-campaign-post-delete="${escapeHtml(p.id)}" title="Remove tracked post">×</button></div></div>`).join(''):'<div class="campaign-mini-empty">No published clips tracked yet.</div>'}</div></div>`;
     const importedRequirements=c.requirements||[],violations=c.violations||[];
     const rulesPanel=`<div class="campaign-tab-panel campaign-rules-panel"><div class="campaign-rules-grid"><div><div class="eyebrow">CAMPAIGN BRIEF</div><h3>Objective</h3><p class="campaign-full-brief">${escapeHtml(c.brief||'No campaign objective was visible on the imported page.')}</p>${c.audience?`<div class="campaign-import-fact"><span>Audience</span><b>${escapeHtml(c.audience)}</b></div>`:''}${c.paymentMethod||c.accountLimit?`<div class="campaign-import-facts">${c.paymentMethod?`<div><span>Payment method</span><b>${escapeHtml(c.paymentMethod)}</b></div>`:''}${c.accountLimit?`<div><span>Account limit</span><b>${escapeHtml(c.accountLimit)}</b></div>`:''}</div>`:''}</div><div><div class="eyebrow">PUBLISHING RULES</div><h3>Requirements</h3><div class="campaign-rule-chips">${requirements.map(x=>`<span>${escapeHtml(x)}</span>`).join('')}${c.requiredCTA?`<span>CTA: ${escapeHtml(c.requiredCTA)}</span>`:''}${(c.forbiddenTerms||[]).length?`<span class="campaign-rule-warning">Avoid: ${escapeHtml(c.forbiddenTerms.join(', '))}</span>`:''}</div>${importedRequirements.length?`<div class="campaign-imported-rules"><h4>Imported requirements</h4>${importedRequirements.map(x=>`<div><span>✓</span><p>${escapeHtml(x)}</p></div>`).join('')}</div>`:''}${violations.length?`<div class="campaign-imported-rules violations"><h4>Violations / disqualifiers</h4>${violations.map(x=>`<div><span>!</span><p>${escapeHtml(x)}</p></div>`).join('')}</div>`:''}${c.requirementsUrl?`<a class="campaign-requirements-link" href="${escapeHtml(c.requirementsUrl)}" target="_blank" rel="noreferrer">Open original requirements ↗</a>`:''}</div></div>${c.platformProfile?`<details class="campaign-platform-rules"><summary><span><b>Platform rules — ${escapeHtml(c.platformProfile.provider||c.provider||'Platform')}</b><small>Shared rules imported once for campaigns from this provider.</small></span><span>⌄</span></summary><div class="campaign-platform-rules-body">${Number(c.platformProfile.postMinimumViews||0)>0?`<div class="campaign-platform-rule-fact"><span>Per-post counting floor</span><b>${formatCount(c.platformProfile.postMinimumViews)} views</b></div>`:''}${Number(c.platformProfile.typicalCampaignMinimumViews||0)>0?`<div class="campaign-platform-rule-fact"><span>Typical campaign minimum</span><b>${formatCount(c.platformProfile.typicalCampaignMinimumViews)} views <em>general guidance</em></b></div>`:''}${(c.platformProfile.sections||[]).slice(0,12).map(section=>`<div class="campaign-platform-rule-section"><h4>${escapeHtml(section.title)}</h4><ul>${(section.items||[]).slice(0,20).map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul></div>`).join('')}</div></details>`:''}<div class="campaign-rules-actions"><button class="btn secondary" id="copyCampaignChecklistBtn">Copy publishing checklist</button><button class="btn secondary" id="editCampaignRulesBtn">Edit terms</button></div></div>`;
     const resultsPanel=campaignResultsPanel(c);const panel=tab==='sources'?sourcesPanel:tab==='results'?resultsPanel:tab==='published'?publishedPanel:tab==='rules'?rulesPanel:overview;
@@ -1595,40 +1527,26 @@
   }
 
   async function waitForCampaignProjectResult(id){
-    const started=Date.now(),timeoutMs=30*60*1000;
-    while(Date.now()-started<timeoutMs){
-      const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
-      const data=await readJsonResponse(r,'Could not refresh campaign project');
-      state.video=data;
-      const status=String(data?.status||'');
-      if(['ready','degraded'].includes(status)){if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}return data}
-      const ingestionStage=String(data?.ingestion?.stage||'').toLowerCase();
-      const analysisStage=String(data?.analysis?.stage||'').toLowerCase();
-      const ingestionError=String(data?.ingestion?.error||'').trim();
-      const analysisError=String(data?.analysis?.error||'').trim();
-      if(status==='failed'||ingestionStage==='error'||analysisStage==='error'||ingestionError){
-        throw new Error(analysisError||ingestionError||'Campaign video processing failed.');
-      }
-      const stage=String(data?.analysis?.stage||data?.ingestion?.stage||status||'Working').replace(/-/g,' ');
-      const reported=Math.max(0,Math.min(100,Number(data?.analysis?.progress??data?.ingestion?.progress??0)));
-      const previous=Math.max(0,Number(state.uiModal?.progress||0));
-      // Never fake large jumps and never let progress move backwards. Backend stages
-      // are authoritative; a tiny time-based creep only reassures during long AI calls.
-      const creep=Math.min(status==='analyzing'?94:89,previous+(status==='analyzing' ? 0.35 : 0.2));
-      const pct=Math.max(previous,reported,creep);
-      const nextTitle=status==='analyzing'?'Analyzing campaign video…':'Preparing campaign video…';
-      const nextLabel=stage||'Working';
-      if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
-        state.uiModal={...state.uiModal,title:nextTitle,progressLabel:nextLabel,progress:pct};
-        const modal=document.querySelector('.cb-modal');
-        if(modal){
-          const title=modal.querySelector('#cbModalTitle'),label=modal.querySelector('.cb-analysis-progress-head span'),value=modal.querySelector('.cb-analysis-progress-head strong'),bar=modal.querySelector('.cb-analysis-progress-track i');
-          if(title)title.textContent=nextTitle;if(label)label.textContent=nextLabel;if(value)value.textContent=`${Math.round(pct)}%`;if(bar)bar.style.width=`${Math.max(4,pct)}%`;
-        }else render();
-      }
-      await new Promise(resolve=>setTimeout(resolve,1500));
-    }
-    throw new Error('Campaign video processing timed out.');
+    const settled=await waitForCampaignProject({
+      readProject:async()=>{
+        const r=await fetch(`/api/videos/${encodeURIComponent(id)}`);
+        return readJsonResponse(r,'Could not refresh campaign project');
+      },
+      onProject:data=>{state.video=data},
+      onProgress:data=>{
+        const {title:nextTitle,progressLabel:nextLabel,progress:pct}=campaignProgress(data,state.uiModal?.progress);
+        if(state.uiModal?.title!==nextTitle||state.uiModal?.progressLabel!==nextLabel||Math.round(Number(state.uiModal?.progress||0))!==Math.round(pct)){
+          state.uiModal={...state.uiModal,title:nextTitle,progressLabel:nextLabel,progress:pct};
+          const modal=document.querySelector('.cb-modal');
+          if(modal){
+            const title=modal.querySelector('#cbModalTitle'),label=modal.querySelector('.cb-analysis-progress-head span'),value=modal.querySelector('.cb-analysis-progress-head strong'),bar=modal.querySelector('.cb-analysis-progress-track i');
+            if(title)title.textContent=nextTitle;if(label)label.textContent=nextLabel;if(value)value.textContent=`${Math.round(pct)}%`;if(bar)bar.style.width=`${Math.max(4,pct)}%`;
+          }else render();
+        }
+      },
+    });
+    if(state.uiModal){state.uiModal={...state.uiModal,title:'Campaign analysis complete',progressLabel:'Results ready',progress:100};const bar=document.querySelector('.cb-analysis-progress-track i'),value=document.querySelector('.cb-analysis-progress-head strong');if(bar)bar.style.width='100%';if(value)value.textContent='100%'}
+    return settled;
   }
 
   async function startCampaignCreating(){
@@ -1684,22 +1602,25 @@
     }finally{state.projectBusy=false}
   }
   async function deleteCampaign(){const c=selectedCampaign();if(!c)return;const ok=await confirmAction({kind:'danger',eyebrow:'Campaigns',title:`Delete ${c.name}?`,message:'This removes the campaign workspace and its view tracking. Existing AI Studio projects and exported videos are kept.',confirmLabel:'Delete campaign'});if(!ok)return;const r=await fetch(`/api/campaigns/${encodeURIComponent(c.id)}`,{method:'DELETE'});await readJsonResponse(r,'Could not delete campaign');state.campaignSelected=null;state.campaigns=null;await loadCampaigns()}
-  async function runCampaignCheck(){const v=state.video;if(!v?.campaign?.id)return;const ci=state.selectedCandidate||0,base=v.candidates?.[ci]||{};const start=Number(document.getElementById('clipStart')?.value??base.start??0),end=Number(document.getElementById('clipEnd')?.value??base.end??start+30);const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci,start,end,options:currentRenderOptions()})});state.campaignCompliance=await readJsonResponse(r,'Campaign check failed');render()}
-  async function generateCampaignVariants(){const v=state.video;if(!v?.campaign?.id)return;const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/variants`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:state.selectedCandidate||0})});const data=await readJsonResponse(r,'Could not generate variants');state.campaignVariants=data.variants||[];render()}
-  function projectDisplayState(p){
-    if(p?.processingInterrupted)return {progress:36,progressLabel:'Interrupted',badge:'Needs attention',done:false};
-    if(p?.status==='ready')return {progress:100,progressLabel:'Ready',badge:'Ready',done:true};
-    if(p?.status==='degraded')return {progress:100,progressLabel:'Ready with fallback',badge:'Degraded',done:true};
-    if(p?.status==='failed')return {progress:100,progressLabel:'Failed',badge:'Failed',done:false};
-    if(p?.status==='uploaded')return {progress:100,progressLabel:'Source ready',badge:'Ready to analyze',done:false};
-    if(p?.status==='preparing')return {progress:Number(p?.ingestion?.progress||92),progressLabel:'Preparing source',badge:'In progress',done:false};
-    if(p?.status==='linked')return {progress:15,progressLabel:'Linked',badge:p?.ingestionError?'Retry source':'Needs source file',done:false};
-    if(['ingesting','analyzing'].includes(p?.status))return {progress:p?.status==='ingesting'?45:65,progressLabel:p?.status==='ingesting'?'Downloading':'Processing',badge:'In progress',done:false};
-    return {progress:35,progressLabel:'Needs attention',badge:'Needs attention',done:false};
+  let campaignCheckRevision=0;
+  async function runCampaignCheck(){const v=state.video;if(!v?.campaign?.id)return;const revision=++campaignCheckRevision,previewRevision=state.candidatePreviewRequestId;const ci=state.selectedCandidate||0,base=v.candidates?.[ci]||{};const start=Number(document.getElementById('clipStart')?.value??base.start??0),end=Number(document.getElementById('clipEnd')?.value??base.end??start+30);const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/campaign-check`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci,start,end,options:currentRenderOptions()})});const check=await readJsonResponse(r,'Campaign check failed');if(revision!==campaignCheckRevision||state.video!==v||(state.selectedCandidate||0)!==ci||state.candidatePreviewRequestId!==previewRevision||v.candidates?.[ci]!==base)return;state.campaignCompliance=check;render()}
+  let campaignVariantsRevision=0;
+  async function generateCampaignVariants(){
+    const v=state.video,ci=state.selectedCandidate||0,base=v?.candidates?.[ci];
+    if(!v?.campaign?.id||!base)return;
+    const revision=++campaignVariantsRevision,previewRevision=state.candidatePreviewRequestId;
+    const isCurrent=()=>revision===campaignVariantsRevision&&state.video===v&&(state.selectedCandidate||0)===ci&&state.candidatePreviewRequestId===previewRevision&&v.candidates?.[ci]===base;
+    try{
+      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/variants`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:ci})});
+      const data=await readJsonResponse(r,'Could not generate variants');
+      // Suggestions must belong to the clip that will receive them when clicked.
+      if(!isCurrent())return;
+      state.campaignVariants=data.variants||[];render();
+    }catch(e){if(isCurrent())throw e;}
   }
   function projects(){
     const list=Array.isArray(state.projects)?state.projects:[];
-    const rows=list.length?list.map((p,i)=>{const ui=projectDisplayState(p),campaignName=String(p.campaignName||p.campaign?.name||'').trim(),isCampaign=Boolean(p.campaignId||campaignName);return `<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div class="project-identity-v129"><div class="project-title-line-v129"><strong>${escapeHtml(p.originalName||'Untitled project')}</strong>${isCampaign?`<span class="project-campaign-badge-v129">◎ ${escapeHtml(campaignName||'Campaign')}</span>`:`<span class="project-personal-badge-v129">AI Studio</span>`}</div><div class="muted">${isCampaign?`Campaign · ${escapeHtml(campaignName||'Campaign')} · `:''}${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}${p.processingInterrupted?' · processing was interrupted':''}</div></div><div class="project-progress"><div class="progress"><i style="width:${ui.progress}%"></i></div><span>${ui.progressLabel}</span></div><div class="project-row-actions"><span class="status ${ui.done?'done':''}">${ui.badge}</span><button class="btn secondary" data-open-project="${escapeHtml(p.id)}">Open</button><button class="icon-btn project-delete-btn" type="button" data-delete-project="${escapeHtml(p.id)}" data-delete-project-name="${escapeHtml(p.originalName||'Untitled project')}" title="${['ingesting','analyzing'].includes(p.status)?'Stop processing and delete project':'Delete project'}">×</button></div></div>`}).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
+    const rows=list.length?list.map((p,i)=>{const ui=projectDisplayState(p),campaignName=String(p.campaignName||p.campaign?.name||'').trim(),isCampaign=Boolean(p.campaignId||campaignName);return `<div class="project-row"><div class="project-source-thumb">${p.externalSource?.thumbnail?`<img src="${escapeHtml(p.externalSource.thumbnail)}" alt="">`:mediaThumb(i)}</div><div class="project-identity-v129"><div class="project-title-line-v129"><strong>${escapeHtml(p.originalName||'Untitled project')}</strong>${isCampaign?`<span class="project-campaign-badge-v129">◎ ${escapeHtml(campaignName||'Campaign')}</span>`:`<span class="project-personal-badge-v129">AI Studio</span>`}</div><div class="muted">${isCampaign?`Campaign · ${escapeHtml(campaignName||'Campaign')} · `:''}${escapeHtml(p.externalSource?.creatorName||'Local upload')} · ${relativeDate(p.createdAt)}${p.processingInterrupted?' · processing was interrupted':''}</div></div><div class="project-progress"><div class="progress"><i style="width:${ui.progress}%"></i></div><span>${ui.progressLabel}</span></div><div class="project-row-actions"><span class="status ${ui.done?'done':''}">${ui.badge}</span><button class="btn secondary" data-open-project="${escapeHtml(p.id)}" aria-label="Open ${escapeHtml(p.originalName||'Untitled project')}">Open</button><button class="icon-btn project-delete-btn" type="button" data-delete-project="${escapeHtml(p.id)}" data-delete-project-name="${escapeHtml(p.originalName||'Untitled project')}" aria-label="${['ingesting','analyzing'].includes(p.status)?'Stop processing and delete':'Delete'} ${escapeHtml(p.originalName||'Untitled project')}" title="${['ingesting','analyzing'].includes(p.status)?'Stop processing and delete project':'Delete project'}">×</button></div></div>`}).join(''):`<div class="projects-empty"><b>No real projects yet</b><span>Send a YouTube video or Twitch VOD from Library to AI Studio.</span><button class="btn primary" data-page="library">Open Library</button></div>`;
     return `<div class="content mint-projects-nb-v1418"><div class="page-title"><div><div class="eyebrow">Workflow</div><h1>My projects</h1><p>Sources sent from your Library appear here automatically.</p></div><button class="btn primary" data-page="library">+ From Library</button></div><section class="card projects">${state.projectsLoading?'<div class="projects-empty">Loading projects…</div>':rows}</section></div>`
   }
 
@@ -1843,10 +1764,15 @@
       if(!state.manualTrimUndoApplying)state.manualTrimUndo={videoId:v.id,index,start:Number(cand.start),end:Number(cand.end)};
       state.manualTrimUndoApplying=false;
       v.candidates[index]={...cand,...data.candidate,previewUrl:null,previewMeta:null,previewEdited:false};
+      // A trim can finish after the user has moved to another clip.
+      if((state.selectedCandidate||0)!==index)return;
       state.timelineSeek=Number(v.candidates[index].start||0);
       state.campaignCompliance=null;state.campaignVariants=null;
       render();
-      setTimeout(()=>prepareCandidatePreview(index,{autoplay:false,force:true}),0);
+      setTimeout(()=>{
+        if(revision!==trimSaveRevision||state.video?.id!==v.id||(state.selectedCandidate||0)!==index)return;
+        prepareCandidatePreview(index,{autoplay:false,force:true});
+      },0);
     }catch(e){
       if(revision!==trimSaveRevision||state.video?.id!==v.id)return;
       showNotice({kind:'danger',eyebrow:'Manual cut',title:'Could not apply cut',message:e.message||'The manual start/end adjustment could not be saved.'});
@@ -1856,45 +1782,85 @@
 
   async function prepareCandidatePreview(index,{autoplay=false,force=false}={}){
     const v=state.video,cand=v?.candidates?.[index];if(!v?.id||!cand||!v?.sourceUrl)return;
-    if(state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force)return;
+    // Clip indices are shared across projects; pending work belongs to one video.
+    if(state.candidatePreviewVideoId===v.id&&state.candidatePreviewLoading&&state.candidatePreviewLoadingIndex===index&&!force){
+      // A click while rendering must retain its playback intent without another render.
+      state.candidatePreviewPendingAutoplay=autoplay;
+      return;
+    }
     if(cand.previewUrl&&!force){state.candidatePreviewAutoplay=autoplay;render();return;}
     const requestId=++state.candidatePreviewRequestId;
-    state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
+    state.candidatePreviewPendingAutoplay=autoplay;
+    state.candidatePreviewVideoId=v.id;state.candidatePreviewLoading=true;state.candidatePreviewLoadingIndex=index;state.candidatePreviewError='';state.candidatePreviewAutoplay=false;render();
     try{
-      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,watermarkUrl:''}})});
+      // Editable overlays live in the DOM; bake them only into final validation previews.
+      const r=await fetch(`/api/videos/${encodeURIComponent(v.id)}/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index,start:cand.start,end:cand.end,options:state.previewFinalMode?currentRenderOptions():{...currentRenderOptions(),captionPreference:'off',captions:false,hookTitleEnabled:false,watermarkUrl:''}})});
       const data=await readJsonResponse(r,'Could not prepare clip preview');
-      if(requestId!==state.candidatePreviewRequestId)return;
-      cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=autoplay;render();
+      if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
+      if(typeof data?.url!=='string'||!data.url.trim())throw new Error('Could not prepare clip preview: the server returned no playable preview. Retry preview.');
+      cand.previewUrl=data.url;cand.previewEdited=Boolean(data.edited);cand.previewMeta=data.render||null;state.candidatePreviewLoading=false;state.candidatePreviewError='';state.candidatePreviewAutoplay=state.candidatePreviewPendingAutoplay;render();
     }catch(e){
-      if(requestId!==state.candidatePreviewRequestId)return;
+      if(requestId!==state.candidatePreviewRequestId||state.video?.id!==v.id)return;
       state.candidatePreviewLoading=false;state.candidatePreviewError=e.message||'Could not prepare preview';render();
     }
   }
   function selectCandidatePreview(index,{autoplay=true}={}){
     const candidates=state.video?.candidates||[];if(!candidates[index])return;
     state.selectedCandidate=index;state.timelineSeek=Number(candidates[index].start||0);state.candidatePreviewError='';state.campaignCompliance=null;state.campaignVariants=null;
-    if(candidates[index].previewUrl){state.candidatePreviewAutoplay=autoplay;render();}
+    if(candidates[index].previewUrl){
+      // A cached selection must supersede any render still pending for another clip.
+      state.candidatePreviewRequestId++;
+      state.candidatePreviewLoading=false;state.candidatePreviewLoadingIndex=-1;
+      state.candidatePreviewAutoplay=autoplay;render();
+    }
     else prepareCandidatePreview(index,{autoplay});
   }
 
-  function render(){const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()}
+  let disposePreviewCaptionClock=null;
+  function render(){
+    // Selection and preview completion rebuild clip controls; retain keyboard focus.
+    const focusedClip=document.activeElement?.closest?.('[data-candidate]');
+    const focusedClipIndex=focusedClip?.dataset.candidate;
+    const focusedClipClass=focusedClip?.classList.contains('timeline-clip')?'timeline-clip':'candidate-btn';
+    // Release the old preview clock before replacing its video and caption nodes.
+    disposePreviewCaptionClock?.();
+    disposePreviewCaptionClock=null;
+    const pages={home,'campaign-discover':campaignDiscover,studio,campaigns,'campaign-editor':campaignEditor,analytics,library,projects,publish,settings};document.getElementById('app').innerHTML=`<div class="app">${side()}<main class="main">${top()}${pages[state.page]()}</main></div>${campaignAssetBrowserMarkup()}${modalMarkup()}`;bind()
+    if(focusedClip && /^\d+$/.test(focusedClipIndex) && !document.querySelector('[role="dialog"]')){
+      document.querySelector(`.${focusedClipClass}[data-candidate="${focusedClipIndex}"]`)?.focus({preventScroll:true});
+    }
+  }
   function bind(){
+    // Keep tool sections where the user left them when preview/settings rebuild the editor.
+    document.querySelectorAll('[data-editor-tool-group]').forEach(group=>{
+      group.ontoggle=()=>editorToolGroupOpen.set(group.dataset.editorToolGroup,group.open);
+    });
+    bindModalKeyboard(document.querySelector('.cb-modal'),{mode:state.uiModal?.mode,onDismiss:()=>finishModal(false)});
     const modalConfirm=document.getElementById('cbModalConfirm');if(modalConfirm)modalConfirm.onclick=()=>finishModal(true);
     const modalCancel=document.getElementById('cbModalCancel');if(modalCancel)modalCancel.onclick=()=>finishModal(false);
     const modalBackdrop=document.getElementById('cbModalBackdrop');if(modalBackdrop)modalBackdrop.onclick=e=>{if(e.target===modalBackdrop&&state.uiModal?.mode==='confirm')finishModal(false)};
     const closeCampaignAssetBrowserNow=()=>{if(!state.campaignAssetBrowser)return;state.campaignAssetBrowser=null;state.campaignAssetBusy=false;render()};
+    if(!state.uiModal)bindModalKeyboard(document.querySelector('.campaign-asset-browser'),{onDismiss:closeCampaignAssetBrowserNow,initialFocus:document.getElementById('closeCampaignAssetBrowser'),focusSelector:'button:not([disabled]), a[href], video[controls]'});
     const assetClose=document.getElementById('closeCampaignAssetBrowser');if(assetClose)assetClose.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeCampaignAssetBrowserNow()});
     const assetOverlay=document.getElementById('campaignAssetBrowserBackdrop');if(assetOverlay)assetOverlay.addEventListener('click',e=>{if(e.target===assetOverlay){e.preventDefault();e.stopPropagation()}});
 
     document.querySelectorAll('[data-shorts-count]').forEach(el=>el.onclick=()=>{state.shortsCount=[5,10,20].includes(Number(el.dataset.shortsCount))?Number(el.dataset.shortsCount):10;persistEditorPrefs();render()});
-    document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{const next=el.dataset.studioMode==='long'?'long':'shorts';if(next===state.studioMode)return;state.studioMode=next;invalidateRenderedPreviews();persistEditorPrefs();render();if(state.video?.candidates?.length&&state.video?.sourceUrl)setTimeout(()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true}),0)});
+    document.querySelectorAll('[data-studio-mode]').forEach(el=>el.onclick=()=>{const next=el.dataset.studioMode==='long'?'long':'shorts';if(next===state.studioMode)return;state.studioMode=next;invalidateRenderedPreviews();persistEditorPrefs();render();document.querySelector(`[data-studio-mode="${next}"]`)?.focus();if(state.video?.candidates?.length&&state.video?.sourceUrl)setTimeout(()=>prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true}),0)});
     document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.page)));
     document.querySelectorAll('[data-analytics-scope]').forEach(el=>el.onclick=()=>{state.analyticsScope=el.dataset.analyticsScope||'all';render()});
     document.querySelectorAll('[data-analytics-platform]').forEach(el=>el.onclick=()=>{state.analyticsPlatform=el.dataset.analyticsPlatform||'all';render()});
     const analyticsPeriodToggle=document.getElementById('analyticsPeriodToggle');if(analyticsPeriodToggle)analyticsPeriodToggle.onclick=e=>{e.stopPropagation();state.analyticsPeriodOpen=!state.analyticsPeriodOpen;render()};
     document.querySelectorAll('[data-analytics-period]').forEach(el=>el.onclick=()=>{state.analyticsPeriod=String(el.dataset.analyticsPeriod||'30');state.analyticsPeriodOpen=false;render()});
     const analyticsYoutubeConnect=document.getElementById('analyticsYoutubeConnect');if(analyticsYoutubeConnect)analyticsYoutubeConnect.onclick=()=>state.platformConnections?.youtube?.connected?loadYouTubeAnalytics({force:true,quiet:false}):connectPlatformAccount('youtube');
-    const analyticsSearch=document.getElementById('analyticsSearch');if(analyticsSearch)analyticsSearch.oninput=e=>{state.analyticsSearch=String(e.target.value||'');render();setTimeout(()=>{const x=document.getElementById('analyticsSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},0)};
+    const analyticsSearch=document.getElementById('analyticsSearch');
+    if(analyticsSearch)analyticsSearch.oninput=e=>{
+      const {selectionStart,selectionEnd,selectionDirection}=e.target;
+      state.analyticsSearch=String(e.target.value||'');
+      render();
+      // Rendering replaces the input; keep the user's edit position in its replacement.
+      const input=document.getElementById('analyticsSearch');
+      if(input){input.focus();input.setSelectionRange(selectionStart,selectionEnd,selectionDirection)}
+    };
     const analyticsExport=document.getElementById('analyticsExport');if(analyticsExport)analyticsExport.onclick=()=>{const table=document.querySelector('.mint-posts-panel table');if(!table)return;const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>`"${String(td.innerText||'').replaceAll('"','""')}"`).join(',')).join('\n');const blob=new Blob([rows],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mint-stats.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaign-discover')});
@@ -1909,8 +1875,13 @@
       catch(err){showNotice({kind:'danger',eyebrow:'Discover',title:'Could not delete campaign',message:err.message||'The campaign could not be deleted.'})}
       finally{state.campaignBusy=false;render()}
     });
-    const closeCampaignDetails=()=>{state.campaignDetailsOpen=false;render()};
+    const closeCampaignDetails=()=>{
+      const id=state.campaignSelected;
+      state.campaignDetailsOpen=false;render();
+      [...document.querySelectorAll('[data-campaign-discover-select]')].find(el=>el.dataset.campaignDiscoverSelect===String(id))?.focus();
+    };
     const closeCampaignDetailsBtn=document.getElementById('closeCampaignDetails');if(closeCampaignDetailsBtn)closeCampaignDetailsBtn.onclick=closeCampaignDetails;
+    if(!state.uiModal&&!state.campaignAssetBrowser&&!state.campaignFormOpen)bindModalKeyboard(document.querySelector('.campaign-details-modal-v223'),{onDismiss:closeCampaignDetails,initialFocus:closeCampaignDetailsBtn,focusSelector:'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'});
     const campaignDetailsBackdrop=document.getElementById('campaignDetailsBackdrop');if(campaignDetailsBackdrop)campaignDetailsBackdrop.onclick=e=>{if(e.target===campaignDetailsBackdrop)closeCampaignDetails()};
     const m=document.getElementById('menu');if(m)m.onclick=()=>document.getElementById('sidebar').classList.toggle('open');
     const winMin=document.getElementById('mintWindowMin');if(winMin)winMin.onclick=()=>window.clipboostDesktop?.minimizeWindow?.();
@@ -1940,70 +1911,93 @@
     if(shortVideo&&liveCaption){
       const cand=state.video?.candidates?.[state.selectedCandidate||0];
       const captions=previewCaptionRowsForCandidate(cand);
-      const captionWords=previewCaptionWordsForCandidate(cand);
+      const captionWords=previewPlaybackWords(captions,previewCaptionWordsForCandidate(cand));
+      const findCaptionWord=createPreviewWordLookup(captionWords);
+      // Word-to-phrase timing is fixed until this preview is rebuilt. Cache
+      // misses too, so unmatched words do not rescan every animation frame.
+      const captionLineByWord=new Map();
+      // Phrase membership is fixed for this preview; only the active word changes each tick.
+      let cachedCaptionLine=null,cachedLineWords=[];
       const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));
       let captionRaf=0;
+      // The playback clock runs between word changes; preserve identical caption DOM.
+      let lastCaptionMarkup=null;
+      let lastCaptionRender=null;
+      const updateCaptionMarkup=markup=>{
+        if(markup===lastCaptionMarkup)return;
+        liveCaption.innerHTML=markup;
+        lastCaptionMarkup=markup;
+      };
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
-      const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      // Overlay nodes live until render() disposes this preview clock.
+      const hookTitle=document.getElementById('liveHookTitle');
+      const setOverlayVisibility=(element,visible)=>{
+        const visibility=visible?'visible':'hidden';
+        // Read the inline value so changes from live controls stay authoritative.
+        if(element&&element.style.visibility!==visibility)element.style.visibility=visibility;
+      };
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
-        const hookTitle=document.getElementById('liveHookTitle');
-        if(hookTitle){
-          const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));
-          hookTitle.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden';
-        }
+        setOverlayVisibility(hookTitle,isPreviewHookVisible(state,rel,duration));
 
-        const activeSpeechIndex=captionWords.findIndex(w=>rel>=Number(w.start||0)-.01&&rel<=Number(w.end||0)+.035);
-        const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
-        const line=activeSpeechWord
-          ? captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02)
-          : null;
-        const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
-        liveCaption.style.visibility=hasSpeechCaption&&state.captionPreference!=='off'?'visible':'hidden';
-        if(!hasSpeechCaption){
-          liveCaption.innerHTML='';
+        // Keep hook timing live without searching or rendering disabled subtitles.
+        if(state.captionPreference==='off'){
+          setOverlayVisibility(liveCaption,false);
           return;
         }
 
-        const lineWords=captionWords.filter(w=>Number(w.end||0)>Number(line.start||0)+.005&&Number(w.start||0)<Number(line.end||0)-.005);
+        const activeSpeechIndex=findCaptionWord(rel);
+        const activeSpeechWord=activeSpeechIndex>=0?captionWords[activeSpeechIndex]:null;
+        if(activeSpeechWord&&!captionLineByWord.has(activeSpeechWord)){
+          captionLineByWord.set(activeSpeechWord,captions.find(x=>Number(activeSpeechWord.start||0)<Number(x.end||0)+.02&&Number(activeSpeechWord.end||0)>Number(x.start||0)-.02));
+        }
+        const line=activeSpeechWord?captionLineByWord.get(activeSpeechWord):null;
+        const hasSpeechCaption=Boolean(activeSpeechWord&&line?.text&&String(line.text).trim());
+        setOverlayVisibility(liveCaption,hasSpeechCaption);
+        if(!hasSpeechCaption){
+          lastCaptionRender=null;
+          updateCaptionMarkup('');
+          return;
+        }
+
+        if(line!==cachedCaptionLine){
+          cachedLineWords=captionWords.filter(w=>Number(w.end||0)>Number(line.start||0)+.005&&Number(w.start||0)<Number(line.end||0)-.005);
+          cachedCaptionLine=line;
+        }
+        const lineWords=cachedLineWords;
         const words=lineWords.length?lineWords:[activeSpeechWord];
-        const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
         const effect=state.captionEffect||'active-word';
         const accent=accentMap[state.captionColor||'auto']||accentMap.auto;
-        if(effect==='word-pop'){
-          const w=words[active]||activeSpeechWord;
-          liveCaption.innerHTML=`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`;
-          return;
-        }
-        if(effect==='active-word'){
-          liveCaption.innerHTML=words.map((w,i)=>`<span style="color:${i===active?accent:'#fff'};display:inline-block;${i===active?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' ');
-          return;
-        }
-        if(effect==='karaoke'){
-          liveCaption.innerHTML=words.map((w,i)=>`<span style="color:${i<=active?accent:'#fff'};display:inline-block">${esc(w.word)}</span>`).join(' ');
-          return;
-        }
-        if(effect==='keyword-color'){
-          liveCaption.innerHTML=words.map(w=>`<span style="color:${captionWordImportant(w.word)?accent:'#fff'};display:inline-block;${captionWordImportant(w.word)?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' ');
-          return;
-        }
-        liveCaption.innerHTML=`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`;
+        // Static phrase effects do not change at word boundaries. Keyword color
+        // only depends on the active word when phrase membership is unavailable.
+        const wordSensitive=effect==='active-word'||effect==='word-pop'||effect==='karaoke'||(effect==='keyword-color'&&!lineWords.length);
+        const renderWord=wordSensitive?activeSpeechWord:null;
+        if(lastCaptionRender?.line===line&&lastCaptionRender.word===renderWord&&lastCaptionRender.effect===effect&&lastCaptionRender.accent===accent)return;
+        lastCaptionRender={line,word:renderWord,effect,accent};
+        updateCaptionMarkup(buildPreviewCaptionMarkup({words,activeSpeechWord,text:line.text,effect,accent}));
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
+      let captionClockDisposed=false;
+      disposePreviewCaptionClock=()=>{captionClockDisposed=true;stopCaptionClock()};
       const tickCaptionClock=()=>{
+        if(captionClockDisposed)return;
         syncCaption();
         if(!shortVideo.paused&&!shortVideo.ended)captionRaf=requestAnimationFrame(tickCaptionClock);
         else captionRaf=0;
       };
       const startCaptionClock=()=>{stopCaptionClock();tickCaptionClock()};
       shortVideo.addEventListener('play',startCaptionClock);
+      // Buffering leaves paused=false, but the media clock is no longer advancing.
+      shortVideo.addEventListener('waiting',stopCaptionClock);
+      shortVideo.addEventListener('playing',startCaptionClock);
       shortVideo.addEventListener('pause',()=>{stopCaptionClock();syncCaption()});
       shortVideo.addEventListener('timeupdate',syncCaption);
       shortVideo.addEventListener('seeked',syncCaption);
       shortVideo.addEventListener('loadedmetadata',syncCaption,{once:true});
       shortVideo.addEventListener('ended',()=>{stopCaptionClock();shortVideo.currentTime=0;syncCaption()});
       if(state.candidatePreviewAutoplay){
-        const autoplay=()=>{state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
+        // Deferred readiness can arrive after render() has detached this preview.
+        const autoplay=()=>{if(captionClockDisposed)return;state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
         if(shortVideo.readyState>=2)setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true});
       }
       syncCaption();
@@ -2025,6 +2019,8 @@
         else end=Math.min(total,start+60);
       }
       manualTrimStart.value=start.toFixed(2);manualTrimEnd.value=end.toFixed(2);
+      manualTrimStart.setAttribute('aria-valuetext',start.toFixed(2)+' seconds');
+      manualTrimEnd.setAttribute('aria-valuetext',end.toFixed(2)+' seconds');
       manualTrimStart.max=Math.max(0,end-.25).toFixed(2);
       manualTrimEnd.min=Math.min(total,start+.25).toFixed(2);
       const sv=document.getElementById('manualTrimStartValue'),ev=document.getElementById('manualTrimEndValue'),dv=document.getElementById('manualTrimDuration');
@@ -2040,6 +2036,9 @@
     const precisionScenes=(state.video?.analysis?.timeline?.scenes||[]).map(Number).filter(Number.isFinite);
     const precisionSilences=(state.video?.analysis?.timeline?.silences||[]);
     const precisionCenters={Start:Number(manualTrimStart?.value||0),End:Number(manualTrimEnd?.value||0)};
+    // Scene/silence decorations only change when the visible window changes.
+    // During a drag within that window, move the existing marker alone.
+    const precisionRulerState={};
     const syncPrecisionZoom=(start,end)=>{
       const total=Math.max(.25,Number(state.video?.details?.duration||end));
       const radius=Number(precisionWindow?.value||5);
@@ -2049,6 +2048,7 @@
         if(value<precisionCenters[name]-radius||value>precisionCenters[name]+radius)precisionCenters[name]=value;
         const min=Math.max(0,precisionCenters[name]-radius),max=Math.min(total,precisionCenters[name]+radius);
         input.min=min.toFixed(2);input.max=max.toFixed(2);input.value=value.toFixed(2);
+        input.setAttribute('aria-valuetext',value.toFixed(2)+' seconds');
         const label=document.getElementById('precision'+name+'Label');
         if(label)label.textContent=formatTime(value);
         const minLabel=document.getElementById('precision'+name+'Min'),maxLabel=document.getElementById('precision'+name+'Max');
@@ -2056,10 +2056,7 @@
         if(maxLabel)maxLabel.textContent=formatTime(max);
         const ruler=document.getElementById('precision'+name+'Ruler');
         if(ruler){
-          const pct=t=>Math.max(0,Math.min(100,(t-min)/Math.max(.01,max-min)*100));
-          ruler.innerHTML=precisionSilences.filter(x=>Number(x.end)>=min&&Number(x.start)<=max).slice(0,100).map(x=>'<i class="mint-cut-silence" style="left:'+pct(Number(x.start))+'%;width:'+Math.max(.3,pct(Number(x.end))-pct(Number(x.start)))+'%"></i>').join('')+
-          precisionScenes.filter(t=>t>=min&&t<=max).slice(0,100).map(t=>'<i class="mint-cut-scene" style="left:'+pct(t)+'%"></i>').join('')+
-          '<i class="mint-cut-marker" style="left:'+pct(value)+'%"></i>';
+          precisionRulerState[name]=updatePrecisionRuler(ruler,{min,max,value,scenes:precisionScenes,silences:precisionSilences},precisionRulerState[name]);
         }
       }
     };
@@ -2098,7 +2095,9 @@
     if((state.page==='studio'||state.page==='campaigns'||state.page==='campaign-editor')&&state.video?.candidates?.length){
       const idx=Math.min(state.selectedCandidate||0,state.video.candidates.length-1);
       const cand=state.video.candidates[idx];
-      if(cand&&(!cand.previewUrl||cand.previewMeta?.editApplied?.captions!==false)&&!state.candidatePreviewLoading&&!state.candidatePreviewError)setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
+      // Baked captions are expected in final validation previews. Only editable
+      // previews need to replace them with the draggable DOM overlays.
+      if(cand&&(!cand.previewUrl||(!state.previewFinalMode&&cand.previewMeta?.editApplied?.captions!==false))&&(state.candidatePreviewVideoId!==state.video.id||(!state.candidatePreviewLoading&&!state.candidatePreviewError)))setTimeout(()=>prepareCandidatePreview(idx,{autoplay:false,force:Boolean(cand.previewUrl)}),0);
     }
     const publishBtn=document.getElementById('publishBtn');if(publishBtn)publishBtn.onclick=()=>exportCurrent('publish');
     const applyLiveCaptionStyle=()=>{
@@ -2126,7 +2125,14 @@
       document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.classList.toggle('active',(btn.dataset.captionColor||'auto')===(state.captionColor||'auto')));
     };
     const refreshLiveCaptionPreview=()=>{applyLiveCaptionStyle();shortVideo?.dispatchEvent(new Event('timeupdate'))};
-    const saveLiveCaptionSettings=()=>{state.previewFinalMode=false;persistEditorPrefs();invalidateRenderedPreviews();refreshLiveCaptionPreview()};
+    const saveLiveCaptionSettings=()=>{
+      const wasFinalPreview=state.previewFinalMode;
+      state.previewFinalMode=false;persistEditorPrefs();invalidateRenderedPreviews();
+      // Final previews contain baked overlays. Replace that video before showing edits;
+      // render() also schedules the clean editable preview through the normal guard.
+      if(wasFinalPreview)render();
+      else refreshLiveCaptionPreview();
+    };
     const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;saveLiveCaptionSettings()};
     const rerenderSourceSubtitlePreview=()=>{persistEditorPrefs();invalidateRenderedPreviews();render();if(state.video?.candidates?.length&&state.video?.sourceUrl)void prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});};
     const sourceSubtitleModeSelect=document.getElementById('sourceSubtitleModeSelect');if(sourceSubtitleModeSelect)sourceSubtitleModeSelect.onchange=e=>{state.sourceSubtitleMode=e.target.value;rerenderSourceSubtitlePreview()};
@@ -2135,11 +2141,14 @@
       sourceSubtitleBottomRange.onchange=()=>{rerenderSourceSubtitlePreview()};
     }
     document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.onclick=()=>{state.captionColor=btn.dataset.captionColor||'auto';saveLiveCaptionSettings()});
-    document.querySelectorAll('[data-caption-preset]').forEach(btn=>btn.onclick=()=>{const preset={social:['bold','social','clean-bold','white'],active:['bold','social','active-word','auto'],clean:['minimal','social','clean-bold','white'],dynamic:['pop','impact','word-pop','yellow']}[btn.dataset.captionPreset];if(!preset)return;[state.captionStyle,state.captionFont,state.captionEffect,state.captionColor]=preset;persistEditorPrefs();invalidateRenderedPreviews();render();});
+    document.querySelectorAll('[data-caption-preset]').forEach(btn=>btn.onclick=()=>{const preset={social:['bold','social','clean-bold','white'],active:['bold','social','active-word','auto'],clean:['minimal','social','clean-bold','white'],dynamic:['pop','impact','word-pop','yellow']}[btn.dataset.captionPreset];if(!preset)return;[state.captionStyle,state.captionFont,state.captionEffect,state.captionColor]=preset;state.previewFinalMode=false;persistEditorPrefs();invalidateRenderedPreviews();render();});
     const captionStyleSelect=document.getElementById('captionStyleSelect');if(captionStyleSelect)captionStyleSelect.onchange=e=>{state.captionStyle=e.target.value;saveLiveCaptionSettings()};
     const captionFontSelect=document.getElementById('captionFontSelect');if(captionFontSelect)captionFontSelect.onchange=e=>{state.captionFont=e.target.value;saveLiveCaptionSettings()};
     const captionEffectSelect=document.getElementById('captionEffectSelect');if(captionEffectSelect)captionEffectSelect.onchange=e=>{state.captionEffect=e.target.value;saveLiveCaptionSettings()};
-    const updateHookTitlePreview=()=>{const hook=document.getElementById('liveHookTitle');if(!hook)return;hook.textContent=String(state.hookTitleText||'').toUpperCase();hook.style.left=(Number(state.hookTitleX||.5)*100)+'%';hook.style.top=(Number(state.hookTitleY||.12)*100)+'%';hook.style.transform='translate(-50%,-50%) scale('+Number(state.hookTitleScale||1)+')';const video=document.getElementById('shortVideo');const cand=state.video?.candidates?.[state.selectedCandidate||0];const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));const rel=Number(video?.currentTime||0);const hookEnd=state.hookTitleDuration==='full'?duration:Math.min(duration,Number(state.hookTitleDuration||5));hook.style.visibility=state.hookTitleEnabled&&String(state.hookTitleText||'').trim()&&rel<=hookEnd?'visible':'hidden'};
+    const updateHookTitlePreview=()=>{
+      // Final validation videos contain the old hook; rebuild before showing edits.
+      if(state.previewFinalMode){state.previewFinalMode=false;invalidateRenderedPreviews();render();return;}
+      const hook=document.getElementById('liveHookTitle');if(!hook)return;hook.textContent=String(state.hookTitleText||'').toUpperCase();hook.style.left=(Number(state.hookTitleX||.5)*100)+'%';hook.style.top=(Number(state.hookTitleY||.12)*100)+'%';hook.style.transform='translate(-50%,-50%) scale('+Number(state.hookTitleScale||1)+')';const video=document.getElementById('shortVideo');const cand=state.video?.candidates?.[state.selectedCandidate||0];const duration=Math.max(.25,Number(cand?.end||0)-Number(cand?.start||0));const rel=Number(video?.currentTime||0);hook.style.visibility=isPreviewHookVisible(state,rel,duration)?'visible':'hidden'};
     const hookTitleEnabledSelect=document.getElementById('hookTitleEnabledSelect');if(hookTitleEnabledSelect)hookTitleEnabledSelect.onchange=e=>{state.hookTitleEnabled=e.target.value==='on';persistEditorPrefs();updateHookTitlePreview()};
     const hookTitleTextInput=document.getElementById('hookTitleTextInput');if(hookTitleTextInput)hookTitleTextInput.oninput=e=>{state.hookTitleText=String(e.target.value||'').slice(0,120);persistEditorPrefs();updateHookTitlePreview()};
     const hookTitleDurationSelect=document.getElementById('hookTitleDurationSelect');if(hookTitleDurationSelect)hookTitleDurationSelect.onchange=e=>{state.hookTitleDuration=e.target.value;persistEditorPrefs();updateHookTitlePreview()};
@@ -2174,26 +2183,54 @@
       liveHookTitle.addEventListener('pointerup',stopDrag);
       liveHookTitle.addEventListener('pointercancel',stopDrag);
       liveHookTitle.addEventListener('lostpointercapture',stopDrag);
+      liveHookTitle.addEventListener('keydown',e=>{
+        if(!state.hookTitleEnabled||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;
+        const horizontal=e.key==='ArrowLeft'||e.key==='ArrowRight';
+        const vertical=e.key==='ArrowUp'||e.key==='ArrowDown';
+        if(!horizontal&&!vertical)return;
+        e.preventDefault();
+        const axis=horizontal?'hookTitleX':'hookTitleY';
+        const delta=e.key==='ArrowLeft'||e.key==='ArrowUp'?-.025:.025;
+        state[axis]=Number(Math.max(.08,Math.min(.92,Number(state[axis])+delta)).toFixed(4));
+        persistEditorPrefs();updateHookTitlePreview();
+      });
     }
     const captionSizeSelect=document.getElementById('captionSizeSelect');if(captionSizeSelect)captionSizeSelect.onchange=e=>{state.captionSize=e.target.value;state.captionScale=1;const range=document.getElementById('captionScaleRange');const value=document.getElementById('captionScaleValue');if(range)range.value='100';if(value)value.textContent='100%';saveLiveCaptionSettings()};
     const captionScaleRange=document.getElementById('captionScaleRange');if(captionScaleRange)captionScaleRange.oninput=e=>{state.captionScale=Math.max(.4,Math.min(2,Number(e.target.value)/100));const value=document.getElementById('captionScaleValue');if(value)value.textContent=Math.round(state.captionScale*100)+'%';persistEditorPrefs();applyLiveCaptionStyle()};
     const captionPositionSelect=document.getElementById('captionPositionSelect');if(captionPositionSelect)captionPositionSelect.onchange=e=>{if(e.target.value==='custom')return;state.captionPosition=e.target.value;state.captionY=null;saveLiveCaptionSettings()};
     if(liveCaption){
       const frame=liveCaption.closest('.mint-short-video-frame-v222');
-      let dragging=false,lastY=currentCaptionY();
+      let activePointer=null,lastY=currentCaptionY();
+      const saveCaptionPosition=y=>{
+        state.captionY=Number(y.toFixed(4));
+        state.captionPosition='custom';
+        persistEditorPrefs();
+        const select=document.getElementById('captionPositionSelect');
+        if(select&&!Array.from(select.options).some(o=>o.value==='custom'))select.add(new Option('Custom','custom'));
+        if(select)select.value='custom';
+      };
       const updateCaptionDrag=e=>{
-        if(!dragging||!frame)return;
+        if(activePointer===null||activePointer!==e.pointerId||!frame)return;
         const rect=frame.getBoundingClientRect();if(!rect.height)return;
         lastY=Math.max(.12,Math.min(.88,(e.clientY-rect.top)/rect.height));
         liveCaption.style.top=(lastY*100)+'%';
       };
-      liveCaption.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();dragging=true;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
+      liveCaption.addEventListener('pointerdown',e=>{if(activePointer!==null||!frame)return;e.preventDefault();e.stopPropagation();activePointer=e.pointerId;lastY=currentCaptionY();liveCaption.setPointerCapture?.(e.pointerId);liveCaption.classList.add('dragging')});
       liveCaption.addEventListener('pointermove',updateCaptionDrag);
-      liveCaption.addEventListener('pointerup',e=>{if(!dragging)return;updateCaptionDrag(e);dragging=false;liveCaption.classList.remove('dragging');state.captionY=Number(lastY.toFixed(4));state.captionPosition='custom';persistEditorPrefs();const select=document.getElementById('captionPositionSelect');if(select&&!Array.from(select.options).some(o=>o.value==='custom'))select.add(new Option('Custom','custom'));if(select)select.value='custom'});
-      liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;state.captionY=Math.max(.12,Math.min(.88,currentCaptionY()+delta));state.captionPosition='custom';persistEditorPrefs();applyLiveCaptionStyle()});
+      const stopCaptionDrag=e=>{
+        if(activePointer===null||activePointer!==e.pointerId)return;
+        if(e.type==='pointerup')updateCaptionDrag(e);
+        activePointer=null;
+        liveCaption.classList.remove('dragging');
+        saveCaptionPosition(lastY);
+      };
+      liveCaption.addEventListener('pointerup',stopCaptionDrag);
+      liveCaption.addEventListener('pointercancel',stopCaptionDrag);
+      liveCaption.addEventListener('lostpointercapture',stopCaptionDrag);
+      liveCaption.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=e.key==='ArrowUp'?-.025:.025;saveCaptionPosition(Math.max(.12,Math.min(.88,currentCaptionY()+delta)));applyLiveCaptionStyle()});
     }
     const watermarkFile=document.getElementById('watermarkFile');if(watermarkFile)watermarkFile.onchange=e=>uploadWatermark(e.target.files?.[0]);
-    const removeWatermarkBtn=document.getElementById('removeWatermarkBtn');if(removeWatermarkBtn)removeWatermarkBtn.onclick=()=>{state.watermarkUrl='';state.watermarkName='';persistEditorPrefs();render()};
+    const removeWatermarkBtn=document.getElementById('removeWatermarkBtn');if(removeWatermarkBtn)removeWatermarkBtn.onclick=removeWatermark;
     const liveWatermark=document.getElementById('liveWatermark');
     const applyWatermarkLive=()=>{
       const wm=document.getElementById('liveWatermark');if(!wm)return;
@@ -2207,6 +2244,15 @@
       const frame=liveWatermark.closest('.mint-short-video-frame-v222');let dragging=false;
       const move=e=>{if(!dragging||!frame)return;const rect=frame.getBoundingClientRect();if(!rect.width||!rect.height)return;state.watermarkX=Math.max(.04,Math.min(.96,(e.clientX-rect.left)/rect.width));state.watermarkY=Math.max(.04,Math.min(.96,(e.clientY-rect.top)/rect.height));applyWatermarkLive()};
       liveWatermark.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();dragging=true;liveWatermark.setPointerCapture?.(e.pointerId);liveWatermark.classList.add('dragging')});
+      liveWatermark.addEventListener('keydown',e=>{
+        if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||e.ctrlKey||e.metaKey||e.altKey)return;
+        e.preventDefault();e.stopPropagation();
+        const horizontal=e.key==='ArrowLeft'||e.key==='ArrowRight';
+        const axis=horizontal?'watermarkX':'watermarkY';
+        const delta=e.key==='ArrowLeft'||e.key==='ArrowUp'?-.025:.025;
+        state[axis]=Number(Math.max(.04,Math.min(.96,Number(state[axis]??(horizontal?.86:.12))+delta)).toFixed(4));
+        applyWatermarkLive();persistEditorPrefs();
+      });
       liveWatermark.addEventListener('pointermove',move);
       liveWatermark.addEventListener('pointerup',e=>{if(!dragging)return;move(e);dragging=false;liveWatermark.classList.remove('dragging');persistEditorPrefs()});
     }
@@ -2227,12 +2273,15 @@
     const savePublishDraftsBtn=document.getElementById('savePublishDraftsBtn');if(savePublishDraftsBtn)savePublishDraftsBtn.onclick=()=>{try{localStorage.setItem('clipboost:publishDrafts',JSON.stringify({drafts:state.publishDrafts,networks:state.publishNetworks}))}catch{}showNotice({kind:'success',title:'Post drafts saved',message:'Titles, descriptions and selected networks are saved locally.'})};
     const generateVariationsBtn=document.getElementById('generateVariationsBtn');if(generateVariationsBtn)generateVariationsBtn.onclick=async()=>{
       if(!state.video?.id||state.regenerating)return;
+      const previousVideo=state.video;
       state.regenerating=true;state.video={...state.video,status:'analyzing',analysis:{...(state.video.analysis||{}),stage:'semantic-clips',progress:72}};generateVariationsBtn.disabled=true;generateVariationsBtn.textContent='↻ Generating clips…';
+      const pendingVideo=state.video;
       try{
         const r=await fetch(`/api/videos/${encodeURIComponent(state.video.id)}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipCount:'auto'})});
         const data=await readJsonResponse(r,'Could not generate clip variations');
+        if(state.video!==pendingVideo)return;
         state.video=data;state.selectedCandidate=0;pollProjectUntilSettled(state.video.id);
-      }catch(e){showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
+      }catch(e){if(state.video===pendingVideo)state.video=previousVideo;showNotice({kind:'danger',title:'Generation failed',message:e.message||'Could not generate clip variations'})}
       finally{state.regenerating=false;if(!['ingesting','analyzing'].includes(state.video?.status))render()}
     };
     const autoIngest=document.getElementById('autoIngestBtn');if(autoIngest)autoIngest.onclick=()=>state.video?.id&&startProjectIngestion(state.video.id);
@@ -2306,12 +2355,13 @@
     const campaignCheck=document.getElementById('campaignCheckBtn');if(campaignCheck)campaignCheck.onclick=()=>runCampaignCheck().catch(e=>showNotice({kind:'danger',title:'Campaign check failed',message:e.message}));
     const campaignVariants=document.getElementById('campaignVariantsBtn');if(campaignVariants)campaignVariants.onclick=()=>generateCampaignVariants().catch(e=>showNotice({kind:'danger',title:'Could not generate variants',message:e.message}));
     document.querySelectorAll('[data-campaign-variant]').forEach(el=>el.onclick=()=>{const idx=Number(el.dataset.campaignVariant||0),variant=state.campaignVariants?.[idx],ci=state.selectedCandidate||0;if(!variant||!state.video?.candidates?.[ci])return;state.video.candidates[ci]={...variant,previewUrl:null,previewMeta:null};state.campaignCompliance=null;state.campaignVariants=null;prepareCandidatePreview(ci,{autoplay:true,force:true})});
-    const open=()=>{state.addCreatorOpen=true;state.libraryError='';state.creatorPlatform=state.libraryPlatform||'youtube';state.creatorQuery='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)};
+    const open=()=>{resetCreatorSearch();state.addCreatorOpen=true;state.libraryError='';state.creatorPlatform=state.libraryPlatform||'youtube';state.creatorQuery='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)};
     const add=document.getElementById('addCreator'),emptyAdd=document.getElementById('emptyAddCreator');if(add)add.onclick=open;if(emptyAdd)emptyAdd.onclick=open;
-    const close=()=>{state.addCreatorOpen=false;state.libraryError='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render()};
+    const close=()=>{resetCreatorSearch();state.addCreatorOpen=false;state.libraryError='';state.creatorSearchResults=[];state.creatorSearchLoading=false;render();document.getElementById('addCreator')?.focus()};
+    if(!state.uiModal)bindModalKeyboard(document.querySelector('.creator-modal'),{onDismiss:close,initialFocus:document.getElementById('creatorInput'),focusSelector:'button:not([disabled]), input:not([disabled])'});
     ['closeCreatorModal','cancelCreator'].forEach(id=>{const el=document.getElementById(id);if(el)el.onclick=close});
     const backdrop=document.getElementById('creatorModalBackdrop');if(backdrop)backdrop.onclick=e=>{if(e.target===backdrop)close()};
-    const input=document.getElementById('creatorInput');if(input){input.oninput=e=>{state.creatorQuery=e.target.value;clearTimeout(window.__clipboostCreatorSearchTimer);window.__clipboostCreatorSearchTimer=setTimeout(()=>searchCreators(state.creatorQuery),700)}}
+    const input=document.getElementById('creatorInput');if(input){input.oninput=e=>{resetCreatorSearch();state.creatorQuery=e.target.value;document.querySelector('.creator-search-results')?.replaceChildren();const searchButton=document.querySelector('#creatorForm button');if(searchButton)searchButton.disabled=false;window.__clipboostCreatorSearchTimer=setTimeout(()=>searchCreators(state.creatorQuery),700)}}
     const form=document.getElementById('creatorForm');if(form)form.onsubmit=e=>{e.preventDefault();const value=document.getElementById('creatorInput')?.value?.trim();if(value)searchCreators(value)};
     document.querySelectorAll('[data-add-channel]').forEach(el=>el.onclick=()=>addCreatorByPlatform(el.dataset.addInput||el.dataset.addChannel));
     const exact=document.getElementById('addExactCreator');if(exact)exact.onclick=()=>{const value=document.getElementById('creatorInput')?.value?.trim()||state.creatorQuery;if(value)addCreatorByPlatform(value)};
@@ -2320,7 +2370,14 @@
     const clearCreatorFilter=document.getElementById('clearCreatorFilter');if(clearCreatorFilter)clearCreatorFilter.onclick=()=>{state.libraryCreatorFilter='all';render()};
     document.querySelectorAll('[data-send-studio-id]').forEach(el=>el.onclick=()=>sendLibraryItemToStudio(el.dataset.sendStudioPlatform,el.dataset.sendStudioCreator,el.dataset.sendStudioType,el.dataset.sendStudioId,el.dataset.sendStudioMode||'shorts'));
     document.querySelectorAll('[data-preview-id]').forEach(el=>el.onclick=e=>{e.preventDefault();state.previewVideo={kind:el.dataset.previewKind||'youtube',id:el.dataset.previewId,title:el.dataset.previewTitle||'Video preview',url:el.dataset.previewUrl||''};render()});
-    const closePreview=()=>{state.previewVideo=null;render()};const cp=document.getElementById('closeVideoPreview');if(cp)cp.onclick=closePreview;const pb=document.getElementById('videoPreviewBackdrop');if(pb)pb.onclick=e=>{if(e.target===pb)closePreview()};
+    const closePreview=()=>{
+      const preview=state.previewVideo;
+      state.previewVideo=null;render();
+      if(preview)[...document.querySelectorAll('[data-preview-id]')].find(el=>el.dataset.previewId===preview.id&&(el.dataset.previewKind||'youtube')===preview.kind)?.focus();
+    };
+    const cp=document.getElementById('closeVideoPreview');if(cp)cp.onclick=closePreview;
+    if(!state.uiModal)bindModalKeyboard(document.querySelector('.video-preview-modal'),{onDismiss:closePreview,initialFocus:cp,focusSelector:'button:not([disabled]), a[href], iframe'});
+    const pb=document.getElementById('videoPreviewBackdrop');if(pb)pb.onclick=e=>{if(e.target===pb)closePreview()};
     const openLivePlayer=el=>{const channel=String(el?.dataset?.liveChannel||'').trim();if(!channel)return;state.livePlayer={channel,name:el.dataset.liveName||channel,title:el.dataset.liveTitle||'Live stream',url:el.dataset.liveUrl||`https://www.twitch.tv/${channel}`,viewers:Number(el.dataset.liveViewers||0),game:el.dataset.liveGame||'Twitch'};render()};
     document.querySelectorAll('[data-live-channel]').forEach(el=>{el.onclick=e=>{if(e.target.closest('[data-refresh-live]'))return;e.preventDefault();openLivePlayer(el)};if(el.classList.contains('live-copy'))el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openLivePlayer(el)}}});
     const closeLive=()=>{state.livePlayer=null;render()};const cl=document.getElementById('closeTwitchLive');if(cl)cl.onclick=closeLive;const tlb=document.getElementById('twitchLiveBackdrop');if(tlb)tlb.onclick=e=>{if(e.target===tlb)closeLive()};
@@ -2337,10 +2394,10 @@
     document.querySelectorAll('[data-library-platform]').forEach(el=>el.onclick=()=>{state.libraryPlatform=el.dataset.libraryPlatform;state.librarySection=state.libraryPlatform==='youtube'?'videos':'vods';state.libraryCreatorFilter='all';state.youtubeHistoryExpanded=false;state.libraryError='';state.libraryRefreshMessage='';clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render()});
     document.querySelectorAll('[data-library-section]').forEach(el=>el.onclick=()=>{state.librarySection=el.dataset.librarySection;clearTimeout(window.__clipboostTwitchLiveRefresh);clearTimeout(window.__clipboostTwitchClipsRefresh);render();if(state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()});
     const sort=document.getElementById('librarySort');if(sort)sort.onchange=e=>{state.librarySort=e.target.value;render()};
-    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
-    if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='live')scheduleTwitchLiveRefresh();
-    if(state.page==='library'&&state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh();
-    document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
+    const cf=document.getElementById('libraryCreatorFilter');if(cf)cf.onchange=e=>{state.libraryCreatorFilter=e.target.value;state.youtubeHistoryExpanded=false;state.twitchClipsLastRefresh=0;twitchClipsLastAttempt=0;render();if(state.libraryPlatform==='twitch'&&state.librarySection==='clips')scheduleTwitchClipsRefresh()};
+    scheduleTwitchLiveRefresh();
+    scheduleTwitchClipsRefresh();
+    document.querySelectorAll('[data-creator-platform]').forEach(el=>el.onclick=()=>{resetCreatorSearch();state.creatorPlatform=el.dataset.creatorPlatform;state.creatorQuery='';state.creatorSearchResults=[];state.libraryError='';render();setTimeout(()=>document.getElementById('creatorInput')?.focus(),0)});
   }
   async function handleDesktopUpdateEvent(evt={}){
     const rawStatus=evt.status||evt.updateState?.status||'info';
@@ -2362,7 +2419,7 @@
     if(rawStatus==='available'&&evt.manual) return showNotice({kind:'update',eyebrow:'Updates',title:`ClipBoost ${evt.version||''} found`,message:evt.downloading===false?'A new version is available.':'The update is downloading in the background.'});
   }
   if(window.clipboostDesktop?.onUpdateEvent&&!window.__clipboostUpdateEventsBound){window.__clipboostUpdateEventsBound=true;window.clipboostDesktop.onUpdateEvent(handleDesktopUpdateEvent)}
-  if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.campaignAssetBrowser){e.preventDefault();state.campaignAssetBrowser=null;state.campaignAssetBusy=false;render();return}if(e.key==='Escape'&&state.campaignDetailsOpen){e.preventDefault();state.campaignDetailsOpen=false;render();return}const tag=String(e.target?.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;if(state.page!=='studio')return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'){e.preventDefault();if(e.shiftKey)exportAll();else exportCurrent();return}if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const list=state.video?.candidates||[];if(!list.length)return;e.preventDefault();const dir=e.key==='ArrowRight'?1:-1;const next=(Math.min(state.selectedCandidate||0,list.length-1)+dir+list.length)%list.length;selectCandidatePreview(next,{autoplay:false})}})}
+  if(!window.__clipboostKeyboardShortcutsBound){window.__clipboostKeyboardShortcutsBound=true;window.addEventListener('keydown',createEditorKeyboardHandler({state,render,selectCandidatePreview,exportCurrent,exportAll}))}
   if(window.clipboostDesktop?.reportActivity&&!window.__clipboostActivityBound){
     window.__clipboostActivityBound=true;
     let lastActivityReport=0;
