@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { updatePrecisionRuler } from './editor-precision-ruler.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    const precisionCenters=');
@@ -26,7 +27,7 @@ function setup() {
   const context = vm.createContext({
     state: { video: { details: { duration: 60 } } },
     manualTrimStart: { value: 10 }, manualTrimEnd: { value: 30 },
-    precisionStart, precisionEnd, precisionWindow,
+    precisionStart, precisionEnd, precisionWindow, updatePrecisionRuler,
     precisionScenes: [8, 12, 28, 32],
     precisionSilences: [{ start: 7, end: 9 }, { start: 31, end: 33 }],
     document: { getElementById: id => nodes[id] }, formatTime: value => String(value),
@@ -72,4 +73,34 @@ test('zoom changes, recentering and returning to an earlier value refresh ruler 
   assert.match(c.nodes.precisionStartRuler.innerHTML, /mint-cut-scene/);
   assert.match(c.nodes.precisionStartRuler.innerHTML, /mint-cut-silence/);
   assert.deepEqual(c.writes, { Start: 4, End: 2 });
+});
+
+test('ruler clips decorations to its window and limits each decoration type', () => {
+  const c = setup();
+  const ruler = c.nodes.precisionStartRuler;
+  const previous = updatePrecisionRuler(ruler, {
+    min: 5, max: 15, value: 10,
+    scenes: [4, ...Array(120).fill(5), 16],
+    silences: [{ start: 0, end: 4 }, { start: 3, end: 7 },
+      { start: 14, end: 20 }, { start: 10, end: 10 },
+      ...Array(120).fill({ start: 8, end: 9 })],
+  });
+  assert.equal((ruler.innerHTML.match(/mint-cut-scene/g) || []).length, 100);
+  assert.equal((ruler.innerHTML.match(/mint-cut-silence/g) || []).length, 100);
+  assert.match(ruler.innerHTML, /left:0%;width:20%/);
+  assert.match(ruler.innerHTML, /left:90%;width:10%/);
+  assert.match(ruler.innerHTML, /left:50%;width:0.3%/);
+  assert.equal(previous.marker.style.left, '50%');
+});
+
+test('a replacement ruler receives markup even when its geometry is unchanged', () => {
+  const c = setup();
+  const options = { min: 0, max: 10, value: 5, scenes: [], silences: [] };
+  const previous = updatePrecisionRuler(c.nodes.precisionStartRuler, options);
+  const next = updatePrecisionRuler(c.nodes.precisionEndRuler, options, previous);
+  assert.notEqual(next, previous);
+  assert.deepEqual(c.writes, { Start: 1, End: 1 });
+  assert.equal(next.marker.style.left, '50%');
+  assert.equal(updatePrecisionRuler(next.ruler, options, next), next);
+  assert.deepEqual(c.writes, { Start: 1, End: 1 });
 });
