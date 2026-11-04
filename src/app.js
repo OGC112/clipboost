@@ -1957,9 +1957,12 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         const words=lineWords.length?lineWords:[activeSpeechWord];
         const effect=state.captionEffect||'active-word';
         const accent=accentMap[state.captionColor||'auto']||accentMap.auto;
-        // Reuse markup between word/style changes, including duplicate media events.
-        if(lastCaptionRender?.line===line&&lastCaptionRender.word===activeSpeechWord&&lastCaptionRender.effect===effect&&lastCaptionRender.accent===accent)return;
-        lastCaptionRender={line,word:activeSpeechWord,effect,accent};
+        // Static phrase effects do not change at word boundaries. Keyword color
+        // only depends on the active word when phrase membership is unavailable.
+        const wordSensitive=effect==='active-word'||effect==='word-pop'||effect==='karaoke'||(effect==='keyword-color'&&!lineWords.length);
+        const renderWord=wordSensitive?activeSpeechWord:null;
+        if(lastCaptionRender?.line===line&&lastCaptionRender.word===renderWord&&lastCaptionRender.effect===effect&&lastCaptionRender.accent===accent)return;
+        lastCaptionRender={line,word:renderWord,effect,accent};
         const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
         if(effect==='word-pop'){
           const w=words[active]||activeSpeechWord;

@@ -156,6 +156,33 @@ test('playback reuses phrase membership across ticks, word transitions and style
   assert.equal(c.wordScans(), 1);
 });
 
+for (const effect of ['keyword-color', 'clean-bold']) {
+  test(`${effect}: word boundaries and backwards seeks reuse static phrase markup`, () => {
+    const c = setup(effect);
+    const initial = c.markup(), checks = c.keywordChecks();
+    for (const time of [1.2, .2, 1.2]) {
+      c.shortVideo.currentTime = time; c.listeners.seeked();
+    }
+    assert.equal(c.activeWordSearches(), 1, 'static markup must not be reconstructed at word boundaries');
+    assert.equal(c.keywordChecks(), checks);
+    assert.equal(c.markup(), initial);
+    assert.equal(c.writes(), 1);
+    assert.equal(c.hook.style.visibility, 'hidden', 'hook timing must still advance');
+    c.state.captionColor = 'cyan'; c.sync();
+    assert.equal(c.activeWordSearches(), 2);
+    assert.match(c.markup(), /#35e7ff/);
+    c.state.captionEffect = 'word-pop'; c.sync();
+    assert.match(c.markup(), />world<\/span>/);
+    c.shortVideo.currentTime = .2; c.listeners.seeked();
+    assert.match(c.markup(), />Hello<\/span>/);
+    c.state.captionEffect = effect; c.sync();
+    c.shortVideo.currentTime = 3; c.sync();
+    assert.equal(c.markup(), '');
+    c.shortVideo.currentTime = 1.2; c.sync();
+    assert.equal(c.markup(), initial.replaceAll('#ffd84a', '#35e7ff'));
+  });
+}
+
 test('phrase changes and backwards seeks recompute membership without retaining old words', () => {
   const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }, { start: 1, end: 2, text: 'world' }]);
   assert.match(c.markup(), />Hello<\/span>/);
