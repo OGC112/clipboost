@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { buildEditorPreferences } from './editor-preferences.js';
+import { buildRenderOptions } from './editor-render-options.js';
 
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const watermarkSource = source.slice(source.indexOf('  let watermarkUploadRevision='), source.indexOf('    function invalidateRenderedPreviews('));
@@ -138,4 +140,58 @@ test('a superseded malformed upload does not report an error after a valid repla
   assert.equal(c.state.watermarkUrl, '/second.png');
   assert.equal(c.saves(), 1);
   assert.equal(c.notices.length, 0);
+});
+
+function keyboardWatermark(overrides = {}) {
+  const state = { watermarkX: .5, watermarkY: .5, ...overrides };
+  const handlers = {};
+  const image = { style: {}, closest: () => null, addEventListener: (key, handler) => { handlers[key] = handler; } };
+  let saves = 0;
+  const context = vm.createContext({ state, document: { getElementById: id => id === 'liveWatermark' ? image : null }, persistEditorPrefs: () => saves++ });
+  const start = source.indexOf("    const liveWatermark=document.getElementById('liveWatermark');");
+  vm.runInContext(source.slice(start, source.indexOf("        document.querySelectorAll('[data-publish-network]')", start)), context);
+  const press = (key, extra = {}) => {
+    const event = { key, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra };
+    handlers.keydown(event);
+    return event;
+  };
+  return { state, image, press, saves: () => saves };
+}
+
+test('watermark arrows update preview, saved preferences and export coordinates', () => {
+  const ui = keyboardWatermark();
+  assert.equal(ui.press('ArrowLeft').defaultPrevented, true);
+  assert.equal(ui.state.watermarkX, .475);
+  ui.press('ArrowUp');
+  assert.equal(ui.state.watermarkY, .475);
+  assert.equal(ui.image.style.left, '47.5%');
+  assert.equal(ui.image.style.top, '47.5%');
+  ui.press('ArrowRight');
+  ui.press('ArrowDown');
+  assert.equal(ui.state.watermarkX, .5);
+  assert.equal(ui.state.watermarkY, .5);
+  assert.equal(ui.saves(), 4);
+  for (const snapshot of [buildEditorPreferences(ui.state), buildRenderOptions(ui.state, .82)]) {
+    assert.equal(snapshot.watermarkX, .5);
+    assert.equal(snapshot.watermarkY, .5);
+  }
+});
+
+test('watermark keyboard movement clamps to drag bounds and preserves other keys', () => {
+  const ui = keyboardWatermark({ watermarkX: .04, watermarkY: .96 });
+  assert.equal(ui.press('ArrowLeft').stopped, true);
+  ui.press('ArrowDown');
+  assert.equal(ui.state.watermarkX, .04);
+  assert.equal(ui.state.watermarkY, .96);
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) {
+    assert.equal(ui.press('ArrowRight', { [modifier]: true }).defaultPrevented, undefined);
+  }
+  assert.equal(ui.press('Tab').defaultPrevented, undefined);
+  assert.equal(ui.saves(), 2);
+});
+
+test('watermark can receive keyboard focus with movement instructions', () => {
+  const markup = source.match(/<img id="liveWatermark"[^>]+>/)[0];
+  assert.match(markup, /tabindex="0"/);
+  assert.match(markup, /aria-label="Watermark position\. Use arrow keys to move\."/);
 });
