@@ -1991,7 +1991,8 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       shortVideo.addEventListener('loadedmetadata',syncCaption,{once:true});
       shortVideo.addEventListener('ended',()=>{stopCaptionClock();shortVideo.currentTime=0;syncCaption()});
       if(state.candidatePreviewAutoplay){
-        const autoplay=()=>{state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
+        // Deferred readiness can arrive after render() has detached this preview.
+        const autoplay=()=>{if(captionClockDisposed)return;state.candidatePreviewAutoplay=false;shortVideo.play().catch(()=>{});};
         if(shortVideo.readyState>=2)setTimeout(autoplay,0);else shortVideo.addEventListener('canplay',autoplay,{once:true});
       }
       syncCaption();

@@ -11,7 +11,7 @@ const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    if(shortVideo&&liveCaption){');
 const captionSource = source.slice(start, source.indexOf('    const manualTrimStart=', start));
 
-function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret world' }]) {
+function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret world' }], { autoplay = false, readyState = 0 } = {}) {
   let writes = 0, markup = '';
   let wordScans = 0;
   let markupBuilds = 0;
@@ -27,13 +27,16 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret
     return phraseWords;
   };
   const listeners = {};
-  const shortVideo = { currentTime: .2, paused: true, addEventListener: (name, fn) => { listeners[name] = fn; } };
+  let playCalls = 0;
+  const timers = [];
+  const shortVideo = { currentTime: .2, paused: true, readyState, play: () => { playCalls++; return Promise.resolve(); }, addEventListener: (name, fn) => { listeners[name] = fn; } };
   const liveCaption = { style: {}, set innerHTML(value) { writes++; markup = value; } };
   const hook = { style: {} };
   const state = { video: { candidates: [{ start: 0, end: 4 }] }, captionEffect: effect, hookTitleEnabled: true, hookTitleText: 'Hook', hookTitleDuration: '1' };
   const frames = new Map();
   let frameId = 0;
   const context = vm.createContext({
+    setTimeout: callback => timers.push(callback),
     disposePreviewCaptionClock: null,
     requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame: id => frames.delete(id),
@@ -49,8 +52,26 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret
     previewCaptionWordsForCandidate: () => words,
     buildPreviewCaptionMarkup: options => { markupBuilds++; return buildPreviewCaptionMarkup(options); },
   });
+  state.candidatePreviewAutoplay = autoplay;
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, timers, playCalls: () => playCalls, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
+}
+
+for (const readyState of [0, 2]) {
+  test(`deferred autoplay ignores disposed previews (readyState=${readyState})`, () => {
+    const c = setup('active-word', undefined, { autoplay: true, readyState });
+    const autoplay = readyState >= 2 ? c.timers[0] : c.listeners.canplay;
+    assert.equal(c.playCalls(), 0);
+    c.context.disposePreviewCaptionClock();
+    autoplay();
+    assert.equal(c.playCalls(), 0, 'detached media must not begin background playback');
+    assert.equal(c.state.candidatePreviewAutoplay, true, 'stale callbacks must preserve the next preview playback intent');
+
+    const current = setup('active-word', undefined, { autoplay: true, readyState });
+    (readyState >= 2 ? current.timers[0] : current.listeners.canplay)();
+    assert.equal(current.playCalls(), 1);
+    assert.equal(current.state.candidatePreviewAutoplay, false);
+  });
 }
 
 test('unchanged playback skips active phrase-word scans but transitions and style edits stay live', () => {
