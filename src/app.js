@@ -1,3 +1,4 @@
+import { buildPreviewCaptionMarkup } from './preview-caption-markup.js';
 import { buildAnalyticsPosts, youtubeVideoId } from './analytics-posts.js';
 import { createEditorKeyboardHandler } from './editor-keyboard-shortcuts.js';
 import { campaignProgress } from './campaign-progress.js';
@@ -538,11 +539,6 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
   }
   function previewCaptionWordsForCandidate(cand){
     return captionWordsForCandidate(cand,state.video?.transcript);
-  }
-  function captionWordImportant(word=''){
-    const raw=String(word||'').trim();
-    const lex=raw.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%]+$/gu,'');
-    return /\d/.test(raw)||raw.length>=8||/^(secret|erreur|problème|vérité|jamais|toujours|résultat|argent|million|mille|pourcent|important|incroyable|impossible|meilleur|pire|mistake|problem|truth|never|always|result|money|percent|crazy|best|worst)$/.test(lex);
   }
 
   function currentRenderOptions(){return buildRenderOptions(state,currentCaptionY())}
@@ -1921,7 +1917,6 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         lastCaptionMarkup=markup;
       };
       const accentMap={auto:'#ffd84a',white:'#ffffff',yellow:'#ffd84a',lime:'#75ff5c',cyan:'#35e7ff',pink:'#ff4fd8',red:'#ff4b55',green:'#43d17d',blue:'#4da3ff',purple:'#9b6cff',orange:'#ff9f43',black:'#111111'};
-      const esc=s=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
       const syncCaption=()=>{
         const rel=Math.max(0,Math.min(duration,Number(shortVideo.currentTime||0)));
         const hookTitle=document.getElementById('liveHookTitle');
@@ -1963,25 +1958,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
         const renderWord=wordSensitive?activeSpeechWord:null;
         if(lastCaptionRender?.line===line&&lastCaptionRender.word===renderWord&&lastCaptionRender.effect===effect&&lastCaptionRender.accent===accent)return;
         lastCaptionRender={line,word:renderWord,effect,accent};
-        const active=Math.max(0,words.findIndex(w=>activeSpeechWord&&Math.abs(Number(w.start||0)-Number(activeSpeechWord.start||0))<.02));
-        if(effect==='word-pop'){
-          const w=words[active]||activeSpeechWord;
-          updateCaptionMarkup(`<span style="display:inline-block;color:${accent};transform:scale(1.12);font-weight:900">${esc(w?.word||'')}</span>`);
-          return;
-        }
-        if(effect==='active-word'){
-          updateCaptionMarkup(words.map((w,i)=>`<span style="color:${i===active?accent:'#fff'};display:inline-block;${i===active?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' '));
-          return;
-        }
-        if(effect==='karaoke'){
-          updateCaptionMarkup(words.map((w,i)=>`<span style="color:${i<=active?accent:'#fff'};display:inline-block">${esc(w.word)}</span>`).join(' '));
-          return;
-        }
-        if(effect==='keyword-color'){
-          updateCaptionMarkup(words.map(w=>`<span style="color:${captionWordImportant(w.word)?accent:'#fff'};display:inline-block;${captionWordImportant(w.word)?'transform:scale(1.08);':''}">${esc(w.word)}</span>`).join(' '));
-          return;
-        }
-        updateCaptionMarkup(`<span style="color:${accent}">${esc(String(line.text||activeSpeechWord.word||''))}</span>`);
+        updateCaptionMarkup(buildPreviewCaptionMarkup({words,activeSpeechWord,text:line.text,effect,accent}));
       };
       const stopCaptionClock=()=>{if(captionRaf){cancelAnimationFrame(captionRaf);captionRaf=0}};
       let captionClockDisposed=false;

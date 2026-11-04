@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { buildPreviewCaptionMarkup } from './preview-caption-markup.js';
 import { isPreviewHookVisible } from './preview-hook-visibility.js';
 import { previewPlaybackWords } from './preview-caption-timeline.js';
 import { createPreviewWordLookup } from './preview-word-lookup.js';
@@ -10,15 +11,15 @@ const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const start = source.indexOf('    if(shortVideo&&liveCaption){');
 const captionSource = source.slice(start, source.indexOf('    const manualTrimStart=', start));
 
-function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello world' }]) {
+function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Secret world' }]) {
   let writes = 0, markup = '';
   let wordScans = 0;
-  let keywordChecks = 0;
+  let markupBuilds = 0;
   let speechSearches = 0;
   let phraseSearches = 0;
   let activeWordSearches = 0;
   rows.find = predicate => { phraseSearches++; return Array.prototype.find.call(rows, predicate); };
-  const words = [{ start: 0, end: .8, word: 'Hello' }, { start: 1, end: 2, word: 'world' }];
+  const words = [{ start: 0, end: .8, word: 'Secret' }, { start: 1, end: 2, word: 'world' }];
   words.filter = predicate => {
     wordScans++;
     const phraseWords = Array.prototype.filter.call(words, predicate);
@@ -46,10 +47,10 @@ function setup(effect = 'active-word', rows = [{ start: 0, end: 2, text: 'Hello 
     document: { getElementById: () => hook },
     previewCaptionRowsForCandidate: () => rows,
     previewCaptionWordsForCandidate: () => words,
-    captionWordImportant: word => { keywordChecks++; return word === 'Hello'; },
+    buildPreviewCaptionMarkup: options => { markupBuilds++; return buildPreviewCaptionMarkup(options); },
   });
   vm.runInContext(captionSource, context);
-  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, keywordChecks: () => keywordChecks, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
+  return { state, shortVideo, liveCaption, hook, context, frames, listeners, sync: () => listeners.timeupdate(), writes: () => writes, markup: () => markup, wordScans: () => wordScans, markupBuilds: () => markupBuilds, speechSearches: () => speechSearches, phraseSearches: () => phraseSearches, activeWordSearches: () => activeWordSearches };
 }
 
 test('unchanged playback skips active phrase-word scans but transitions and style edits stay live', () => {
@@ -65,21 +66,21 @@ test('unchanged playback skips active phrase-word scans but transitions and styl
   assert.match(c.markup(), />world<\/span>/);
   c.shortVideo.currentTime = .2; c.listeners.seeked();
   assert.equal(c.activeWordSearches(), 4);
-  assert.match(c.markup(), />Hello<\/span>/);
+  assert.match(c.markup(), />Secret<\/span>/);
 });
 
 test('phrase lookup runs once per encountered word, including misses and backwards seeks', () => {
-  const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }]);
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Secret' }]);
   for (let i = 0; i < 120; i++) { c.shortVideo.currentTime = .2 + i / 1000; c.sync(); }
   assert.equal(c.phraseSearches(), 1);
-  assert.match(c.markup(), /Hello/);
+  assert.match(c.markup(), /Secret/);
   c.shortVideo.currentTime = 1.2;
   for (let i = 0; i < 120; i++) c.sync();
   assert.equal(c.phraseSearches(), 2, 'missing phrases must also be cached');
   assert.equal(c.liveCaption.style.visibility, 'hidden');
   c.shortVideo.currentTime = .2; c.listeners.seeked();
   assert.equal(c.phraseSearches(), 2);
-  assert.match(c.markup(), /Hello/);
+  assert.match(c.markup(), /Secret/);
   const rebuilt = setup();
   assert.equal(rebuilt.phraseSearches(), 1, 'a rebuilt preview owns a fresh cache');
 });
@@ -123,25 +124,25 @@ test('captions off skips speech searches while hook timing and re-enabled captio
 
 test('unchanged playback skips caption markup construction while hook and visibility stay current', () => {
   const c = setup('keyword-color');
-  const initialChecks = c.keywordChecks();
-  assert.ok(initialChecks > 0);
+  const initialBuilds = c.markupBuilds();
+  assert.ok(initialBuilds > 0);
   for (let i = 0; i < 120; i++) c.sync();
-  assert.equal(c.keywordChecks(), initialChecks);
+  assert.equal(c.markupBuilds(), initialBuilds);
   c.state.hookTitleEnabled = false;
   c.state.captionPreference = 'off'; c.sync();
   assert.equal(c.hook.style.visibility, 'hidden');
   assert.equal(c.liveCaption.style.visibility, 'hidden');
   c.state.captionPreference = 'auto'; c.sync();
   assert.equal(c.liveCaption.style.visibility, 'visible');
-  assert.equal(c.keywordChecks(), initialChecks);
+  assert.equal(c.markupBuilds(), initialBuilds);
   c.state.captionColor = 'cyan'; c.sync();
-  assert.equal(c.keywordChecks(), initialChecks * 2);
+  assert.equal(c.markupBuilds(), initialBuilds * 2);
   assert.match(c.markup(), /#35e7ff/);
   c.shortVideo.currentTime = 3; c.sync();
   assert.equal(c.markup(), '');
   c.shortVideo.currentTime = .2; c.sync();
-  assert.equal(c.keywordChecks(), initialChecks * 3);
-  assert.match(c.markup(), /Hello/);
+  assert.equal(c.markupBuilds(), initialBuilds * 3);
+  assert.match(c.markup(), /Secret/);
 });
 
 test('playback reuses phrase membership across ticks, word transitions and style changes', () => {
@@ -159,12 +160,12 @@ test('playback reuses phrase membership across ticks, word transitions and style
 for (const effect of ['keyword-color', 'clean-bold']) {
   test(`${effect}: word boundaries and backwards seeks reuse static phrase markup`, () => {
     const c = setup(effect);
-    const initial = c.markup(), checks = c.keywordChecks();
+    const initial = c.markup(), checks = c.markupBuilds();
     for (const time of [1.2, .2, 1.2]) {
       c.shortVideo.currentTime = time; c.listeners.seeked();
     }
     assert.equal(c.activeWordSearches(), 1, 'static markup must not be reconstructed at word boundaries');
-    assert.equal(c.keywordChecks(), checks);
+    assert.equal(c.markupBuilds(), checks);
     assert.equal(c.markup(), initial);
     assert.equal(c.writes(), 1);
     assert.equal(c.hook.style.visibility, 'hidden', 'hook timing must still advance');
@@ -174,7 +175,7 @@ for (const effect of ['keyword-color', 'clean-bold']) {
     c.state.captionEffect = 'word-pop'; c.sync();
     assert.match(c.markup(), />world<\/span>/);
     c.shortVideo.currentTime = .2; c.listeners.seeked();
-    assert.match(c.markup(), />Hello<\/span>/);
+    assert.match(c.markup(), />Secret<\/span>/);
     c.state.captionEffect = effect; c.sync();
     c.shortVideo.currentTime = 3; c.sync();
     assert.equal(c.markup(), '');
@@ -184,15 +185,15 @@ for (const effect of ['keyword-color', 'clean-bold']) {
 }
 
 test('phrase changes and backwards seeks recompute membership without retaining old words', () => {
-  const c = setup('active-word', [{ start: 0, end: .8, text: 'Hello' }, { start: 1, end: 2, text: 'world' }]);
-  assert.match(c.markup(), />Hello<\/span>/);
+  const c = setup('active-word', [{ start: 0, end: .8, text: 'Secret' }, { start: 1, end: 2, text: 'world' }]);
+  assert.match(c.markup(), />Secret<\/span>/);
   assert.doesNotMatch(c.markup(), /world/);
   c.shortVideo.currentTime = 1.2; c.sync(); c.sync();
   assert.match(c.markup(), />world<\/span>/);
-  assert.doesNotMatch(c.markup(), /Hello/);
+  assert.doesNotMatch(c.markup(), /Secret/);
   assert.equal(c.wordScans(), 2);
   c.shortVideo.currentTime = .2; c.sync();
-  assert.match(c.markup(), />Hello<\/span>/);
+  assert.match(c.markup(), />Secret<\/span>/);
   assert.doesNotMatch(c.markup(), /world/);
   assert.equal(c.wordScans(), 3);
 });
