@@ -2130,7 +2130,14 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       document.querySelectorAll('[data-caption-color]').forEach(btn=>btn.classList.toggle('active',(btn.dataset.captionColor||'auto')===(state.captionColor||'auto')));
     };
     const refreshLiveCaptionPreview=()=>{applyLiveCaptionStyle();shortVideo?.dispatchEvent(new Event('timeupdate'))};
-    const saveLiveCaptionSettings=()=>{state.previewFinalMode=false;persistEditorPrefs();invalidateRenderedPreviews();refreshLiveCaptionPreview()};
+    const saveLiveCaptionSettings=()=>{
+      const wasFinalPreview=state.previewFinalMode;
+      state.previewFinalMode=false;persistEditorPrefs();invalidateRenderedPreviews();
+      // Final previews contain baked overlays. Replace that video before showing edits;
+      // render() also schedules the clean editable preview through the normal guard.
+      if(wasFinalPreview)render();
+      else refreshLiveCaptionPreview();
+    };
     const captionPreferenceSelect=document.getElementById('captionPreferenceSelect');if(captionPreferenceSelect)captionPreferenceSelect.onchange=e=>{state.captionPreference=e.target.value;saveLiveCaptionSettings()};
     const rerenderSourceSubtitlePreview=()=>{persistEditorPrefs();invalidateRenderedPreviews();render();if(state.video?.candidates?.length&&state.video?.sourceUrl)void prepareCandidatePreview(state.selectedCandidate||0,{autoplay:false,force:true});};
     const sourceSubtitleModeSelect=document.getElementById('sourceSubtitleModeSelect');if(sourceSubtitleModeSelect)sourceSubtitleModeSelect.onchange=e=>{state.sourceSubtitleMode=e.target.value;rerenderSourceSubtitlePreview()};
