@@ -12,7 +12,12 @@ function setup() {
   for (const name of ['Start', 'End']) {
     nodes[`precision${name}Ruler`] = {
       get innerHTML() { return this.markup; },
-      set innerHTML(value) { writes[name]++; this.markup = value; },
+      set innerHTML(value) {
+        writes[name]++;
+        this.markup = value;
+        this.marker = { style: { left: value.match(/mint-cut-marker.*left:([^%]+%)/)[1] } };
+      },
+      querySelector(selector) { assert.equal(selector, '.mint-cut-marker'); return this.marker; },
     };
     for (const suffix of ['Label', 'Min', 'Max']) nodes[`precision${name}${suffix}`] = {};
   }
@@ -30,19 +35,25 @@ function setup() {
   return { nodes, writes, precisionStart, precisionEnd, precisionWindow, sync: context.sync };
 }
 
-test('trim movement rebuilds only the changed boundary and keeps labels current', () => {
+test('trim movement preserves decorations and moves only the marker within the window', () => {
   const c = setup();
   c.sync(10, 30);
   const endMarkup = c.nodes.precisionEndRuler.innerHTML;
-  for (let i = 0; i < 100; i++) c.sync(11, 30);
-  assert.deepEqual(c.writes, { Start: 2, End: 1 });
+  const startMarker = c.nodes.precisionStartRuler.marker;
+  for (let i = 0; i < 100; i++) c.sync(10 + i / 100, 30);
+  c.sync(11, 30);
+  assert.deepEqual(c.writes, { Start: 1, End: 1 });
+  assert.equal(c.nodes.precisionStartRuler.marker, startMarker);
   assert.equal(c.nodes.precisionEndRuler.innerHTML, endMarkup);
   assert.equal(c.precisionStart.value, '11.00');
   assert.equal(c.nodes.precisionStartLabel.textContent, '11');
   assert.equal(c.precisionStart['aria-valuetext'], '11.00 seconds');
-  assert.match(c.nodes.precisionStartRuler.innerHTML, /mint-cut-marker.*left:60%/);
+  assert.equal(startMarker.style.left, '60%');
   c.sync(11, 31);
-  assert.deepEqual(c.writes, { Start: 2, End: 2 });
+  assert.equal(c.nodes.precisionEndRuler.marker.style.left, '60%');
+  c.sync(10, 30);
+  assert.equal(startMarker.style.left, '50%');
+  assert.deepEqual(c.writes, { Start: 1, End: 1 });
 });
 
 test('zoom changes, recentering and returning to an earlier value refresh ruler geometry', () => {
