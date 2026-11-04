@@ -1843,7 +1843,15 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
     const analyticsPeriodToggle=document.getElementById('analyticsPeriodToggle');if(analyticsPeriodToggle)analyticsPeriodToggle.onclick=e=>{e.stopPropagation();state.analyticsPeriodOpen=!state.analyticsPeriodOpen;render()};
     document.querySelectorAll('[data-analytics-period]').forEach(el=>el.onclick=()=>{state.analyticsPeriod=String(el.dataset.analyticsPeriod||'30');state.analyticsPeriodOpen=false;render()});
     const analyticsYoutubeConnect=document.getElementById('analyticsYoutubeConnect');if(analyticsYoutubeConnect)analyticsYoutubeConnect.onclick=()=>state.platformConnections?.youtube?.connected?loadYouTubeAnalytics({force:true,quiet:false}):connectPlatformAccount('youtube');
-    const analyticsSearch=document.getElementById('analyticsSearch');if(analyticsSearch)analyticsSearch.oninput=e=>{state.analyticsSearch=String(e.target.value||'');render();setTimeout(()=>{const x=document.getElementById('analyticsSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},0)};
+    const analyticsSearch=document.getElementById('analyticsSearch');
+    if(analyticsSearch)analyticsSearch.oninput=e=>{
+      const {selectionStart,selectionEnd,selectionDirection}=e.target;
+      state.analyticsSearch=String(e.target.value||'');
+      render();
+      // Rendering replaces the input; keep the user's edit position in its replacement.
+      const input=document.getElementById('analyticsSearch');
+      if(input){input.focus();input.setSelectionRange(selectionStart,selectionEnd,selectionDirection)}
+    };
     const analyticsExport=document.getElementById('analyticsExport');if(analyticsExport)analyticsExport.onclick=()=>{const table=document.querySelector('.mint-posts-panel table');if(!table)return;const rows=[...table.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>`"${String(td.innerText||'').replaceAll('"','""')}"`).join(',')).join('\n');const blob=new Blob([rows],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='mint-stats.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
     document.querySelectorAll('[data-home-project]').forEach(el=>el.onclick=()=>openProject(el.dataset.homeProject));
     document.querySelectorAll('[data-home-campaign]').forEach(el=>el.onclick=()=>{state.campaignSelected=el.dataset.homeCampaign;state.campaignTab='overview';navigate('campaign-discover')});
