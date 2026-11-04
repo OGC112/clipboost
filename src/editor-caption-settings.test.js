@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('./app.js', import.meta.url), 'utf8');
 const settingsStart = source.indexOf('    const saveLiveCaptionSettings=');
 const settings = source.slice(settingsStart, source.indexOf('    const rerenderSourceSubtitlePreview=', settingsStart));
+const presetStart = source.indexOf("    document.querySelectorAll('[data-caption-preset]')");
+const presets = source.slice(presetStart, source.indexOf('\n', presetStart));
 const invalidateStart = source.indexOf('    function invalidateRenderedPreviews()');
 const invalidate = source.slice(invalidateStart, source.indexOf('\n', invalidateStart));
 const preview = source.slice(source.indexOf('  async function prepareCandidatePreview('), source.indexOf('  function selectCandidatePreview('));
@@ -16,9 +18,10 @@ function setup(finalMode) {
   const candidate = { start: 2, end: 12, previewUrl: '/baked.mp4', previewMeta: { editApplied: { captions: true } } };
   const state = { page: 'studio', previewFinalMode: finalMode, candidatePreviewRequestId: 0,
     candidatePreviewVideoId: 'video-1', video: { id: 'video-1', sourceUrl: '/source.mp4', candidates: [candidate] } };
+  const buttons = ['social', 'active', 'clean', 'dynamic'].map(captionPreset => ({ dataset: { captionPreset } }));
   const select = {}, timers = [], requests = [], displayed = [];
   let refreshes = 0, saves = 0, context;
-  context = vm.createContext({ state, document: { getElementById: () => select },
+  context = vm.createContext({ state, document: { getElementById: () => select, querySelectorAll: () => buttons },
     persistEditorPrefs: () => saves++, refreshLiveCaptionPreview: () => refreshes++,
     render: () => { displayed.push(candidate.previewUrl); vm.runInContext(scheduling, context); },
     setTimeout: callback => timers.push(callback),
@@ -26,8 +29,8 @@ function setup(finalMode) {
     readJsonResponse: async response => response,
     fetch: (url, init) => new Promise(resolve => requests.push({ url, body: JSON.parse(init.body), resolve })),
   });
-  vm.runInContext(invalidate + '\n' + preview + '\n' + settings, context);
-  return { state, candidate, select, timers, requests, displayed, refreshes: () => refreshes, saves: () => saves };
+  vm.runInContext(invalidate + '\n' + preview + '\n' + settings + '\n' + presets, context);
+  return { state, candidate, select, buttons, timers, requests, displayed, refreshes: () => refreshes, saves: () => saves };
 }
 
 for (const preference of ['off', 'on', 'auto']) {
@@ -63,3 +66,29 @@ test('ordinary editable caption changes stay live without replacing the player',
   assert.equal(c.requests.length, 0);
   assert.equal(c.timers.length, 0);
 });
+
+for (const [name, expected] of Object.entries({
+  social: ['bold', 'social', 'clean-bold', 'white'],
+  active: ['bold', 'social', 'active-word', 'auto'],
+  clean: ['minimal', 'social', 'clean-bold', 'white'],
+  dynamic: ['pop', 'impact', 'word-pop', 'yellow'],
+})) {
+  for (const finalMode of [true, false]) {
+    test(name + ' caption preset rebuilds editable preview from final mode ' + finalMode, async () => {
+      const c = setup(finalMode);
+      c.buttons.find(button => button.dataset.captionPreset === name).onclick();
+      assert.equal(c.state.previewFinalMode, false);
+      assert.deepEqual([c.state.captionStyle, c.state.captionFont, c.state.captionEffect, c.state.captionColor], expected);
+      assert.equal(c.saves(), 1);
+      assert.deepEqual(c.displayed, [null]);
+      assert.equal(c.state.candidatePreviewRequestId, 1, 'invalidate pending baked renders');
+      assert.equal(c.timers.length, 1);
+      const pending = c.timers.shift()();
+      assert.equal(c.requests[0].body.options.captions, false);
+      c.requests[0].resolve({ url: '/editable.mp4', render: { editApplied: { captions: false } } });
+      await pending;
+      assert.equal(c.candidate.previewUrl, '/editable.mp4');
+      assert.equal(c.timers.length, 0);
+    });
+  }
+}
