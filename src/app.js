@@ -543,9 +543,15 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
 
   function currentRenderOptions(){return buildRenderOptions(state,currentCaptionY())}
   let watermarkUploadRevision=0;
+  function saveWatermarkImageChange(){
+    // A final preview contains the old image in its pixels. Rebuild a clean
+    // editable preview before displaying the updated branding overlay.
+    if(state.previewFinalMode){state.previewFinalMode=false;invalidateRenderedPreviews();}
+    persistEditorPrefs();render();
+  }
   function removeWatermark(){
     watermarkUploadRevision++;
-    state.watermarkUrl='';state.watermarkName='';persistEditorPrefs();render();
+    state.watermarkUrl='';state.watermarkName='';saveWatermarkImageChange();
   }
   async function uploadWatermark(file){
     if(!file)return;
@@ -558,7 +564,7 @@ import { previewCaptionRowsForCandidate as captionRowsForCandidate, previewCapti
       if(typeof data?.url!=='string'||!data.url.trim())throw new Error('Could not upload watermark: the server did not return an image URL. Please try again.');
       state.watermarkUrl=data.url;state.watermarkName=data.originalName||file.name||'Watermark';
       state.watermarkX=.86;state.watermarkY=.12;state.watermarkScale=.18;state.watermarkOpacity=.9;
-      persistEditorPrefs();render();
+      saveWatermarkImageChange();
     }catch(e){if(revision===watermarkUploadRevision)showNotice({kind:'danger',title:'Watermark upload failed',message:e.message||'Could not upload watermark image.'})}
   }
     function invalidateRenderedPreviews(){state.candidatePreviewRequestId++;for(const cand of (state.video?.candidates||[])){cand.previewUrl=null;cand.previewEdited=false;cand.previewMeta=null}state.candidatePreviewError='';state.candidatePreviewLoading=false;state.candidatePreviewLoadingIndex=-1;}
